@@ -1,0 +1,1386 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>WAFERLOCK LINE 客服平台</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.development.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.development.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --lg:#06C755;--brand:#0F2744;--accent:#38BDF8;
+  --ok:#10B981;--warn:#F59E0B;--err:#EF4444;--purple:#8B5CF6;
+  --w:#fff;--g50:#F8FAFC;--g100:#F1F5F9;--g200:#E2E8F0;--g300:#CBD5E1;
+  --g400:#94A3B8;--g500:#64748B;--g600:#475569;--g700:#334155;--g800:#1E293B;
+}
+body{font-family:'Noto Sans TC',sans-serif;background:#EEF2F7;color:var(--g800);min-height:100vh}
+button{font-family:inherit;cursor:pointer}
+input,select,textarea{font-family:inherit}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-thumb{background:var(--g300);border-radius:2px}
+
+/* NAV */
+.nav{position:fixed;top:0;left:0;right:0;height:48px;background:var(--brand);z-index:999;display:flex;align-items:center;padding:0 14px;gap:3px}
+.nav-logo{color:#fff;font-weight:700;font-size:13px;margin-right:10px;display:flex;align-items:center;gap:6px}
+.nav-logo span{background:var(--accent);color:var(--brand);font-size:9px;font-weight:800;padding:2px 5px;border-radius:3px}
+.nbtn{padding:5px 11px;border-radius:5px;font-size:11.5px;font-weight:500;border:none;color:rgba(255,255,255,.65);background:transparent;transition:all .15s}
+.nbtn.on{background:var(--accent);color:var(--brand);font-weight:700}
+.nbtn:hover:not(.on){background:rgba(255,255,255,.1);color:#fff}
+.nbadge{background:var(--err);color:#fff;font-size:9px;font-weight:800;padding:1px 5px;border-radius:8px;margin-left:3px}
+.sync-dot{width:6px;height:6px;border-radius:50%;margin-left:auto;flex-shrink:0}
+.sync-dot.live{background:var(--ok);animation:blink 2s infinite}
+.sync-dot.off{background:var(--g400)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.page{padding-top:48px;min-height:100vh}
+
+/* Server status */
+.srv-status{display:flex;align-items:center;gap:5px;margin-left:auto;font-size:10.5px;color:rgba(255,255,255,.7);padding:4px 9px;border-radius:5px;border:1px solid rgba(255,255,255,.15);cursor:pointer;transition:all .15s}
+.srv-status:hover{background:rgba(255,255,255,.1)}
+.srv-status.online{color:#4ade80}.srv-status.offline{color:#f87171}
+
+/* API key panel */
+.apikey-panel{position:fixed;top:55px;right:12px;z-index:8000;background:#fff;border-radius:12px;padding:16px;width:320px;box-shadow:0 8px 30px rgba(0,0,0,.18);border:1px solid var(--g200)}
+.apikey-panel h4{font-size:13px;font-weight:700;margin-bottom:10px;color:var(--brand)}
+.apikey-panel input{width:100%;border:1px solid var(--g200);border-radius:5px;padding:7px 10px;font-size:12px;outline:none;font-family:monospace}
+.apikey-panel input:focus{border-color:var(--accent)}
+.apikey-row{display:flex;gap:6px;margin-top:7px}
+.apikey-row button{flex:1;padding:6px;border-radius:5px;border:none;font-size:12px;font-weight:700;cursor:pointer}
+.ak-save{background:var(--accent);color:var(--brand)}.ak-cancel{background:var(--g100);color:var(--g600)}
+.srv-info{font-size:10.5px;color:var(--g500);margin-top:8px;line-height:1.6;background:var(--g50);border-radius:5px;padding:7px}
+
+/* TOAST */
+.toasts{position:fixed;top:55px;right:12px;z-index:9999;display:flex;flex-direction:column;gap:5px;pointer-events:none}
+.toast{background:#fff;border-radius:8px;padding:8px 12px;box-shadow:0 4px 12px rgba(0,0,0,.15);border-left:3px solid var(--accent);min-width:200px;font-size:12px;animation:tin .25s ease}
+.toast.ok{border-color:var(--ok)}.toast.err{border-color:var(--err)}.toast.warn{border-color:var(--warn)}
+.toast-t{font-weight:700;font-size:12.5px;margin-bottom:1px}
+@keyframes tin{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+
+/* ── LINE PAGE ── */
+.lw{display:flex;justify-content:center;align-items:flex-start;padding:18px 14px;gap:18px;flex-wrap:wrap}
+.lphone{width:360px;height:720px;background:var(--g100);border-radius:30px;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,.25),0 0 0 7px #1a1a1a,0 0 0 9px #333;display:flex;flex-direction:column}
+.lhdr{background:var(--lg);padding:9px 13px;display:flex;align-items:center;gap:8px;flex-shrink:0}
+.lhdr-ic{width:33px;height:33px;background:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px}
+.lhdr-n{color:#fff;font-weight:700;font-size:12.5px}
+.lhdr-s{color:rgba(255,255,255,.8);font-size:9.5px}
+.lmsgs{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:6px;background:#B4D4BA}
+.mrow{display:flex;gap:6px;align-items:flex-end}
+.mrow.u{flex-direction:row-reverse}
+.mav{width:26px;height:26px;border-radius:50%;background:var(--lg);display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;flex-shrink:0}
+.mb{max-width:72%;padding:7px 11px;border-radius:10px;font-size:12px;line-height:1.5;word-break:break-word;white-space:pre-line}
+.mb.bot{background:#fff;border-radius:0 10px 10px 10px;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.mb.u{background:var(--lg);color:#fff;border-radius:10px 0 10px 10px}
+.mb.agent-reply{background:#E8F4FF;border-radius:0 10px 10px 10px;border:1px solid #BAD8F7}
+.mt{font-size:9px;color:rgba(0,0,0,.4);align-self:flex-end;flex-shrink:0}
+.typing{display:flex;gap:3px;padding:7px 10px;background:#fff;border-radius:0 10px 10px 10px;width:fit-content}
+.tdot{width:5px;height:5px;background:var(--g400);border-radius:50%;animation:tb 1.2s ease-in-out infinite}
+.tdot:nth-child(2){animation-delay:.2s}.tdot:nth-child(3){animation-delay:.4s}
+@keyframes tb{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-5px)}}
+.lgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#ddd;flex-shrink:0}
+.lgitem{background:#fff;padding:10px 3px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;transition:background .12s;user-select:none}
+.lgitem:hover{background:var(--g50)}.lgitem:active{background:var(--g100)}
+.lgitem .ic{font-size:20px}.lgitem .lb{font-size:9.5px;color:var(--g600);font-weight:500;text-align:center}
+.linput-bar{background:#fff;padding:7px;display:flex;gap:5px;align-items:flex-end;border-top:1px solid var(--g200);flex-shrink:0}
+.ltxt{flex:1;border:1px solid var(--g200);border-radius:18px;padding:7px 12px;font-size:12px;outline:none;resize:none;font-family:inherit;max-height:70px;line-height:1.4}
+.ltxt:focus{border-color:var(--lg)}
+.lsend{width:33px;height:33px;background:var(--lg);border:none;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.lsend:active{transform:scale(.9)}
+.lcam{width:33px;height:33px;background:var(--g100);border:1px solid var(--g200);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px;transition:background .15s}
+.lcam:hover{background:var(--g200)}
+.lcam.has-img{background:#FEF3C7;border-color:#F59E0B}
+.img-preview-wrap{position:relative;flex-shrink:0}
+.img-preview-wrap img{width:44px;height:44px;object-fit:cover;border-radius:8px;border:2px solid var(--accent);display:block}
+.img-preview-wrap .img-rm{position:absolute;top:-5px;right:-5px;width:16px;height:16px;background:var(--err);color:#fff;border:none;border-radius:50%;font-size:10px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1}
+.mb img.chat-img{max-width:160px;border-radius:8px;display:block;margin-top:4px}
+/* Inline forms */
+.inline-form{background:#fff;border-radius:10px;padding:12px;margin:3px 0;font-size:11.5px;border:2px solid var(--accent)}
+.inline-form h4{font-size:12px;font-weight:700;margin-bottom:8px;color:var(--brand)}
+.if-field{margin-bottom:7px}
+.if-field label{display:block;font-size:10.5px;color:var(--g500);margin-bottom:2px;font-weight:600}
+.if-field input,.if-field select{width:100%;border:1px solid var(--g200);border-radius:4px;padding:5px 8px;font-size:11.5px;outline:none}
+.if-field input:focus,.if-field select:focus{border-color:var(--accent)}
+.ch-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:3px}
+.ch-btn{padding:6px 4px;border:1px solid var(--g200);border-radius:4px;font-size:10px;font-weight:600;text-align:center;cursor:pointer;background:#fff;transition:all .12s}
+.ch-btn.sel{border-color:var(--accent);background:#EFF6FF;color:var(--brand)}
+.step-dots{display:flex;gap:8px;margin-bottom:10px;align-items:center}
+.sdot{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0;transition:all .2s}
+.sdot.done{background:var(--ok);color:#fff}.sdot.active{background:var(--accent);color:var(--brand)}.sdot.wait{background:var(--g200);color:var(--g500)}
+.sdot-line{flex:1;height:1px;background:var(--g200)}
+.ai-steps-card{background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;padding:10px;margin:3px 0}
+.ai-steps-card h5{color:#92400E;font-size:11px;font-weight:700;margin-bottom:6px}
+.ai-step{display:flex;gap:5px;margin-bottom:4px;align-items:flex-start;font-size:11.5px}
+.ai-step-n{width:16px;height:16px;background:#FED7AA;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#92400E;flex-shrink:0;margin-top:1px}
+.ai-step-confirm{width:100%;background:#92400E;color:#fff;border:none;border-radius:5px;padding:7px;font-size:11px;font-weight:700;cursor:pointer;margin-top:6px}
+.broadcast-card{background:#FEF2F2;border:1px solid var(--err);border-radius:8px;padding:10px;margin:3px 0}
+.broadcast-card h5{color:var(--err);font-size:11.5px;font-weight:700;margin-bottom:6px}
+.w-row{display:flex;align-items:center;gap:7px;padding:6px 8px;background:#fff;border-radius:5px;margin-bottom:4px;font-size:11px}
+.w-row .wn{flex:1;font-weight:600}.w-row .wr{color:var(--warn);font-size:10px}
+.w-accept{padding:4px 10px;background:var(--ok);color:#fff;border:none;border-radius:4px;font-size:10px;font-weight:700;cursor:pointer}
+.w-decline{padding:4px 10px;background:var(--g200);color:var(--g600);border:none;border-radius:4px;font-size:10px;cursor:pointer}
+.urg-banner{background:rgba(239,68,68,.12);border:1px solid var(--err);border-radius:5px;padding:4px 8px;margin:2px 0;font-size:10px;color:var(--err);font-weight:700}
+.wf-success{background:#F0FDF4;border:1px solid #86EFAC;border-radius:8px;padding:10px;margin:3px 0;font-size:11.5px}
+.wf-success .wfid{font-family:monospace;background:#D1FAE5;padding:2px 6px;border-radius:4px;font-weight:700;font-size:12px}
+
+/* ── AGENT PAGE ── */
+.aplayout{display:flex;height:calc(100vh - 48px)}
+.apsb{width:285px;background:#fff;border-right:1px solid var(--g200);display:flex;flex-direction:column;flex-shrink:0}
+.apsb-hdr{padding:12px 14px;border-bottom:1px solid var(--g200);display:flex;align-items:center;gap:8px}
+.apsb-hdr h3{font-size:13.5px;font-weight:700;flex:1}
+.pt-tabs{display:flex;gap:3px;padding:8px 10px;border-bottom:1px solid var(--g200)}
+.pt-tab{padding:4px 9px;border-radius:4px;font-size:10.5px;font-weight:700;cursor:pointer;border:1px solid var(--g300);transition:all .12s}
+.pt-tab.line{color:#06C755;border-color:#06C755}.pt-tab.line.on{background:#06C755;color:#fff}
+.pt-tab.fb{color:#1877F2;border-color:#1877F2}.pt-tab.fb.on{background:#1877F2;color:#fff}
+.pt-tab.ig{color:#E1306C;border-color:#E1306C}.pt-tab.ig.on{background:#E1306C;color:#fff}
+.pt-tab.all{color:var(--accent);border-color:var(--accent)}.pt-tab.all.on{background:var(--accent);color:var(--brand)}
+.clist{flex:1;overflow-y:auto}
+.citem{padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--g100);transition:background .12s;position:relative}
+.citem:hover{background:var(--g50)}.citem.on{background:#EFF6FF;border-left:3px solid var(--accent)}
+.citem-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:2px}
+.cname{font-size:12.5px;font-weight:700}
+.ctime{font-size:10px;color:var(--g400)}
+.cprev{font-size:11px;color:var(--g500);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:20px}
+.cplat{font-size:9px;font-weight:700;padding:1px 4px;border-radius:3px;margin-right:3px}
+.cplat.line{background:#E8F5E9;color:#2E7D32}.cplat.fb{background:#E3F2FD;color:#1565C0}.cplat.ig{background:#FCE4EC;color:#880E4F}
+.cunread{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:var(--err);color:#fff;font-size:9px;font-weight:800;min-width:15px;height:15px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 3px}
+.urg-indicator{width:7px;height:7px;background:var(--err);border-radius:50%;display:inline-block;margin-right:3px;animation:blink 1s infinite}
+.apmain{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.apch{padding:10px 16px;background:#fff;border-bottom:1px solid var(--g200);display:flex;align-items:center;gap:10px}
+.apch h4{font-size:13.5px;font-weight:700;flex:1}
+.apact{padding:5px 10px;border-radius:4px;font-size:10.5px;font-weight:700;border:none;cursor:pointer}
+.apact.crm{background:#EFF6FF;color:var(--accent)}.apact.dp{background:#D1FAE5;color:#065F46}.apact.urg{background:#FEE2E2;color:#991B1B}
+.apmsgs{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:8px;background:var(--g50)}
+.apmsg{display:flex;gap:7px;align-items:flex-end;max-width:80%}
+.apmsg.cust {align-self:flex-start}.apmsg.agt{align-self:flex-end;flex-direction:row-reverse}.apmsg.bot{align-self:flex-start}
+.apmsg-av{width:28px;height:28px;border-radius:50%;background:var(--g200);display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0}
+.apmsg-b{padding:8px 12px;border-radius:10px;font-size:12px;line-height:1.5;white-space:pre-line}
+.apmsg.cust .apmsg-b{background:#fff;border:1px solid var(--g200);border-radius:0 10px 10px 10px}
+.apmsg.agt .apmsg-b{background:#1A3F6F;color:#fff;border-radius:10px 0 10px 10px}
+.apmsg.bot .apmsg-b{background:#F0FDF4;border:1px solid #86EFAC;border-radius:0 10px 10px 10px}
+.apmsg-m{font-size:9.5px;color:var(--g400);margin-top:2px;align-self:flex-end}
+.urg-alert{background:#FEE2E2;border:1px solid var(--err);padding:7px 14px;font-size:11.5px;color:var(--err);font-weight:700;display:flex;align-items:center;gap:6px}
+.ai-sug{background:#EFF6FF;border:1px solid #BFDBFE;padding:6px 12px;font-size:11px;color:var(--accent);cursor:pointer;display:flex;align-items:center;gap:6px}
+.ai-sug:hover{background:#DBEAFE}
+.apib{background:#fff;border-top:1px solid var(--g200);padding:8px 12px;display:flex;gap:7px;align-items:flex-end}
+.aptxt{flex:1;border:1px solid var(--g200);border-radius:10px;padding:8px 12px;font-size:12.5px;outline:none;resize:none;font-family:inherit;max-height:90px}
+.aptxt:focus{border-color:var(--accent)}
+.apsend{padding:8px 16px;background:var(--accent);color:var(--brand);border:none;border-radius:5px;font-size:12.5px;font-weight:700}
+.apmeta{width:220px;background:#fff;border-left:1px solid var(--g200);padding:12px;overflow-y:auto;flex-shrink:0}
+.apmeta h5{font-size:11.5px;font-weight:700;color:var(--g600);margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid var(--g100)}
+.meta-row{margin-bottom:6px;font-size:11.5px;line-height:1.6}
+.meta-row strong{color:var(--g800);display:block;font-size:10.5px;color:var(--g400);font-weight:600;text-transform:uppercase;letter-spacing:.3px;margin-bottom:1px}
+.wbar{background:var(--g100);border-radius:3px;height:5px;margin:3px 0}
+.wfill{height:100%;border-radius:3px}
+.wfill.ok{background:var(--ok)}.wfill.warn{background:var(--warn)}.wfill.bad{background:var(--err)}
+.crm-link{display:block;margin-top:10px;padding:6px;background:var(--accent);color:var(--brand);text-decoration:none;border-radius:5px;font-size:11px;font-weight:700;text-align:center}
+
+/* MODAL */
+.mo{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:5000;display:flex;align-items:center;justify-content:center;padding:16px}
+.mo-box{background:#fff;border-radius:14px;padding:20px;width:100%;max-width:440px;max-height:90vh;overflow-y:auto}
+.mo-box h3{font-size:15px;font-weight:700;margin-bottom:14px}
+.mf{margin-bottom:10px}
+.mf label{display:block;font-size:11px;color:var(--g500);font-weight:600;margin-bottom:3px;text-transform:uppercase;letter-spacing:.3px}
+.mf input,.mf select{width:100%;border:1px solid var(--g200);border-radius:5px;padding:7px 10px;font-size:12.5px;outline:none}
+.mf input:focus,.mf select:focus{border-color:var(--accent)}
+.mf-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.mact{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+.mact button{padding:7px 16px;border-radius:5px;font-size:12.5px;border:none;font-weight:600;cursor:pointer}
+.mact .cancel{background:var(--g100);color:var(--g600)}
+.mact .ok{background:var(--accent);color:var(--brand)}
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:200px;color:var(--g400)}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useRef,useCallback,createContext,useContext} = React;
+const Ctx = createContext(null);
+
+// ═══════════════════════════════════════════════
+// 共享資料庫 (localStorage + BroadcastChannel)
+// ═══════════════════════════════════════════════
+// ── Supabase 設定 ──
+const SUPABASE_URL = 'https://nkyanyjgfrmovjoqevro.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5reWFueWpnZnJtb3Zqb3FldnJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2ODIxMTMsImV4cCI6MjA5NzI1ODExM30.LPnQyceYS7Z1-rlqUtXm3B8dGBOqnmnavTV-PAOSPZ8';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ── DB 欄位轉換（camelCase <-> snake_case） ──
+const custToDb = c => ({wf_id:c.wfId,name:c.name,phone:c.phone,email:c.email,address:c.address,district:c.district,area:c.area,channel:c.channel,product_id:c.productId,serial_no:c.serialNo,install_date:c.installDate,warranty_months:c.warrantyMonths,warranty_end:c.warrantyEnd,tags:c.tags||[],reg_type:c.regType,reg_date:c.regDate,line_uid:c.lineUid,fb_id:c.fbId,ig_id:c.igId,repair_ids:c.repairIds||[],complaint_ids:c.complaintIds||[],site:c.site,unit:c.unit,order_no:c.orderNo});
+const dbToCust = r => ({wfId:r.wf_id,name:r.name,phone:r.phone,email:r.email,address:r.address,district:r.district,area:r.area,channel:r.channel,productId:r.product_id,serialNo:r.serial_no,installDate:r.install_date,warrantyMonths:r.warranty_months,warrantyEnd:r.warranty_end,tags:r.tags||[],regType:r.reg_type,regDate:r.reg_date,lineUid:r.line_uid,fbId:r.fb_id,igId:r.ig_id,repairIds:r.repair_ids||[],complaintIds:r.complaint_ids||[],site:r.site,unit:r.unit,orderNo:r.order_no});
+const repairToDb = r => ({id:r.id,wf_id:r.wfId,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,worker_id:r.workerId,scheduled_date:r.scheduledDate,desc:r.desc,contact_name:r.contactName,contact_phone:r.contactPhone,site:r.site,unit:r.unit,handling_unit:r.handlingUnit,note:r.note,warranty_in:r.warrantyIn,created_by:r.createdBy,created_at:r.createdAt,unread:r.unread,arrival_pushed:r.arrivalPushed,rating:r.rating,receipt_no:r.receiptNo,audit_note:r.auditNote,completed_date:r.completedDate});
+const dbToRepair = r => ({id:r.id,wfId:r.wf_id,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,workerId:r.worker_id,scheduledDate:r.scheduled_date,desc:r.desc,contactName:r.contact_name,contactPhone:r.contact_phone,site:r.site,unit:r.unit,handlingUnit:r.handling_unit,note:r.note,warrantyIn:r.warranty_in,createdBy:r.created_by,createdAt:r.created_at,unread:r.unread,arrivalPushed:r.arrival_pushed,rating:r.rating,receiptNo:r.receipt_no,auditNote:r.audit_note,completedDate:r.completed_date});
+const ctToDb = c => ({id:c.id,wf_id:c.wfId,name:c.name,phone:c.phone,date:c.date,created_at:c.createdAt,created_by:c.createdBy,call_channel:c.callChannel,department:c.department,cat1:c.cat1,cat2:c.cat2,cat3:c.cat3,process:c.process,status:c.status,closed_date:c.closedDate,timeline:c.timeline||[]});
+const dbToCt = r => ({id:r.id,wfId:r.wf_id,name:r.name,phone:r.phone,date:r.date,createdAt:r.created_at,createdBy:r.created_by,callChannel:r.call_channel,department:r.department,cat1:r.cat1,cat2:r.cat2,cat3:r.cat3,process:r.process,status:r.status,closedDate:r.closed_date,timeline:r.timeline||[]});
+const installToDb = o => ({id:o.id,name:o.name,phone:o.phone,address:o.address,channel:o.channel,product_id:o.productId,serial_no:o.serialNo,locksmith_id:o.locksmithId,status:o.status,created_date:o.createdDate,created_ts:o.createdTs,arrival_pushed:o.arrivalPushed,photos:o.photos||[],signature:o.signature,verify:o.verify||{},taught:o.taught||{},work_note:o.workNote,completed_date:o.completedDate,wf_id:o.wfId,warranty_end:o.warrantyEnd});
+const dbToInstall = r => ({id:r.id,name:r.name,phone:r.phone,address:r.address,channel:r.channel,productId:r.product_id,serialNo:r.serial_no,locksmithId:r.locksmith_id,status:r.status,createdDate:r.created_date,createdTs:r.created_ts?parseInt(r.created_ts):null,arrivalPushed:r.arrival_pushed,photos:r.photos||[],signature:r.signature,verify:r.verify||{},taught:r.taught||{},workNote:r.work_note,completedDate:r.completed_date,wfId:r.wf_id,warrantyEnd:r.warranty_end});
+const convToDb = c => ({id:c.id,wf_id:c.wfId,name:c.name,platform:c.platform,av:c.av,unread:c.unread||0,last_msg:c.lastMsg,last_time:c.lastTime,msgs:c.msgs||[],agent_takeover:c.agentTakeover||false,need_case:c.needCase||false,biz_inquiry:c.bizInquiry||false});
+const dbToConv = r => ({id:r.id,wfId:r.wf_id,name:r.name,platform:r.platform,av:r.av,unread:r.unread||0,lastMsg:r.last_msg,lastTime:r.last_time,msgs:r.msgs||[],agentTakeover:r.agent_takeover||false,needCase:r.need_case||false,bizInquiry:r.biz_inquiry||false});
+
+const EMPTY_DB = {customers:[],repairs:{},complaints:{},installs:{},conversations:[],wfCounter:0,version:0};
+
+async function loadFromSupabase(){
+  try{
+    const [custsRes,repairsRes,ctRes,installRes,convRes,cfgRes] = await Promise.all([
+      sb.from('customers').select('*'),
+      sb.from('repairs').select('*'),
+      sb.from('complaints').select('*'),
+      sb.from('installs').select('*'),
+      sb.from('conversations').select('*'),
+      sb.from('config').select('*'),
+    ]);
+    const customers = (custsRes.data||[]).map(dbToCust);
+    const repairs = Object.fromEntries((repairsRes.data||[]).map(r=>[r.id,dbToRepair(r)]));
+    const complaints = Object.fromEntries((ctRes.data||[]).map(r=>[r.id,dbToCt(r)]));
+    const installs = Object.fromEntries((installRes.data||[]).map(r=>[r.id,dbToInstall(r)]));
+    const conversations = (convRes.data||[]).map(dbToConv);
+    const wfCounter = parseInt((cfgRes.data||[]).find(c=>c.key==='wf_counter')?.value||'0');
+    return {customers,repairs,complaints,installs,conversations,wfCounter,version:0};
+  }catch(e){ console.error('loadFromSupabase error:',e); return EMPTY_DB; }
+}
+
+async function syncToSupabase(prev,next){
+  try{
+    const changedCusts=(next.customers||[]).filter(c=>{
+      const old=(prev.customers||[]).find(p=>p.wfId===c.wfId);
+      return !old||JSON.stringify(old)!==JSON.stringify(c);
+    });
+    if(changedCusts.length>0) await sb.from('customers').upsert(changedCusts.map(custToDb));
+    const changedRepairs=Object.values(next.repairs||{}).filter(r=>{
+      const old=(prev.repairs||{})[r.id];
+      return !old||JSON.stringify(old)!==JSON.stringify(r);
+    });
+    if(changedRepairs.length>0) await sb.from('repairs').upsert(changedRepairs.map(repairToDb));
+    const changedCts=Object.values(next.complaints||{}).filter(ct=>{
+      const old=(prev.complaints||{})[ct.id];
+      return !old||JSON.stringify(old)!==JSON.stringify(ct);
+    });
+    if(changedCts.length>0) await sb.from('complaints').upsert(changedCts.map(ctToDb));
+    const changedInstalls=Object.values(next.installs||{}).filter(o=>{
+      const old=(prev.installs||{})[o.id];
+      return !old||JSON.stringify(old)!==JSON.stringify(o);
+    });
+    if(changedInstalls.length>0) await sb.from('installs').upsert(changedInstalls.map(installToDb));
+    const changedConvs=(next.conversations||[]).filter(c=>{
+      const old=(prev.conversations||[]).find(p=>p.id===c.id);
+      return !old||JSON.stringify(old)!==JSON.stringify(c);
+    });
+    if(changedConvs.length>0) await sb.from('conversations').upsert(changedConvs.map(convToDb));
+    if(next.wfCounter!==prev.wfCounter){
+      await sb.from('config').upsert({key:'wf_counter',value:String(next.wfCounter)});
+    }
+  }catch(e){ console.error('syncToSupabase error:',e); }
+}
+
+// RAG 後端伺服器位址
+const RAG_SERVER_URL = "http://localhost:8000";
+
+const CHANNELS = {
+  momo:{label:'momo購物',type:'online',icon:'🛒',color:'#E9308A'},
+  pchome:{label:'PChome',type:'online',icon:'🛒',color:'#CC0000'},
+  shopee:{label:'蝦皮購物',type:'online',icon:'🛒',color:'#F5721A'},
+  official:{label:'官方網站',type:'online',icon:'🌐',color:'#1A3557'},
+  store_tc:{label:'台中漢神直營',type:'offline',icon:'🏪',color:'#059669'},
+  store_tp:{label:'台北信義門市',type:'offline',icon:'🏪',color:'#059669'},
+  lock_shop:{label:'合作鎖店',type:'offline',icon:'🔑',color:'#7C3AED'},
+  builder:{label:'建案配置',type:'builder',icon:'🏗️',color:'#92400E'},
+};
+
+const PRODUCTS = {
+  'L376':{name:'L376 智能電子鎖',price:7990,warranty:36},
+  'L396':{name:'L396 進階電子鎖',price:12990,warranty:36},
+  'L600':{name:'L600 人臉辨識旗艦',price:28990,warranty:36},
+  'L901':{name:'L901 掌靜脈頂規',price:45990,warranty:36},
+  'L900':{name:'L900 旗艦款',price:22990,warranty:24},
+};
+
+const WORKERS = [
+  {id:'W1',name:'壹立工班1（仁哥）',district:'台中市',rating:4.8,jobs:42,status:'available'},
+  {id:'W2',name:'壹立工班2（阿偉）',district:'台中市',rating:4.6,jobs:38,status:'available'},
+  {id:'W3',name:'北區工班A（大明）',district:'台北市',rating:4.9,jobs:55,status:'available'},
+];
+
+const AI_STEPS = {
+  urgent:['嘗試外接9V鹼性電池到鎖孔下方','確認電池是否耗盡，嘗試備用電源','嘗試使用備用鑰匙'],
+  battery:['更換新鹼性AA電池（建議品牌電池）','確認電池安裝方向正確','清潔電池接點'],
+  default:['重啟鎖具電源（取出電池10秒再裝）','確認電池電量充足','參閱說明書故障排除'],
+};
+
+// ── 初始示範資料 ──
+const DEMO_CUSTOMERS = [
+  {wfId:'WF-2026-00001',name:'程心妤',phone:'0985688563',email:'chen@example.com',
+   lineUid:'demo_user_1',fbId:null,igId:null,
+   address:'台中市南屯區文心路306號 IDO森活家12A',district:'台中市',area:'南屯區',
+   channel:'builder',orderNo:'IDO-B-240315-012',serialNo:'WF-L376-2024-018432',
+   productId:'L376',installDate:'2024/03/15',warrantyMonths:36,warrantyEnd:'2027/03/15',
+   regType:'auto',regDate:'2024/03/15',tags:['保固中','建案客戶'],
+   repairIds:['R-001']},
+];
+
+const DEMO_REPAIRS = {
+  'R-001':{id:'R-001',wfId:'WF-2026-00001',name:'程心妤',phone:'0985688563',
+    district:'台中市',area:'南屯區',building:'IDO森活家12A',date:'2026/01/28',
+    type:'電子鎖',issue:'耗電過快',space:'客廳',status:'dispatched',urgency:'normal',
+    workerId:'W1',scheduledDate:'2026/01/30 上午',desc:'一下就沒電了',
+    unread:false,arrivalPushed:true,rating:null},
+};
+
+const DEMO_CONVS = [
+  {id:'conv_demo',wfId:'WF-2026-00001',name:'程心妤',platform:'line',av:'程',
+   unread:0,lastMsg:'（示範對話）',lastTime:'',
+   msgs:[
+     {id:'d1',from:'bot',text:'您好程心妤，歡迎使用WAFERLOCK官方服務 🏠\n\n帳戶：WF-2026-00001\n保固：✅ 至2027/03/15\n\n請點選下方選單或直接留言',time:'示範'},
+   ]},
+];
+
+
+
+const now = ()=>new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'});
+const today = ()=>new Date().toLocaleDateString('zh-TW');
+const isUrg = t=>/(門打不開|鎖壞了|打不開|緊急|被鎖在|出不去|進不去|無法開門)/i.test(t||'');
+const isBattery = t=>/(電池|沒電|耗電)/i.test(t||'');
+
+const mkWF = (counter)=>`WF-${new Date().getFullYear()}-${String(counter).padStart(5,'0')}`;
+
+const pctWarranty=(install,months)=>{
+  const e=new Date(install),end=new Date(e);
+  end.setMonth(end.getMonth()+months);
+  const n=new Date(); if(n>end) return 0;
+  return Math.max(0,Math.min(100,Math.round((1-(n-e)/(end-e))*100)));
+};
+
+const SYS_PROMPT = `你是WAFERLOCK維夫拉克官方LINE客服AI，專精電子門鎖售前售後服務。
+回覆原則：繁體中文、簡短友善（≤100字）、適時用emoji
+緊急（門打不開/被鎖在外面）：立即給緊急建議步驟，告知已通知客服
+電池問題：建議外接9V電池臨時供電
+引導使用報修功能或保固登錄`;
+
+// ═══════════════════════════════════════════════
+// Toast
+// ═══════════════════════════════════════════════
+function Toasts({items}){
+  return <div className="toasts">
+    {items.map(t=><div key={t.id} className={`toast ${t.type||''}`}>
+      <div className="toast-t">{t.title}</div>
+      <div style={{fontSize:11.5}}>{t.body}</div>
+    </div>)}
+  </div>;
+}
+
+// ═══════════════════════════════════════════════
+// PAGE 1: 客戶 LINE 端
+// ═══════════════════════════════════════════════
+function CustomerPage(){
+  const {db, updateDB, toast} = useContext(Ctx);
+  const CHAT_KEY = 'waferlock_line_chat';
+  const greeting = {id:1,from:'bot',text:'您好！歡迎加入WAFERLOCK維夫拉克官方LINE@ 🔒\n\n我是您的AI客服，可協助：\n• 🛒 購買諮詢（轉專屬業務）\n• 🔧 報修協助（AI 先行排除，必要時轉真人客服）\n• 💡 產品與保固問題\n\n🔗 已是客戶嗎？點下方「LINE綁定」連結帳戶，即可查詢保固與報修紀錄',time:''};
+  const [msgs,setMsgs] = useState(()=>{
+    try{ const raw=localStorage.getItem(CHAT_KEY); if(raw){ const arr=JSON.parse(raw); if(Array.isArray(arr)&&arr.length) return arr; } }catch(e){}
+    return [greeting];
+  });
+  const [input,setInput] = useState('');
+  const [typing,setTyping] = useState(false);
+  const [view,setView] = useState('chat');
+  // 會員綁定
+  const [memberWf,setMemberWf] = useState(()=>{try{return localStorage.getItem('waferlock_line_bind')||null;}catch(e){return null;}});
+  const [bindData,setBindData] = useState({phone:'',address:''});
+  const member = memberWf ? (db.customers||[]).find(c=>c.wfId===memberWf) : null;
+  const aiPaused = !!(db.conversations||[]).find(c=>c.id==='conv_live')?.agentTakeover;
+  // emergency
+  const [urgSteps,setUrgSteps] = useState([]);
+  const [broadcasting,setBroadcasting] = useState(false);
+  const [bcTimer,setBcTimer] = useState(30);
+  const [bcWorkers,setBcWorkers] = useState([]);
+  const endRef = useRef();
+  const convHistoryRef = useRef([]);
+  const fileInputRef = useRef();
+  const pendingImageRef = useRef(null); // { base64, mimeType, previewUrl }
+  const [pendingImagePreview, setPendingImagePreview] = useState(null);
+
+  // RAG 伺服器狀態（從 context 取得）
+  const {srvOnline, geminiReady} = useContext(Ctx);
+  const [showApiPanel, setShowApiPanel] = React.useState(false);
+  const [apiKeyInput, setApiKeyInput] = React.useState('');
+
+  const saveApiKey = async () => {
+    if (!apiKeyInput.trim()) return;
+    try {
+      const r = await fetch(`${RAG_SERVER_URL}/config/api-key`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({api_key: apiKeyInput.trim()})
+      });
+      if (r.ok) { setShowApiPanel(false); toast('Gemini 已設定','API Key 儲存成功','ok'); }
+    } catch { toast('錯誤','無法連接伺服器','err'); }
+  };
+
+  useEffect(()=>{ endRef.current?.scrollIntoView({behavior:'smooth'}); },[msgs,typing,view]);
+  useEffect(()=>{ try{ localStorage.setItem(CHAT_KEY, JSON.stringify(msgs)); }catch(e){} },[msgs]);
+  // 接收客服 / CRM 端回推的訊息（派工通知 'p'、真人客服回覆 'a'、立案通知 'c'）
+  useEffect(()=>{
+    const conv=(db.conversations||[]).find(c=>c.id==='conv_live');
+    if(!conv||!conv.msgs) return;
+    const incoming=conv.msgs.filter(m=>/^[pac]/.test(String(m.id)));
+    if(!incoming.length) return;
+    setMsgs(prev=>{
+      const have=new Set(prev.map(m=>String(m.id)));
+      const add=incoming.filter(m=>!have.has(String(m.id)));
+      if(!add.length) return prev;
+      return [...prev, ...add.map(m=>({id:m.id,from:m.from==='agent'?'agent-reply':m.from,text:m.text,time:m.time||now()}))];
+    });
+  },[db.version]);
+
+  const addMsg = useCallback((m)=>{
+    const msg = {id:Date.now()+Math.random(),...m,time:now()};
+    setMsgs(p=>[...p,msg]);
+    return msg;
+  },[]);
+
+  const syncMsgToAgent = useCallback((text,from,urgent=false)=>{
+    updateDB(prev=>{
+      let convs = [...(prev.conversations||[])];
+      const bound = memberWf ? (prev.customers||[]).find(c=>c.wfId===memberWf) : null;
+      const cname = bound ? `${bound.name}（LINE）` : '住戶（LINE）';
+      let idx = convs.findIndex(c=>c.id==='conv_live');
+      const newMsg = {id:'s'+Date.now(),from,text,time:now(),urgent};
+      if(idx<0){
+        convs.push({id:'conv_live',wfId:memberWf||'',name:cname,platform:'line',av:'住',
+          unread:from==='user'?1:0,lastMsg:text,lastTime:now(),msgs:[newMsg]});
+      } else {
+        convs[idx] = {...convs[idx],
+          wfId: memberWf||convs[idx].wfId,
+          name: bound ? cname : convs[idx].name,
+          msgs:[...convs[idx].msgs, newMsg],
+          unread: from==='user' ? (convs[idx].unread||0)+1 : convs[idx].unread,
+          lastMsg:text, lastTime:now()};
+      }
+      return {...prev, conversations:convs};
+    });
+  },[updateDB,memberWf]);
+
+  const handleImageSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target.result; // data:image/jpeg;base64,XXXX
+      const [header, base64] = dataUrl.split(',');
+      const mimeType = header.match(/:(.*?);/)[1];
+      pendingImageRef.current = { base64, mimeType, previewUrl: dataUrl };
+      setPendingImagePreview(dataUrl);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = ''; // 允許重複選同一張
+  };
+
+  const callAI = async(text, imageData=null)=>{
+    setTyping(true);
+    try{
+      if (!srvOnline) {
+        addMsg({from:'bot',text:'⚠️ RAG 伺服器未啟動，請先執行 rag_server.py\n\n或撥打客服專線 0800-002-345 📞'});
+        setTyping(false);
+        return;
+      }
+
+      const historyText = text || '（傳送了一張照片）';
+      convHistoryRef.current = [...convHistoryRef.current, {role:'user', text: historyText}].slice(-6);
+
+      const body = {
+        message: text,
+        top_k: 5,
+        history: convHistoryRef.current.slice(0, -1),
+      };
+      if (imageData) {
+        body.image_base64 = imageData.base64;
+        body.image_mime_type = imageData.mimeType;
+      }
+
+      const response = await fetch(`${RAG_SERVER_URL}/chat`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body)
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      const reply = data.reply || '請稍候，客服人員將儘速為您服務 🙏';
+
+      convHistoryRef.current = [...convHistoryRef.current, {role:'assistant', text:reply}].slice(-6);
+
+      addMsg({from:'bot',text:reply});
+      syncMsgToAgent(reply,'bot',false);
+    }catch(e){
+      console.error('[RAG] Error:', e);
+      addMsg({from:'bot',text:'抱歉，系統暫時無法回應，請撥打 0800-002-345 📞'});
+    }
+    setTyping(false);
+  };
+
+  const send = async()=>{
+    const t=input.trim();
+    const img = pendingImageRef.current;
+    if(!t && !img) return;
+    setInput('');
+    pendingImageRef.current = null;
+    setPendingImagePreview(null);
+
+    addMsg({from:'user', text:t||'', imageUrl: img?.previewUrl||null});
+    if(t) syncMsgToAgent(t,'user',isUrg(t));
+
+    if(aiPaused){ return; } // 真人客服已接手 → AI 停止自動回應
+
+    if(isUrg(t) && !img){
+      const steps = AI_STEPS.urgent;
+      setUrgSteps(steps);
+      toast('🚨 緊急案件','住戶報告緊急狀況，整合平台已收到','err');
+      setTimeout(()=>{
+        const reply = `🚨 收到緊急狀況！\n\n請先依序嘗試：\n${steps.map((s,i)=>`${i+1}. ${s}`).join('\n')}\n\n⬇️ 如均無效，點下方「確認緊急派工」`;
+        addMsg({from:'bot',text:reply});
+        syncMsgToAgent(reply,'bot',true);
+        setView('repair_urgent');
+      },400);
+    } else {
+      await callAI(t, img);
+    }
+  };
+
+  const handleMenu=(lb)=>{
+    if(lb==='LINE綁定'){setBindData({phone:'',address:''});setView('bind');return;}
+    if(lb==='保固查詢'){setView('warranty_query');return;}
+    if(lb==='我要報修'){escalateToAgent('我要報修，請協助處理',false,true);return;}
+    if(lb==='真人客服'){escalateToAgent('我想詢問 / 需要真人客服協助',false,false);return;}
+    if(lb==='購買諮詢'){inquiryBuy();return;}
+    if(lb==='報修紀錄'){
+      const c = member;
+      if(!c){ addMsg({from:'bot',text:'請先完成 LINE 綁定才能查詢報修紀錄 🔗'}); return; }
+      const list=(c.repairIds||[]).map(rid=>db.repairs?.[rid]).filter(Boolean);
+      if(list.length===0){
+        addMsg({from:'bot',text:'📋 目前尚無報修紀錄\n\n如需報修請點選下方「我要報修」'});
+      } else {
+        // 顯示所有紀錄（最新的在前）
+        const lines = [...list].reverse().map((r,i)=>{
+          const statusLabel = r.status==='done'?'✅ 已完成':r.status==='dispatched'?'🚗 派工中':'⏳ 待處理';
+          const warrantyLabel = r.warrantyIn!=null?(r.warrantyIn?'🛡️ 保固內（免費）':'⚠️ 保固外（收費）'):'';
+          const handlingLabel = r.handlingUnit?`👷 ${r.handlingUnit}`:'';
+          const workerLabel = r.workerId?`師傅：${['W1','W2','W3'].includes(r.workerId)?{'W1':'壹立工班1（仁哥）','W2':'壹立工班2（阿偉）','W3':'北區工班A（大明）'}[r.workerId]:r.workerId}`:'';
+          const scheduleLabel = r.scheduledDate?`📅 預約：${r.scheduledDate}`:'';
+          const receiptLabel = r.receiptNo?`📋 簽收單號：${r.receiptNo}`:'';
+          const parts = [
+            `${i+1}. ${r.type} — ${r.issue}`,
+            `   ${statusLabel}  ${warrantyLabel}`,
+            handlingLabel?`   ${handlingLabel}`:'',
+            workerLabel?`   ${workerLabel}`:'',
+            scheduleLabel?`   ${scheduleLabel}`:'',
+            receiptLabel?`   ${receiptLabel}`:'',
+            `   案件編號：${r.id}  日期：${r.date}`,
+          ].filter(Boolean);
+          return parts.join('\n');
+        });
+        addMsg({from:'bot',text:`📋 您的報修紀錄（共 ${list.length} 筆）：\n\n${lines.join('\n\n')}`});
+      }
+      return;
+    }
+    const texts = {'服務據點':'請問服務據點在哪裡？','常見問題':'有哪些常見問題？'};
+    const t = texts[lb]||lb;
+    addMsg({from:'user',text:t});
+    syncMsgToAgent(t,'user',false);
+    if(!aiPaused) callAI(t);
+  };
+
+  const submitBind=()=>{
+    const phone=bindData.phone.trim();
+    const addr=bindData.address.trim();
+    if(!phone){ toast('請輸入電話','綁定需要聯絡電話','warn'); return; }
+    const custs=db.customers||[];
+    let match=custs.find(c=>c.phone&&c.phone.replace(/\s/g,'')===phone);
+    if(!match&&addr) match=custs.find(c=>c.address&&c.address!=='待填寫'&&c.address.includes(addr));
+    const wfId = match ? match.wfId : mkWF((db.wfCounter||1)+1);
+    const name = match ? match.name : 'LINE會員';
+    const okText = match
+      ? `🔗 綁定成功！\n\n已連結您的帳戶：${wfId}\n姓名：${name}\n現在可查詢保固與報修紀錄 ✅`
+      : `🔗 綁定成功！\n\n已建立會員編號：${wfId}\n目前尚無安裝/保固資料，待師傅到府安裝登錄後即可查詢保固 🛠️`;
+    updateDB(prev=>{
+      let cs=prev.customers||[];
+      if(match){
+        cs=cs.map(c=>c.wfId===wfId?{...c,lineUid:'live_user',tags:Array.from(new Set([...(c.tags||[]),'會員']))}:c);
+      } else {
+        cs=[...cs,{wfId,name,phone,email:'',lineUid:'live_user',fbId:null,igId:null,
+          address:addr||'待填寫',district:'未知',area:'未知',channel:'',orderNo:'',serialNo:'',
+          productId:null,installDate:null,warrantyMonths:null,warrantyEnd:null,
+          regType:'line_bind',regDate:today(),tags:['會員','待安裝'],repairIds:[]}];
+      }
+      let convs=[...(prev.conversations||[])];
+      const botMsg={id:'b'+Date.now(),from:'bot',text:okText,time:now()};
+      const idx=convs.findIndex(c=>c.id==='conv_live');
+      if(idx<0){ convs.push({id:'conv_live',wfId,name:`${name}（LINE）`,platform:'line',av:'住',unread:0,lastMsg:'已完成綁定',lastTime:now(),msgs:[botMsg]}); }
+      else { convs[idx]={...convs[idx],wfId,name:`${name}（LINE）`,msgs:[...convs[idx].msgs,botMsg],lastMsg:'已完成綁定',lastTime:now()}; }
+      return {...prev,customers:cs,conversations:convs,...(match?{}:{wfCounter:(prev.wfCounter||1)+1})};
+    });
+    setMemberWf(wfId);
+    try{ localStorage.setItem('waferlock_line_bind',wfId); }catch(e){}
+    setView('chat');
+    addMsg({from:'bot',text:okText});
+    toast(match?'✅ 綁定成功（已連動客資）':'✅ 綁定成功（新會員）', match?`已連結 ${wfId}`:`配發編號 ${wfId}`,'ok');
+  };
+
+  const escalateToAgent=(label,urgent=false,needCase=true)=>{
+    addMsg({from:'user',text:label});
+    syncMsgToAgent(label,'user',urgent);
+    if(needCase){
+      updateDB(prev=>({...prev,conversations:(prev.conversations||[]).map(c=>c.id==='conv_live'
+        ?{...c,needCase:true,lastMsg:urgent?'🚨 緊急報修（待立案）':'🔧 客戶要求報修（待立案）',lastTime:now()}:c)}));
+    }
+    setTimeout(()=>{
+      const r='已為您轉接真人客服 🧑‍💼\n客服將協助確認問題' + (needCase?'並為您立案報修':'') + '，請稍候。';
+      addMsg({from:'bot',text:r}); syncMsgToAgent(r,'bot',false);
+    },400);
+    toast(needCase?'🔧 已轉客服':'👤 已轉客服', needCase?'報修需求已送至客服平台待立案':'已轉接真人客服','ok');
+  };
+
+  const inquiryBuy=()=>{
+    const txt='我想購買 / 諮詢電子鎖產品';
+    addMsg({from:'user',text:txt});
+    syncMsgToAgent(txt,'user',false);
+    updateDB(prev=>({...prev,conversations:(prev.conversations||[]).map(c=>c.id==='conv_live'
+      ?{...c,bizInquiry:true,lastMsg:'🛒 購買諮詢（轉業務）',lastTime:now()}:c)}));
+    setTimeout(()=>{
+      const r='感謝您的興趣！已為您轉接業務專員 🤝\n業務將與您聯繫洽談需求與報價，確認購買後安排到府安裝。';
+      addMsg({from:'bot',text:r}); syncMsgToAgent(r,'bot',false);
+    },400);
+    toast('🛒 購買諮詢','已轉業務專員','ok');
+  };
+
+  const triggerBroadcast=()=>{
+    if(!member){ setView('chat'); escalateToAgent('🚨 緊急：門無法開啟，請立即協助',true,true); return; }
+    setBroadcasting(true);
+    setBcWorkers(WORKERS.filter(w=>w.district==='台中市'));
+    setBcTimer(30);
+    let t=30;
+    const timer=setInterval(()=>{ t--; setBcTimer(t); if(t<=0){clearInterval(timer); toast('⚠️ 無人接單','30秒無工班回應，請客服立即介入','err');}},1000);
+    const broadMsg = '🚨 緊急派工廣播已啟動！\n\n系統正通知您附近工班...\n第一位接單的師傅將立即出發\n\n如30秒無人接單，客服將即時介入';
+    addMsg({from:'bot',text:broadMsg});
+    syncMsgToAgent(broadMsg,'bot',true);
+    setView('broadcast');
+    toast('🚨 緊急廣播','已廣播給所有台中市工班','err');
+  };
+
+  const workerAccept=(worker)=>{
+    setBroadcasting(false); setView('chat');
+    const rid='R-URG-'+Date.now();
+    const m = member || {};
+    const urgRepair = {
+      id:rid, wfId:memberWf||'', name:m.name||'住戶', phone:m.phone||'',
+      district:m.district||'台中市', area:m.area||'', building:m.address||'現場',
+      date:today(), type:'電子鎖', issue:'門打不開', space:'大門',
+      status:'dispatched', urgency:'urgent', workerId:worker.id,
+      scheduledDate:'緊急出勤', desc:'緊急！門無法開啟',
+      unread:false, arrivalPushed:true, rating:null,
+    };
+    updateDB(prev=>{
+      const custs = (prev.customers||[]).map(c=>c.wfId===memberWf?{...c,repairIds:[...(c.repairIds||[]),rid]}:c);
+      return {...prev, repairs:{...prev.repairs,[rid]:urgRepair}, customers:custs};
+    });
+    const acceptText = `✅ ${worker.name} 已接單！\n\n🚗 師傅正趕往您的位置\n評分：★${worker.rating}｜${worker.jobs}件\n預計抵達：25分鐘內\n\n客服熱線：0800-002-345`;
+    addMsg({from:'bot',text:acceptText});
+    syncMsgToAgent(acceptText,'bot',false);
+    toast('✅ 工班接單',`${worker.name} 接受緊急派工`,'ok');
+  };
+
+  // ─── Render inline UI panels ───
+  const renderInlinePanel=()=>{
+    if(view==='bind'){
+      return(
+        <div className="inline-form">
+          <h4>🔗 LINE 綁定會員</h4>
+          <div style={{fontSize:11,color:'var(--g500)',marginBottom:8,lineHeight:1.6}}>輸入電話或地址，與後台客戶資料比對；查無資料將為您配發新會員編號。</div>
+          <div className="if-field"><label>聯絡電話（必填）</label>
+            <input placeholder="0912345678" value={bindData.phone}
+              onChange={e=>setBindData(p=>({...p,phone:e.target.value}))}/>
+          </div>
+          <div className="if-field"><label>安裝地址（選填，加強比對）</label>
+            <input placeholder="例：台中市南屯區…" value={bindData.address}
+              onChange={e=>setBindData(p=>({...p,address:e.target.value}))}/>
+          </div>
+          <button style={{width:'100%',marginTop:4,padding:'8px',background:bindData.phone.trim()?'var(--ok)':'var(--g200)',color:bindData.phone.trim()?'#fff':'var(--g500)',border:'none',borderRadius:5,fontSize:12,fontWeight:700,cursor:bindData.phone.trim()?'pointer':'not-allowed'}}
+            onClick={()=>bindData.phone.trim()&&submitBind()}>🔗 完成綁定</button>
+          <button style={{width:'100%',padding:'5px',background:'none',border:'none',fontSize:10.5,color:'var(--g400)',cursor:'pointer',marginTop:6}}
+            onClick={()=>setView('chat')}>取消</button>
+        </div>
+      );
+    }
+    if(view==='warranty_query'){
+      if(!member) return null;
+      const hasW = member.productId && member.installDate;
+      const p = hasW ? pctWarranty(member.installDate, member.warrantyMonths) : 0;
+      return(
+        <div className="inline-form">
+          <h4>🛡️ 保固查詢</h4>
+          <div style={{fontSize:11.5,lineHeight:1.9}}>
+            <div><strong>帳戶編號：</strong>{member.wfId}</div>
+            <div><strong>姓名：</strong>{member.name}</div>
+            <div><strong>電話：</strong>{member.phone}</div>
+            {hasW ? (
+              <>
+                <div><strong>產品：</strong>{PRODUCTS[member.productId]?.name||member.productId}</div>
+                <div><strong>安裝日：</strong>{member.installDate}</div>
+                <div style={{margin:'4px 0'}}><div className="wbar"><div className={`wfill ${p>50?'ok':p>20?'warn':'bad'}`} style={{width:`${p}%`}}/></div></div>
+                <div style={{color:p>0?'var(--ok)':'var(--err)',fontWeight:700}}>{p>0?`✅ 保固中，至 ${member.warrantyEnd}`:`❌ 保固已到期（${member.warrantyEnd}）`}</div>
+              </>
+            ) : (
+              <div style={{background:'#FFF7ED',border:'1px solid #FED7AA',borderRadius:6,padding:9,marginTop:6,color:'#92400E'}}>🛠️ 尚無保固資料<br/>待師傅到府安裝登錄後，即可查詢保固期限。</div>
+            )}
+          </div>
+          <button style={{width:'100%',padding:'5px',background:'none',border:'none',fontSize:10.5,color:'var(--g400)',cursor:'pointer',marginTop:8}}
+            onClick={()=>setView('chat')}>關閉</button>
+        </div>
+      );
+    }
+    if(view==='repair_urgent'){
+      return(
+        <div className="ai-steps-card">
+          <h5>🤖 AI 建議處理步驟（緊急）</h5>
+          {urgSteps.map((s,i)=><div key={i} className="ai-step">
+            <div className="ai-step-n">{i+1}</div><span>{s}</span>
+          </div>)}
+          <div style={{borderTop:'1px solid #FED7AA',marginTop:8,paddingTop:8,fontSize:11,color:'#92400E',marginBottom:6}}>
+            以上步驟都嘗試過了嗎？
+          </div>
+          <div style={{display:'flex',gap:5}}>
+            <button style={{flex:1,padding:'6px',background:'#FEF3C7',border:'none',borderRadius:4,fontSize:11,cursor:'pointer'}}
+              onClick={()=>setView('chat')}>已解決，謝謝</button>
+            <button className="ai-step-confirm" style={{flex:2}}
+              onClick={triggerBroadcast}>🚨 確認無法解決，緊急派工</button>
+          </div>
+        </div>
+      );
+    }
+    if(view==='broadcast'){
+      return(
+        <div className="broadcast-card">
+          <h5>🚨 緊急廣播中 — 等待工班接單</h5>
+          <div style={{fontSize:10.5,color:'var(--g600)',marginBottom:6}}>
+            倒計時 {bcTimer} 秒 ｜ 無人接單將通知客服介入
+          </div>
+          {bcWorkers.map(w=>(
+            <div key={w.id} className="w-row">
+              <span className="wn">{w.name}</span>
+              <span className="wr">★{w.rating}</span>
+              <button className="w-accept" onClick={()=>workerAccept(w)}>接單</button>
+              <button className="w-decline" onClick={()=>setBcWorkers(p=>p.filter(x=>x.id!==w.id))}>無法</button>
+            </div>
+          ))}
+          {bcWorkers.length===0&&<div style={{fontSize:11,color:'var(--err)'}}>⚠️ 無工班回應，客服即將介入...</div>}
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const menuItems = member ? [
+    {ic:'🛡️',lb:'保固查詢'},{ic:'📋',lb:'報修紀錄'},{ic:'🔧',lb:'我要報修'},
+    {ic:'🛒',lb:'購買諮詢'},{ic:'📍',lb:'服務據點'},{ic:'❓',lb:'常見問題'},
+  ] : [
+    {ic:'🔗',lb:'LINE綁定'},{ic:'🛒',lb:'購買諮詢'},{ic:'📍',lb:'服務據點'},
+    {ic:'❓',lb:'常見問題'},{ic:'👤',lb:'真人客服'},
+  ];
+
+  return(
+    <div className="lw">
+      <div>
+        <p style={{fontSize:11.5,color:'var(--g500)',marginBottom:10,textAlign:'center'}}>👤 住戶端 LINE 模擬</p>
+        <div className="lphone">
+          <div className="lhdr">
+            <div className="lhdr-ic">🔒</div>
+            <div><div className="lhdr-n">WAFERLOCK維夫拉克</div><div className="lhdr-s">{aiPaused?'🧑‍💼 真人客服服務中':(member?`🔗 已綁定 ${member.wfId}`:'未綁定 · 點「LINE綁定」連結帳戶')}</div></div>
+            <span style={{marginLeft:'auto',fontSize:9,background:'rgba(255,255,255,.2)',color:'#fff',padding:'2px 5px',borderRadius:3}}>官方</span>
+          </div>
+          <div className="lmsgs">
+            {msgs.map(m=>(
+              <div key={m.id}>
+                {m.urgent&&<div className="urg-banner">🚨 緊急 — 已通知客服平台</div>}
+                <div className={`mrow ${m.from==='user'?'u':''}`}>
+                  {m.from!=='user'&&<div className="mav">W</div>}
+                  <div>
+                    <div className={`mb ${m.from==='user'?'u':m.from==='agent-reply'?'agent-reply':'bot'}`}>
+                    {m.imageUrl&&<img src={m.imageUrl} className="chat-img" alt="照片"/>}
+                    {m.text&&<span>{m.text}</span>}
+                  </div>
+                    <div className="mt" style={{textAlign:m.from==='user'?'right':'left'}}>{m.time}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {typing&&<div className="mrow"><div className="mav">W</div><div className="typing"><div className="tdot"/><div className="tdot"/><div className="tdot"/></div></div>}
+            {aiPaused&&<div style={{textAlign:'center',fontSize:10.5,color:'#92400E',background:'#FEF3C7',borderRadius:8,padding:'5px 10px',margin:'6px auto',maxWidth:230}}>🧑‍💼 真人客服服務中，AI 自動回覆已暫停</div>}
+            {renderInlinePanel()}
+            <div ref={endRef}/>
+          </div>
+          <div className="lgrid">
+            {menuItems.map(m=><div key={m.lb} className="lgitem" onClick={()=>handleMenu(m.lb)}>
+              <span className="ic">{m.ic}</span><span className="lb">{m.lb}</span>
+            </div>)}
+          </div>
+          <div className="linput-bar">
+            <input type="file" ref={fileInputRef} accept="image/*" style={{display:'none'}} onChange={handleImageSelect}/>
+            <button className={`lcam ${pendingImagePreview?'has-img':''}`} onClick={()=>fileInputRef.current?.click()} title="傳送照片辨識型號">
+              📷
+            </button>
+            {pendingImagePreview&&(
+              <div className="img-preview-wrap">
+                <img src={pendingImagePreview} alt="預覽"/>
+                <button className="img-rm" onClick={()=>{pendingImageRef.current=null;setPendingImagePreview(null);}}>×</button>
+              </div>
+            )}
+            <textarea className="ltxt" rows={1} value={input}
+              onChange={e=>setInput(e.target.value)}
+              onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}}}
+              placeholder={pendingImagePreview?"（可補充說明或直接送出）":"輸入訊息..."}/>
+            <button className="lsend" onClick={send}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="white"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div style={{maxWidth:280,fontSize:12,color:'var(--g600)',lineHeight:1.8}}>
+        <div style={{background:'#fff',borderRadius:10,padding:13,boxShadow:'0 1px 3px rgba(0,0,0,.08)',marginBottom:10}}>
+          <p style={{fontWeight:700,fontSize:12.5,marginBottom:7}}>🔄 即時同步說明</p>
+          <p>此頁面的所有操作會即時同步到 <strong>CRM 頁面</strong>（waferlock_crm.html）</p>
+          <p style={{marginTop:6}}>需同時在瀏覽器中開啟兩個檔案才能看到連動效果。</p>
+        </div>
+        <div style={{background:'#FFF7ED',borderRadius:10,padding:12,border:'1px solid #FED7AA'}}>
+          <p style={{fontWeight:700,color:'#92400E',fontSize:12,marginBottom:6}}>🧪 試試看</p>
+          <p>1. 點「LINE綁定」→ 輸入電話（試 0985688563 可連動既有客戶程心妤）</p>
+          <p>2. 綁定後點「保固查詢」看保固期限</p>
+          <p>3. 點「我要報修」→ 切到客服平台「立案」建立報修單</p>
+          <p>4. 輸入「門打不開」觸發緊急流程</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════
+// PAGE 2: 客服整合平台
+// ═══════════════════════════════════════════════
+function AgentPage(){
+  const {db, updateDB, toast} = useContext(Ctx);
+  const [active,setActive] = useState(null);
+  const [filter,setFilter] = useState('all');
+  const [input,setInput] = useState('');
+  const [aiSug,setAiSug] = useState('');
+  const [aiLoading,setAiLoading] = useState(false);
+  const [dispModal,setDispModal] = useState(null);
+  const [selWorker,setSelWorker] = useState('W1');
+  const [selDate,setSelDate] = useState('');
+  const [selTime,setSelTime] = useState('上午');
+  const [caseModal,setCaseModal] = useState(false);
+  const [caseForm,setCaseForm] = useState({type:'電子鎖',issue:'',space:'大門',urgency:'normal',scheduledDate:'',desc:''});
+  const endRef = useRef();
+
+  const convs = db.conversations || [];
+  const filtered = convs.filter(c=>filter==='all'||c.platform===filter);
+  const totalUnread = convs.reduce((s,c)=>s+(c.unread||0),0);
+
+  useEffect(()=>{ endRef.current?.scrollIntoView({behavior:'smooth'}); },[active?.msgs]);
+
+  // Refresh active conv when DB changes
+  useEffect(()=>{
+    if(active){
+      const updated = convs.find(c=>c.id===active.id);
+      if(updated) setActive(updated);
+    }
+  },[db.version]);
+
+  const getCust = (wfId)=>db.customers?.find(c=>c.wfId===wfId);
+  const isUrgConv = (conv)=>conv.msgs?.some(m=>m.urgent||isUrg(m.text||''));
+
+  const selectConv=(c)=>{
+    setActive(c); setAiSug('');
+    updateDB(prev=>({...prev,conversations:prev.conversations.map(x=>x.id===c.id?{...x,unread:0}:x)}));
+    const lastUser = [...(c.msgs||[])].reverse().find(m=>m.from==='user');
+    if(lastUser) getAiSug(lastUser.text);
+  };
+
+  const getAiSug=async(text)=>{
+    if(!text||aiLoading) return;
+    setAiLoading(true);
+    try{
+      const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:100,
+          system:'你是WAFERLOCK客服助理。根據客戶最新訊息，給客服一個建議回覆草稿（繁體中文，≤50字，直接給草稿不要說明）',
+          messages:[{role:'user',content:`客戶說：「${text}」，建議回覆：`}]})});
+      const d=await r.json();
+      setAiSug(d.content?.[0]?.text||'');
+    }catch(e){ setAiSug(''); }
+    setAiLoading(false);
+  };
+
+  const sendMsg=()=>{
+    if(!input.trim()||!active) return;
+    const t=input.trim(); setInput('');
+    const m={id:'a'+Date.now(),from:'agent',text:t,time:now()};
+    updateDB(prev=>({...prev,conversations:prev.conversations.map(c=>c.id===active.id
+      ?{...c,msgs:[...(c.msgs||[]),m],lastMsg:t,lastTime:now(),agentTakeover:true}:c)}));
+    setActive(p=>({...p,msgs:[...(p.msgs||[]),m],agentTakeover:true}));
+    toast('✉️ 已送出',`回覆 ${active.name}（AI 已停止自動回覆）`,'ok');
+  };
+
+  const toggleTakeover=()=>{
+    if(!active) return;
+    const next=!active.agentTakeover;
+    updateDB(prev=>({...prev,conversations:prev.conversations.map(c=>c.id===active.id?{...c,agentTakeover:next}:c)}));
+    setActive(p=>({...p,agentTakeover:next}));
+    toast(next?'🧑‍💼 客服已接手':'🤖 已交還 AI', next?'AI 將停止自動回覆此對話':'AI 自動回覆已恢復','ok');
+  };
+
+  const doDispatch=()=>{
+    const w=WORKERS.find(x=>x.id===selWorker);
+    if(!dispModal||!w) return;
+    const repairId = dispModal.id;
+    const pushMsg = {id:'p'+Date.now(),from:'bot',
+      text:`🚗 派工通知\n\n師傅：${w.name}\n預約：${selDate||today()} ${selTime}\n師傅抵達前將提前通知您 📱`,
+      time:now()};
+    updateDB(prev=>{
+      const newRepairs = {...prev.repairs,[repairId]:{...prev.repairs[repairId],
+        status:'dispatched',workerId:selWorker,
+        scheduledDate:`${selDate||today()} ${selTime}`,arrivalPushed:true}};
+      const newConvs = prev.conversations.map(c=>c.wfId===dispModal.wfId
+        ?{...c,msgs:[...(c.msgs||[]),pushMsg],lastMsg:'師傅通知已送出',lastTime:now()}:c);
+      return {...prev,repairs:newRepairs,conversations:newConvs};
+    });
+    toast('🚗 派工完成',`${w.name} 已指派，已推播住戶`,'ok');
+    setTimeout(()=>toast('📱 住戶收到','師傅預計抵達通知已送出','ok'),1500);
+    setDispModal(null);
+  };
+
+  const createCase=()=>{
+    const c=getCust(active?.wfId);
+    if(!c){ toast('無法立案','此對話尚未綁定會員，請先請客戶完成 LINE 綁定','warn'); return; }
+    const rid='R-'+Date.now();
+    const newRepair={id:rid,wfId:c.wfId,name:c.name,phone:c.phone,
+      district:c.district,area:c.area,building:c.address,date:today(),
+      type:caseForm.type,issue:caseForm.issue||'異常問題',space:caseForm.space,
+      status:'pending',urgency:caseForm.urgency,workerId:null,
+      scheduledDate:caseForm.scheduledDate,desc:caseForm.desc,
+      unread:false,arrivalPushed:false,rating:null};
+    const pushMsg={id:'c'+Date.now(),from:'bot',
+      text:`📋 已為您建立報修單\n\n案件：${rid}\n問題：${caseForm.type} - ${caseForm.issue||'異常問題'}\n狀態：待派工\n客服將盡快安排師傅 🔧`,time:now()};
+    updateDB(prev=>{
+      const custs=(prev.customers||[]).map(x=>x.wfId===c.wfId?{...x,repairIds:[...(x.repairIds||[]),rid]}:x);
+      const convsN=(prev.conversations||[]).map(cv=>cv.wfId===c.wfId
+        ?{...cv,needCase:false,msgs:[...(cv.msgs||[]),pushMsg],lastMsg:'報修單已建立',lastTime:now()}:cv);
+      return {...prev,repairs:{...prev.repairs,[rid]:newRepair},customers:custs,conversations:convsN};
+    });
+    toast('📋 已立案',`${c.name} 報修單 ${rid} 已建立`,'ok');
+    setCaseModal(false);
+    setCaseForm({type:'電子鎖',issue:'',space:'大門',urgency:'normal',scheduledDate:'',desc:''});
+  };
+
+  // Get pending repairs for dispatch button
+  const getPendingRepairs = (wfId)=>{
+    const c = getCust(wfId);
+    if(!c) return [];
+    return (c.repairIds||[]).map(rid=>db.repairs?.[rid]).filter(r=>r&&r.status==='pending');
+  };
+
+  return(
+    <div className="aplayout">
+      <div className="apsb">
+        <div className="apsb-hdr">
+          <h3>整合收件匣</h3>
+          {totalUnread>0&&<span className="nbadge">{totalUnread}</span>}
+        </div>
+        <div className="pt-tabs">
+          {[['all','全部'],['line','LINE'],['fb','FB'],['ig','IG']].map(([v,l])=>(
+            <button key={v} className={`pt-tab ${v} ${filter===v?'on':''}`}
+              onClick={()=>setFilter(v)}>{l}</button>
+          ))}
+        </div>
+        <div className="clist">
+          {filtered.length===0&&<div style={{padding:'20px',textAlign:'center',color:'var(--g400)',fontSize:12}}>尚無對話記錄</div>}
+          {filtered.map(c=>{
+            const urg=isUrgConv(c);
+            return <div key={c.id} className={`citem ${active?.id===c.id?'on':''}`}
+              onClick={()=>selectConv(c)}>
+              <div className="citem-hdr">
+                <div className="cname">
+                  {urg&&<span className="urg-indicator"/>}
+                  <span className={`cplat ${c.platform}`}>{c.platform?.toUpperCase()}</span>
+                  {c.name}
+                </div>
+                <span className="ctime">{c.lastTime}</span>
+              </div>
+              <div className="cprev">{c.lastMsg}</div>
+              {c.needCase&&<div style={{fontSize:9.5,color:'var(--warn)',fontWeight:700,marginTop:2}}>🔧 待立案</div>}
+              {(c.unread||0)>0&&<div className="cunread">{c.unread}</div>}
+            </div>;
+          })}
+        </div>
+      </div>
+
+      <div className="apmain">
+        {active?(
+          <>
+            <div className="apch">
+              <div style={{width:34,height:34,background:'linear-gradient(135deg,var(--brand),#1A3F6F)',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontWeight:700,fontSize:14,flexShrink:0}}>{active.av}</div>
+              <div style={{flex:1,minWidth:0}}>
+                <h4>{active.name}</h4>
+                <p style={{fontSize:10.5,color:'var(--g400)',margin:0}}>
+                  <span className={`cplat ${active.platform}`}>{active.platform?.toUpperCase()}</span>
+                  {active.wfId&&<span style={{fontFamily:'monospace'}}>{active.wfId}</span>}
+                  {active.agentTakeover&&<span style={{color:'var(--err)',fontWeight:700,marginLeft:4}}>· AI已暫停</span>}
+                </p>
+              </div>
+              <button className="apact crm"
+                onClick={()=>toast('🔗','已在CRM頁面查看客戶資料（請切換到 waferlock_crm.html）','ok')}>CRM</button>
+              {active.wfId&&<button className="apact" style={{background:'var(--warn)',color:'#fff'}} onClick={()=>setCaseModal(true)}>📋 立案</button>}
+              <button className="apact" style={{background:active.agentTakeover?'#FEE2E2':'var(--ok)',color:active.agentTakeover?'var(--err)':'#fff'}} onClick={toggleTakeover}>{active.agentTakeover?'🤖 交還AI':'🧑‍💼 接手'}</button>
+              {getPendingRepairs(active.wfId).length>0&&(
+                <button className="apact dp" onClick={()=>setDispModal(getPendingRepairs(active.wfId)[0])}>派工</button>
+              )}
+              {isUrgConv(active)&&(
+                <button className="apact urg" onClick={()=>{
+                  const urg=Object.values(db.repairs||{}).find(r=>r.wfId===active.wfId&&r.urgency==='urgent'&&r.status==='pending');
+                  if(urg) setDispModal(urg);
+                  else toast('⚡','無緊急待處理案件','warn');
+                }}>🚨緊急</button>
+              )}
+            </div>
+            {isUrgConv(active)&&<div className="urg-alert">🚨 緊急案件 — 此對話包含緊急狀況，請優先處理</div>}
+            <div className="apmsgs">
+              {(active.msgs||[]).map(m=>(
+                <div key={m.id} className={`apmsg ${m.from==='user'?'cust':m.from==='agent'?'agt':'bot'}`}>
+                  <div className="apmsg-av">{m.from==='user'?active.av:m.from==='bot'?'🤖':'👤'}</div>
+                  <div>
+                    <div className="apmsg-b">{m.text}</div>
+                    <div className="apmsg-m">{m.from==='bot'?'AI 自動回覆':m.from==='agent'?'客服人員':active.name} · {m.time}</div>
+                  </div>
+                </div>
+              ))}
+              <div ref={endRef}/>
+            </div>
+            {aiSug&&<div className="ai-sug" onClick={()=>{setInput(aiSug);setAiSug('');}}>
+              <span>✨</span><span style={{flex:1}}><strong>AI建議：</strong>{aiSug}</span>
+              <span style={{fontSize:10,color:'var(--g400)'}}>點擊套用</span>
+            </div>}
+            {aiLoading&&<div style={{fontSize:10.5,color:'var(--g400)',padding:'4px 12px'}}>✨ 生成建議中...</div>}
+            <div className="apib">
+              <textarea className="aptxt" rows={1} value={input}
+                onChange={e=>setInput(e.target.value)}
+                onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg();}}}
+                placeholder={`回覆 ${active.name}...`}/>
+              <button className="apsend" onClick={sendMsg}>送出</button>
+            </div>
+          </>
+        ):<div className="empty"><div style={{fontSize:40,opacity:.3}}>💬</div><div style={{fontSize:13,marginTop:10}}>選擇左側對話開始回覆</div><div style={{fontSize:11,color:'var(--g400)',marginTop:5}}>先在 LINE 頁面進行對話，訊息會即時出現在這裡</div></div>}
+      </div>
+
+      {active&&(()=>{
+        const c=getCust(active.wfId); if(!c) return null;
+        const p=pctWarranty(c.installDate,c.warrantyMonths);
+        const ch=CHANNELS[c.channel];
+        const repairList=(c.repairIds||[]).map(rid=>db.repairs?.[rid]).filter(Boolean);
+        return(
+          <div className="apmeta">
+            <h5>客戶資訊</h5>
+            <div className="meta-row"><strong>帳戶編號</strong><code style={{fontSize:10,fontFamily:'monospace',background:'var(--g100)',padding:'1px 4px',borderRadius:3}}>{c.wfId}</code></div>
+            <div className="meta-row"><strong>姓名</strong>{c.name}</div>
+            <div className="meta-row"><strong>電話</strong>{c.phone}</div>
+            <div className="meta-row"><strong>產品</strong>{PRODUCTS[c.productId]?.name||c.productId}</div>
+            <div className="meta-row"><strong>序號</strong><span style={{fontSize:10,fontFamily:'monospace'}}>{c.serialNo}</span></div>
+            <div className="meta-row"><strong>購買通路</strong>
+              <span style={{display:'inline-flex',alignItems:'center',gap:3,background:'var(--g100)',padding:'1px 6px',borderRadius:8,fontSize:10.5,fontWeight:700}}>
+                {ch?.icon} {ch?.label}
+              </span>
+            </div>
+            <div className="meta-row"><strong>保固狀態</strong>
+              <div className="wbar"><div className={`wfill ${p>50?'ok':p>20?'warn':'bad'}`} style={{width:`${p}%`}}/></div>
+              <span style={{fontSize:10.5,color:p>0?'var(--ok)':'var(--err)'}}>{p>0?`✅ 至${c.warrantyEnd}`:'❌ 已到期'}</span>
+            </div>
+            {repairList.length>0&&(
+              <div className="meta-row"><strong>報修紀錄 ({repairList.length})</strong>
+                {repairList.slice(0,2).map(r=>(
+                  <div key={r.id} style={{background:'var(--g50)',borderRadius:4,padding:'4px 6px',marginTop:3,fontSize:10.5}}>
+                    <div style={{fontWeight:600}}>{r.issue}</div>
+                    <div style={{color:'var(--g400)'}}>{r.date}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <a className="crm-link" href="waferlock_crm.html" target="_blank">
+              🔗 開啟 CRM 查看完整資料
+            </a>
+          </div>
+        );
+      })()}
+
+      {dispModal&&(
+        <div className="mo" onClick={e=>e.target===e.currentTarget&&setDispModal(null)}>
+          <div className="mo-box">
+            <h3>{dispModal.urgency==='urgent'?'🚨 緊急派工':'🚗 派工安排'}</h3>
+            <div style={{background:'var(--g50)',borderRadius:7,padding:10,marginBottom:12,fontSize:12}}>
+              <div style={{fontWeight:700}}>{dispModal.building}</div>
+              <div style={{color:'var(--g500)'}}>{dispModal.type} - {dispModal.issue} ｜ {dispModal.name}</div>
+            </div>
+            <div className="mf"><label>選擇工班</label>
+              <select value={selWorker} onChange={e=>setSelWorker(e.target.value)}>
+                {WORKERS.map(w=><option key={w.id} value={w.id}>{w.name}（★{w.rating}）</option>)}
+              </select>
+            </div>
+            <div className="mf-row">
+              <div className="mf"><label>預約日期</label><input type="date" value={selDate} onChange={e=>setSelDate(e.target.value)}/></div>
+              <div className="mf"><label>時段</label>
+                <select value={selTime} onChange={e=>setSelTime(e.target.value)}>
+                  {['上午','下午','傍晚','緊急立即'].map(v=><option key={v}>{v}</option>)}
+                </select>
+              </div>
+            </div>
+            <div style={{background:'#EFF6FF',borderRadius:5,padding:8,fontSize:11,color:'var(--accent)'}}>
+              📱 確認後自動推播師傅抵達通知給住戶 LINE
+            </div>
+            <div className="mact">
+              <button className="cancel" onClick={()=>setDispModal(null)}>取消</button>
+              <button className="ok" onClick={doDispatch}>確認派工 + 推播通知</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {caseModal&&(
+        <div className="mo" onClick={e=>e.target===e.currentTarget&&setCaseModal(false)}>
+          <div className="mo-box">
+            <h3>📋 客服立案 — 建立報修單</h3>
+            <div style={{background:'var(--g50)',borderRadius:7,padding:10,marginBottom:12,fontSize:12}}>
+              <div style={{fontWeight:700}}>{getCust(active?.wfId)?.name||'—'}</div>
+              <div style={{color:'var(--g500)'}}>{getCust(active?.wfId)?.address||'—'}　{active?.wfId}</div>
+            </div>
+            <div className="mf"><label>問題類別</label>
+              <select value={caseForm.type} onChange={e=>setCaseForm(p=>({...p,type:e.target.value}))}>
+                {['電子鎖','水電工程','廚具設備','弱電工程','油漆工程'].map(v=><option key={v}>{v}</option>)}
+              </select>
+            </div>
+            <div className="mf"><label>問題描述</label>
+              <input value={caseForm.issue} onChange={e=>setCaseForm(p=>({...p,issue:e.target.value}))} placeholder="例：耗電過快、按鍵失靈"/>
+            </div>
+            <div className="mf-row">
+              <div className="mf"><label>修繕空間</label>
+                <select value={caseForm.space} onChange={e=>setCaseForm(p=>({...p,space:e.target.value}))}>
+                  {['大門','客廳','臥室','廚房','前陽台'].map(v=><option key={v}>{v}</option>)}
+                </select>
+              </div>
+              <div className="mf"><label>緊急度</label>
+                <select value={caseForm.urgency} onChange={e=>setCaseForm(p=>({...p,urgency:e.target.value}))}>
+                  <option value="normal">一般</option><option value="urgent">緊急</option>
+                </select>
+              </div>
+            </div>
+            <div className="mf"><label>方便修繕時間</label>
+              <input type="datetime-local" value={caseForm.scheduledDate} onChange={e=>setCaseForm(p=>({...p,scheduledDate:e.target.value}))}/>
+            </div>
+            <div className="mact">
+              <button className="cancel" onClick={()=>setCaseModal(false)}>取消</button>
+              <button className="ok" onClick={createCase}>建立報修單（立案）</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════
+// APP ROOT
+// ═══════════════════════════════════════════════
+function App(){
+  const [page,setPage] = useState('line');
+  const [db,setDB] = useState(EMPTY_DB);
+  const [loading,setLoading] = useState(true);
+  const [toastItems,setToastItems] = useState([]);
+  const [synced,setSynced] = useState(false);
+  const prevDbRef = useRef(EMPTY_DB);
+
+  // RAG 伺服器狀態
+  const [srvOnline, setSrvOnline] = useState(false);
+  const [geminiReady, setGeminiReady] = useState(false);
+  const [showApiPanel, setShowApiPanel] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState('');
+
+  useEffect(() => {
+    const check = async () => {
+      try {
+        const r = await fetch(`${RAG_SERVER_URL}/health`, {signal: AbortSignal.timeout(3000)});
+        if (r.ok) { const d = await r.json(); setSrvOnline(true); setGeminiReady(d.gemini); }
+        else { setSrvOnline(false); }
+      } catch { setSrvOnline(false); }
+    };
+    check();
+    const t = setInterval(check, 10000);
+    return () => clearInterval(t);
+  }, []);
+
+  const saveApiKey = async () => {
+    if (!apiKeyInput.trim()) return;
+    try {
+      const r = await fetch(`${RAG_SERVER_URL}/config/api-key`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({api_key: apiKeyInput.trim()})
+      });
+      if (r.ok) { setGeminiReady(true); setShowApiPanel(false); toast('Gemini 已設定','API Key 儲存成功，AI 回覆已啟用','ok'); }
+    } catch { toast('錯誤','無法連接伺服器','err'); }
+  };
+
+  const toast = useCallback((title,body,type='ok')=>{
+    const id=Date.now();
+    setToastItems(p=>[...p,{id,title,body,type}]);
+    setTimeout(()=>setToastItems(p=>p.filter(t=>t.id!==id)),3200);
+  },[]);
+
+  // 初始載入
+  useEffect(()=>{
+    loadFromSupabase().then(data=>{
+      if (!data.customers || data.customers.length === 0) {
+        const initial = {
+          customers: DEMO_CUSTOMERS,
+          repairs: DEMO_REPAIRS,
+          conversations: DEMO_CONVS,
+          wfCounter: 1,
+          version: 0
+        };
+        syncToSupabase(EMPTY_DB, initial).then(() => {
+          setDB(initial);
+          prevDbRef.current = initial;
+          setLoading(false);
+          setSynced(true);
+        });
+      } else {
+        setDB(data);
+        prevDbRef.current = data;
+        setLoading(false);
+        setSynced(true);
+      }
+    });
+  },[]);
+
+  const updateDB = useCallback((updater)=>{
+    setDB(prev=>{
+      const next = typeof updater==='function' ? updater(prev) : updater;
+      const withVer = {...next, version:(next.version||0)+1};
+      syncToSupabase(prevDbRef.current, withVer).then(()=>setSynced(true));
+      prevDbRef.current = withVer;
+      return withVer;
+    });
+  },[]);
+
+  // Supabase Realtime 跨分頁與跨裝置同步
+  useEffect(()=>{
+    const channel = sb.channel('db-realtime')
+      .on('postgres_changes',{event:'*',schema:'public'},()=>{
+        loadFromSupabase().then(data=>{
+          setDB(data);
+          prevDbRef.current = data;
+          setSynced(true);
+        });
+      })
+      .subscribe(status=>setSynced(status==='SUBSCRIBED'));
+    return ()=>sb.removeChannel(channel);
+  },[]);
+
+  if(loading) return (
+    <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100vh',gap:16,color:'var(--g500)',background:'#EEF2F7'}}>
+      <div style={{fontSize:32}}>🔄</div>
+      <div style={{fontSize:14,fontWeight:600}}>連接 Supabase 雲端資料庫中...</div>
+    </div>
+  );
+
+  const totalUnread = (db.conversations||[]).reduce((s,c)=>s+(c.unread||0),0);
+
+  return(
+    <Ctx.Provider value={{db,updateDB,toast,srvOnline,geminiReady}}>
+      <nav className="nav">
+        <div className="nav-logo">🔒 WAFERLOCK <span>LINE</span></div>
+        <button className={`nbtn ${page==='line'?'on':''}`} onClick={()=>setPage('line')}>
+          📱 客戶 LINE 端
+        </button>
+        <button className={`nbtn ${page==='agent'?'on':''}`} onClick={()=>setPage('agent')}>
+          💬 客服整合平台
+          {totalUnread>0&&<span className="nbadge">{totalUnread}</span>}
+        </button>
+        <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:8,fontSize:11,color:'rgba(255,255,255,.5)'}}>
+          <div className={`sync-dot ${synced?'live':'off'}`}/>
+          {synced?'即時同步中':'離線模式'}
+        </div>
+        <button
+          className={`srv-status ${srvOnline?'online':'offline'}`}
+          onClick={()=>setShowApiPanel(p=>!p)}
+          title="點擊設定 Gemini API Key"
+          style={{marginLeft:8}}
+        >
+          <div style={{width:7,height:7,borderRadius:'50%',background:srvOnline?(geminiReady?'#4ade80':'#facc15'):'#f87171',flexShrink:0}}/>
+          {srvOnline?(geminiReady?'RAG+AI 就緒':'RAG 就緒'):'伺服器離線'}
+        </button>
+        <button style={{padding:'4px 10px',background:'rgba(239,68,68,.2)',border:'1px solid rgba(239,68,68,.4)',borderRadius:4,color:'#FCA5A5',fontSize:10.5,cursor:'pointer',marginLeft:8}}
+          onClick={async ()=>{
+            if(confirm('確定要清除所有資料並重置為示範狀態嗎？(此動作將清空 Supabase 雲端資料並重新載入範例資料)')){
+              setLoading(true);
+              localStorage.removeItem('waferlock_line_chat');
+              localStorage.removeItem('waferlock_line_bind');
+              try {
+                await Promise.all([
+                  sb.from('customers').delete().neq('wf_id', ''),
+                  sb.from('repairs').delete().neq('id', ''),
+                  sb.from('complaints').delete().neq('id', ''),
+                  sb.from('installs').delete().neq('id', ''),
+                  sb.from('conversations').delete().neq('id', ''),
+                  sb.from('config').delete().neq('key', ''),
+                ]);
+              } catch(e) { console.error(e); }
+              toast('已重置','資料庫已清除並重置','warn');
+              setTimeout(()=>location.reload(),500);
+            }
+          }}>重置DB</button>
+      </nav>
+      <div className="page">
+        {page==='line'&&<CustomerPage/>}
+        {page==='agent'&&<AgentPage/>}
+      </div>
+      <Toasts items={toastItems}/>
+      {showApiPanel&&(
+        <div className="apikey-panel">
+          <h4>RAG 伺服器設定</h4>
+          <div className="srv-info">
+            {srvOnline
+              ? `伺服器在線 | 向量數: 4,132 | Gemini: ${geminiReady?'已啟用':'未設定'}`
+              : '伺服器離線 — 請先執行 rag_server.py'}
+          </div>
+          {srvOnline&&!geminiReady&&(
+            <>
+              <p style={{fontSize:11,color:'#92400E',marginTop:10,marginBottom:6,fontWeight:600}}>設定 Gemini API Key 以啟用 AI 回覆</p>
+              <input
+                type="password"
+                placeholder="貼上您的 Gemini API Key (AIza...)"
+                value={apiKeyInput}
+                onChange={e=>setApiKeyInput(e.target.value)}
+              />
+              <p style={{fontSize:10,color:'var(--g400)',marginTop:4}}>取得 API Key: aistudio.google.com/app/apikey</p>
+              <div className="apikey-row">
+                <button className="ak-save" onClick={saveApiKey}>儲存並啟用</button>
+                <button className="ak-cancel" onClick={()=>setShowApiPanel(false)}>關閉</button>
+              </div>
+            </>
+          )}
+          {(!srvOnline||geminiReady)&&(
+            <div className="apikey-row" style={{marginTop:10}}>
+              <button className="ak-cancel" style={{flex:'none',padding:'5px 14px'}} onClick={()=>setShowApiPanel(false)}>關閉</button>
+            </div>
+          )}
+          <div style={{borderTop:'1px solid var(--g100)',marginTop:10,paddingTop:8,fontSize:10,color:'var(--g400)'}}>
+            啟動伺服器: <code style={{background:'var(--g100)',padding:'1px 5px',borderRadius:3}}>python rag_server.py</code>
+          </div>
+        </div>
+      )}
+    </Ctx.Provider>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

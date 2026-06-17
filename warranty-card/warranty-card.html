@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>電子鎖保固卡（A6 雙面）</title>
+<style>
+	/* ===== 列印設定：A6 105×148mm，正反兩頁 ===== */
+	@page {
+		size: 105mm 148mm;
+		margin: 0;
+	}
+
+	* {
+		box-sizing: border-box;
+		margin: 0;
+		padding: 0;
+	}
+
+	:root {
+		--primary: #1a2b4a;
+		--accent: #c9a45c;
+		--line: #c8cdd6;
+	}
+
+	body {
+		font-family: "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+		background: #e8e8e8;
+		color: #2b2b2b;
+	}
+
+	.card {
+		width: 105mm;
+		height: 148mm;
+		background: #fff;
+		margin: 10mm auto;
+		padding: 8mm;
+		position: relative;
+		overflow: hidden;
+		page-break-after: always;
+	}
+
+	@media print {
+		body { background: none; }
+		.card { margin: 0; box-shadow: none; }
+		.screen-note { display: none; }
+	}
+
+	@media screen {
+		.card { box-shadow: 0 4px 20px rgba(0,0,0,0.18); }
+	}
+
+	.screen-note {
+		max-width: 105mm;
+		margin: 16px auto 0;
+		font-size: 13px;
+		color: #666;
+		text-align: center;
+	}
+
+	/* ===== 正面 ===== */
+	.front-band {
+		background: var(--primary);
+		color: #fff;
+		margin: -8mm -8mm 6mm;
+		padding: 8mm 8mm 6mm;
+		text-align: center;
+	}
+
+	.brand {
+		font-size: 11pt;
+		letter-spacing: 3px;
+		color: var(--accent);
+		font-weight: 700;
+	}
+
+	.front-band h1 {
+		font-size: 20pt;
+		letter-spacing: 8px;
+		margin-top: 2mm;
+		font-weight: 700;
+	}
+
+	.front-band .en {
+		font-size: 8pt;
+		letter-spacing: 2px;
+		color: rgba(255,255,255,0.7);
+		margin-top: 1mm;
+	}
+
+	.field-table {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: 10pt;
+	}
+
+	.field-table th,
+	.field-table td {
+		border: 0.3mm solid var(--line);
+		padding: 3.2mm 3mm;
+		text-align: left;
+	}
+
+	.field-table th {
+		width: 26mm;
+		background: #f2f4f7;
+		font-weight: 600;
+		color: var(--primary);
+		white-space: nowrap;
+	}
+
+	.stamp-row td {
+		height: 22mm;
+		vertical-align: top;
+		color: #999;
+		font-size: 8pt;
+	}
+
+	.front-note {
+		margin-top: 5mm;
+		font-size: 8pt;
+		color: #777;
+		line-height: 1.7;
+	}
+
+	.accent-bar {
+		position: absolute;
+		bottom: 0;
+		left: 0;
+		width: 100%;
+		height: 3mm;
+		background: var(--accent);
+	}
+
+	/* ===== 背面 ===== */
+	.back h2 {
+		font-size: 12pt;
+		color: var(--primary);
+		letter-spacing: 2px;
+		border-left: 1.5mm solid var(--accent);
+		padding-left: 3mm;
+		margin-bottom: 3mm;
+	}
+
+	.terms {
+		font-size: 8pt;
+		line-height: 1.75;
+		color: #444;
+	}
+
+	.terms ol {
+		padding-left: 4.5mm;
+	}
+
+	.terms li {
+		margin-bottom: 1.2mm;
+	}
+
+	.register-box {
+		margin-top: 4mm;
+		border: 0.4mm dashed var(--accent);
+		border-radius: 2mm;
+		padding: 4mm;
+		display: flex;
+		gap: 4mm;
+		align-items: center;
+	}
+
+	.register-box img {
+		width: 22mm;
+		height: 22mm;
+		flex-shrink: 0;
+	}
+
+	.register-box .text {
+		font-size: 9pt;
+		line-height: 1.7;
+	}
+
+	.register-box .text strong {
+		color: var(--primary);
+		font-size: 10pt;
+		display: block;
+	}
+
+	.register-box .url {
+		font-size: 8pt;
+		color: #666;
+		word-break: break-all;
+	}
+
+	.contact {
+		margin-top: 4mm;
+		font-size: 8pt;
+		color: #555;
+		text-align: center;
+		line-height: 1.8;
+	}
+</style>
+</head>
+<body>
+
+<!-- ============ 正面 ============ -->
+<div class="card">
+	<div class="front-band">
+		<div class="brand">YOUR BRAND</div>
+		<h1>產品保固卡</h1>
+		<div class="en">PRODUCT WARRANTY CARD</div>
+	</div>
+
+	<table class="field-table">
+		<tr><th>產品型號</th><td></td></tr>
+		<tr><th>產品序號</th><td></td></tr>
+		<tr><th>購買日期</th><td>　　　　年　　　月　　　日</td></tr>
+		<tr><th>消費者姓名</th><td></td></tr>
+		<tr><th>聯絡電話</th><td></td></tr>
+		<tr class="stamp-row"><th>經銷商章</th><td>（未蓋經銷商章或無購買證明者，依出廠日期起算保固）</td></tr>
+	</table>
+
+	<p class="front-note">
+		※ 本卡為保固服務之重要憑證，請連同購買發票妥善保存。<br>
+		※ 請於購買後 30 日內完成線上保固登錄，享有完整保固服務（見背面）。
+	</p>
+
+	<div class="accent-bar"></div>
+</div>
+
+<!-- ============ 背面 ============ -->
+<div class="card back">
+	<h2>保固條款</h2>
+	<div class="terms">
+		<ol>
+			<li>本產品自購買日起，提供主機 <strong>2 年</strong>原廠保固（電池、機械鑰匙等耗材除外）。</li>
+			<li>保固期內因正常使用發生之功能故障，經本公司檢測確認後，免費維修或更換零件。</li>
+			<li>下列情形不在保固範圍內，維修酌收工本費：
+				（1）人為損壞、自行拆裝或改裝；
+				（2）天災、火災、水損、雷擊等不可抗力因素；
+				（3）未依說明書安裝、使用所致之故障；
+				（4）序號標籤毀損、塗改致無法辨識。</li>
+			<li>保固服務需出示本保固卡或線上登錄紀錄，並提供購買證明。</li>
+			<li>本公司保留保固條款之最終解釋權，如有未盡事宜依本公司網站公告為準。</li>
+		</ol>
+	</div>
+
+	<div class="register-box">
+		<!-- 正式上線前：把 data 參數的網址換成實際登錄頁網址，QR Code 會自動更新 -->
+		<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=0&data=https%3A%2F%2Fexample.com%2Fwarranty%2F" alt="保固登錄 QR Code">
+		<div class="text">
+			<strong>掃碼完成保固登錄</strong>
+			線上登錄即啟用 2 年保固，並享有到府維修與產品通知服務。
+			<div class="url">https://example.com/warranty/</div>
+		</div>
+	</div>
+
+	<div class="contact">
+		客服專線：0800-000-000（週一至週五 09:00–18:00）<br>
+		客服信箱：service@example.com｜官方網站：www.example.com
+	</div>
+
+	<div class="accent-bar"></div>
+</div>
+
+<p class="screen-note">列印方式：Ctrl+P → 紙張大小選 A6（105×148mm）→ 邊界「無」→ 勾選「背景圖形」。共 2 頁＝正、反面。</p>
+
+</body>
+</html>

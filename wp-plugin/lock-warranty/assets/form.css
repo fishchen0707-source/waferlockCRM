@@ -1,0 +1,207 @@
+/* 電子鎖保固登錄表單樣式（前綴 lw- 避免與佈景主題衝突） */
+.lw-wrap {
+	--lw-primary: #1a2b4a;
+	--lw-accent: #c9a45c;
+	--lw-bg: #f7f8fa;
+	--lw-border: #d9dee6;
+	--lw-error: #c0392b;
+	--lw-success: #1a7f37;
+	max-width: 640px;
+	margin: 0 auto;
+	padding: 16px;
+	font-size: 16px;
+	line-height: 1.6;
+}
+
+.lw-card {
+	background: #fff;
+	border: 1px solid var(--lw-border);
+	border-radius: 12px;
+	box-shadow: 0 4px 24px rgba(26, 43, 74, 0.08);
+	overflow: hidden;
+}
+
+.lw-head {
+	background: var(--lw-primary);
+	color: #fff;
+	text-align: center;
+	padding: 28px 24px 24px;
+}
+
+.lw-head-icon {
+	font-size: 32px;
+	display: block;
+	margin-bottom: 8px;
+}
+
+.lw-title {
+	margin: 0 0 6px;
+	font-size: 26px;
+	color: #fff;
+	letter-spacing: 2px;
+}
+
+.lw-subtitle {
+	margin: 0;
+	font-size: 14px;
+	color: rgba(255, 255, 255, 0.85);
+}
+
+.lw-form {
+	padding: 24px;
+}
+
+.lw-fieldset {
+	border: none;
+	margin: 0 0 20px;
+	padding: 0;
+}
+
+.lw-legend {
+	font-size: 15px;
+	font-weight: 700;
+	color: var(--lw-primary);
+	border-left: 4px solid var(--lw-accent);
+	padding-left: 10px;
+	margin-bottom: 14px;
+}
+
+.lw-row {
+	display: flex;
+	gap: 14px;
+}
+
+.lw-row .lw-field {
+	flex: 1;
+}
+
+.lw-field {
+	margin-bottom: 14px;
+}
+
+.lw-label {
+	display: block;
+	font-size: 14px;
+	font-weight: 600;
+	margin-bottom: 5px;
+	color: #333;
+}
+
+.lw-required {
+	color: var(--lw-error);
+}
+
+.lw-input {
+	width: 100%;
+	box-sizing: border-box;
+	padding: 10px 12px;
+	font-size: 16px;
+	border: 1px solid var(--lw-border);
+	border-radius: 8px;
+	background: var(--lw-bg);
+	transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.lw-input:focus {
+	outline: none;
+	border-color: var(--lw-accent);
+	box-shadow: 0 0 0 3px rgba(201, 164, 92, 0.2);
+	background: #fff;
+}
+
+.lw-input.lw-invalid {
+	border-color: var(--lw-error);
+}
+
+.lw-hint {
+	margin: 4px 0 0;
+	font-size: 12.5px;
+	color: #888;
+}
+
+/* honeypot：移出視野，機器人仍會填 */
+.lw-hp {
+	position: absolute;
+	left: -9999px;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+}
+
+.lw-consent {
+	display: flex;
+	gap: 8px;
+	align-items: flex-start;
+	font-size: 13.5px;
+	color: #555;
+	margin-bottom: 18px;
+	cursor: pointer;
+}
+
+.lw-consent input {
+	margin-top: 4px;
+	flex-shrink: 0;
+}
+
+.lw-submit {
+	width: 100%;
+	padding: 14px;
+	font-size: 17px;
+	font-weight: 700;
+	letter-spacing: 4px;
+	color: #fff;
+	background: var(--lw-primary);
+	border: none;
+	border-radius: 8px;
+	cursor: pointer;
+	transition: background 0.15s;
+}
+
+.lw-submit:hover {
+	background: #24395f;
+}
+
+.lw-submit:disabled {
+	background: #9aa5b5;
+	cursor: not-allowed;
+}
+
+.lw-msg {
+	margin-top: 12px;
+	font-size: 14px;
+	color: var(--lw-error);
+	white-space: pre-line;
+	text-align: center;
+}
+
+.lw-success {
+	padding: 40px 24px;
+	text-align: center;
+}
+
+.lw-success-icon {
+	width: 56px;
+	height: 56px;
+	line-height: 56px;
+	margin: 0 auto 14px;
+	border-radius: 50%;
+	background: var(--lw-success);
+	color: #fff;
+	font-size: 26px;
+}
+
+.lw-success h3 {
+	margin: 0 0 10px;
+	color: var(--lw-primary);
+}
+
+.lw-success p {
+	margin: 4px 0;
+}
+
+@media (max-width: 520px) {
+	.lw-row {
+		flex-direction: column;
+		gap: 0;
+	}
+}

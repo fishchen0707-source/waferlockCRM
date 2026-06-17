@@ -1,0 +1,1083 @@
+<mxfile host="app.diagrams.net" pages="8">
+  <diagram name="01 總覽" id="p_01">
+    <mxGraphModel dx="1262" dy="685" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="3000" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DBEAFE;strokeColor=#93C5FD;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="💬 LINE 官方帳號 （電商LINE已合併、經銷商QR導入）" vertex="1">
+          <mxGeometry height="55" width="220" x="40" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DBEAFE;strokeColor=#93C5FD;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="📞 0800 電話" vertex="1">
+          <mxGeometry height="55" width="140" x="280" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DBEAFE;strokeColor=#93C5FD;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="📘 FB / 📷 IG / 🌐 官網" vertex="1">
+          <mxGeometry height="55" width="200" x="440" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="5" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF1F2;strokeColor=#FDA4AF;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="🛒 蝦皮聊聊 （獨立後台）" vertex="1">
+          <mxGeometry height="55" width="150" x="660" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="6" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF3C7;strokeColor=#FCD34D;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="🏪 門市 / 🔧 經銷商" vertex="1">
+          <mxGeometry height="55" width="170" x="830" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E0F2FE;strokeColor=#7DD3FC;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="📥 客服整合平台（統一收件匣） 🤖 AI 自動分類 ｜ 自動識別來源標籤" vertex="1">
+          <mxGeometry height="65" width="340" x="330" y="130" as="geometry" />
+        </mxCell>
+        <mxCell id="8" edge="1" parent="1" source="2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="9" edge="1" parent="1" source="3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="10" edge="1" parent="1" source="4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="11" edge="1" parent="1" source="5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="12" edge="1" parent="1" source="6" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="13" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E0F2FE;strokeColor=#7DD3FC;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="🔍 CRM 查詢客戶身份 WF編號 / 電話 / LINE UID / 來源通路標籤" vertex="1">
+          <mxGeometry height="60" width="300" x="350" y="250" as="geometry" />
+        </mxCell>
+        <mxCell id="14" edge="1" parent="1" source="7" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="13">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="15" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEF9C3;strokeColor=#FDE047;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;" value="已知客戶？" vertex="1">
+          <mxGeometry height="90" width="220" x="390" y="370" as="geometry" />
+        </mxCell>
+        <mxCell id="16" edge="1" parent="1" source="13" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="15">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="17" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#6EE7B7;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;arcSize=12;" value="✅ 顯示客戶資料 WF編號/保固/通路/歷史紀錄" vertex="1">
+          <mxGeometry height="60" width="240" x="740" y="385" as="geometry" />
+        </mxCell>
+        <mxCell id="18" edge="1" parent="1" source="15" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#10B981;fontColor=#10B981;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="17" value="是">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="19" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#CBD5E1;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="📝 收集基本資料 姓名/電話/購買通路/型號/問題" vertex="1">
+          <mxGeometry height="60" width="240" x="80" y="385" as="geometry" />
+        </mxCell>
+        <mxCell id="20" edge="1" parent="1" source="15" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#F59E0B;fontColor=#F59E0B;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" target="19" value="否">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="22" edge="1" parent="1" source="17" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="500.0000000000002" y="510" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="23" edge="1" parent="1" source="19" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="500.0000000000002" y="510" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="26" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEF9C3;strokeColor=#FDE047;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;" value="問題類型判斷？" vertex="1">
+          <mxGeometry height="90" width="220" x="390" y="510" as="geometry" />
+        </mxCell>
+        <mxCell id="28" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EFF6FF;strokeColor=#93C5FD;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="🛒 售前諮詢 型號/報價/門型評估" vertex="1">
+          <mxGeometry height="55" width="200" x="200" y="950" as="geometry" />
+        </mxCell>
+        <mxCell id="29" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#6EE7B7;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;arcSize=12;" value="🛡️ 保固查詢/登錄 隨貨卡→掃QR→LINE" vertex="1">
+          <mxGeometry height="55" width="200" x="310" y="790" as="geometry" />
+        </mxCell>
+        <mxCell id="30" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DBEAFE;strokeColor=#93C5FD;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="🛒 電商流程" vertex="1">
+          <mxGeometry height="55" width="200" x="540" y="790" as="geometry" />
+        </mxCell>
+        <mxCell id="31" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF3C7;strokeColor=#FCD34D;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="🔧 經銷商客人 確認來源鎖店" vertex="1">
+          <mxGeometry height="55" width="200" x="770" y="790" as="geometry" />
+        </mxCell>
+        <mxCell id="32" edge="1" parent="1" source="26" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="28" value="售前">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="300" y="555" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="33" edge="1" parent="1" source="26" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="29" value="登陸保固">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="500" y="690" />
+              <mxPoint x="410" y="690" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="34" edge="1" parent="1" source="26" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="30" value="電商">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="500" y="690" />
+              <mxPoint x="640" y="690" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="35" edge="1" parent="1" source="26" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="31" value="經銷">
+          <mxGeometry relative="1" x="0.5152" as="geometry">
+            <mxPoint y="-1" as="offset" />
+            <Array as="points">
+              <mxPoint x="870" y="555" />
+            </Array>
+            <mxPoint x="800" y="700" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="36" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D1FAE5;strokeColor=#6EE7B7;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="🔧 售後報修 工務只負責保固內維修" vertex="1">
+          <mxGeometry height="55" width="200" x="70" y="790" as="geometry" />
+        </mxCell>
+        <mxCell id="37" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7ED;strokeColor=#FDBA74;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="⚠️ 無法回覆 → 升級轉接" vertex="1">
+          <mxGeometry height="55" width="200" x="980" y="790" as="geometry" />
+        </mxCell>
+        <mxCell id="38" edge="1" parent="1" source="26" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="36" value="報修">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="160" y="555" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="39" edge="1" parent="1" source="26" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#F59E0B;fontColor=#F59E0B;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;" target="37" value="無法回覆">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1080" y="555" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="40" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEF9C3;strokeColor=#FDE047;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;" value="上班時段？ 09:00–23:00" vertex="1">
+          <mxGeometry height="90" width="220" x="500" y="1210" as="geometry" />
+        </mxCell>
+        <mxCell id="41" edge="1" parent="1" source="37" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="40">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="42" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D1FAE5;strokeColor=#6EE7B7;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="👤 轉人工客服 ≤2小時回覆" vertex="1">
+          <mxGeometry height="55" width="200" x="190" y="1227.5" as="geometry" />
+        </mxCell>
+        <mxCell id="43" edge="1" parent="1" source="40" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#10B981;fontColor=#10B981;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" target="42" value="是">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="44" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#CBD5E1;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="📩 留言排隊 次日處理" vertex="1">
+          <mxGeometry height="55" width="200" x="860" y="1227.5" as="geometry" />
+        </mxCell>
+        <mxCell id="45" edge="1" parent="1" source="40" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#F59E0B;fontColor=#F59E0B;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="44" value="否">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="46" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E0F2FE;strokeColor=#7DD3FC;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="📋 CRM 記錄工單 + 狀態更新 含購買通路標籤" vertex="1">
+          <mxGeometry height="50" width="300" x="460" y="1350" as="geometry" />
+        </mxCell>
+        <mxCell id="47" edge="1" parent="1" source="42" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="46">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="48" edge="1" parent="1" source="44" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="46">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="02 售前諮詢" id="p_02">
+    <mxGraphModel dx="1262" dy="685" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="3000" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="2" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#0F2744;fontColor=#FFFFFF;strokeColor=#0F2744;fontSize=12;fontStyle=1;fontFamily=Noto Sans TC;" value="開始：客戶售前諮詢進線" vertex="1">
+          <mxGeometry height="45" width="260" x="550" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="3" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEF9C3;strokeColor=#FDE047;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;" value="諮詢類型？" vertex="1">
+          <mxGeometry height="90" width="220" x="570" y="110" as="geometry" />
+        </mxCell>
+        <mxCell id="4" edge="1" parent="1" source="2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="5" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FDF4FF;strokeColor=#E879F9;dashed=1;dashPattern=8 4;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="🤖 知識庫自動回覆 [AI]&amp;nbsp;" vertex="1">
+          <mxGeometry height="55" width="250" x="210" y="127.5" as="geometry" />
+        </mxCell>
+        <mxCell id="6" edge="1" parent="1" source="3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" target="5" value="型號/規格">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="v0H9riR7OIC447ZuPsmC-43" edge="1" parent="1" source="7" style="edgeStyle=none;curved=1;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;startSize=8;endSize=8;" target="11" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="7" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEF9C3;strokeColor=#FDE047;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;" value="需報價？" vertex="1">
+          <mxGeometry height="75" width="180" x="245" y="310" as="geometry" />
+        </mxCell>
+        <mxCell id="8" edge="1" parent="1" source="5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="9" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#10B981;fontColor=#FFFFFF;strokeColor=#059669;fontSize=12;fontStyle=1;fontFamily=Noto Sans TC;" value="✅ 結案" vertex="1">
+          <mxGeometry height="40" width="100" x="90" y="327.5" as="geometry" />
+        </mxCell>
+        <mxCell id="10" edge="1" parent="1" source="7" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#10B981;fontColor=#10B981;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" target="9" value="否">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="11" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7ED;strokeColor=#FDBA74;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="📤 轉業務報價確認" vertex="1">
+          <mxGeometry height="50" width="160" x="255" y="450" as="geometry" />
+        </mxCell>
+        <mxCell id="13" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FDF4FF;strokeColor=#E879F9;dashed=1;dashPattern=8 4;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="🤖 門型拍照指引 [AI] 門正面/背面/側面/門框" vertex="1">
+          <mxGeometry height="55" width="260" x="550" y="240" as="geometry" />
+        </mxCell>
+        <mxCell id="14" edge="1" parent="1" source="3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="13" value="安裝諮詢">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="15" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#CBD5E1;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="客戶上傳門型照片" vertex="1">
+          <mxGeometry height="45" width="200" x="580" y="330" as="geometry" />
+        </mxCell>
+        <mxCell id="16" edge="1" parent="1" source="13" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="15">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="17" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEF9C3;strokeColor=#FDE047;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;" value="門型評估結果？" vertex="1">
+          <mxGeometry height="90" width="220" x="570" y="450" as="geometry" />
+        </mxCell>
+        <mxCell id="18" edge="1" parent="1" source="15" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="17">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="19" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EFF6FF;strokeColor=#93C5FD;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="✅ 標準門型→直接報價 安裝由鎖店師傅負責" vertex="1">
+          <mxGeometry height="55" width="220" x="300" y="540" as="geometry" />
+        </mxCell>
+        <mxCell id="20" edge="1" parent="1" source="17" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#10B981;fontColor=#10B981;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" target="19" value="標準">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="21" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF3C7;strokeColor=#FCD34D;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="⚠️ 特殊門型 加工費+$1,500-2,500" vertex="1">
+          <mxGeometry height="55" width="200" x="580" y="577.5" as="geometry" />
+        </mxCell>
+        <mxCell id="22" edge="1" parent="1" source="17" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#F59E0B;fontColor=#F59E0B;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;" target="21" value="特殊">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="23" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF1F2;strokeColor=#FDA4AF;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="❌ 不適合安裝 提供替代方案" vertex="1">
+          <mxGeometry height="50" width="180" x="900" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="24" edge="1" parent="1" source="17" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#EF4444;fontColor=#EF4444;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="23" value="不適合">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="25" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEF9C3;strokeColor=#FDE047;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;" value="客戶確認？" vertex="1">
+          <mxGeometry height="75" width="180" x="590" y="670" as="geometry" />
+        </mxCell>
+        <mxCell id="26" edge="1" parent="1" source="21" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="25">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="27" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EFF6FF;strokeColor=#93C5FD;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="✅ 安排安裝 →詳見安裝流程" vertex="1">
+          <mxGeometry height="50" width="180" x="590" y="790" as="geometry" />
+        </mxCell>
+        <mxCell id="28" edge="1" parent="1" source="25" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#10B981;fontColor=#10B981;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;" target="27" value="確認">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="29" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#EF4444;fontColor=#FFFFFF;strokeColor=#DC2626;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;" value="結束（婉拒）" vertex="1">
+          <mxGeometry height="40" width="140" x="830" y="687.5" as="geometry" />
+        </mxCell>
+        <mxCell id="30" edge="1" parent="1" source="25" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#EF4444;fontColor=#EF4444;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="29" value="拒絕">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="31" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7ED;strokeColor=#FDBA74;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="📤 合作/大量採購 →直接轉業務" vertex="1">
+          <mxGeometry height="55" width="220" x="920" y="127.5" as="geometry" />
+        </mxCell>
+        <mxCell id="32" edge="1" parent="1" source="3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="31" value="合作/大量">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="33" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E0F2FE;strokeColor=#7DD3FC;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="CRM記錄 潛在客戶+業務追蹤" vertex="1">
+          <mxGeometry height="50" width="220" x="920" y="325" as="geometry" />
+        </mxCell>
+        <mxCell id="34" edge="1" parent="1" source="31" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="33">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="35" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#0F2744;fontColor=#FFFFFF;strokeColor=#0F2744;fontSize=12;fontStyle=1;fontFamily=Noto Sans TC;" value="── 退換貨流程 ──" vertex="1">
+          <mxGeometry height="35" width="200" x="580" y="860" as="geometry" />
+        </mxCell>
+        <mxCell id="36" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEF9C3;strokeColor=#FDE047;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;" value="購買通路？" vertex="1">
+          <mxGeometry height="90" width="220" x="570" y="920" as="geometry" />
+        </mxCell>
+        <mxCell id="37" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EFF6FF;strokeColor=#93C5FD;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="📤 官網退貨 →轉支援課處理" vertex="1">
+          <mxGeometry height="55" width="200" x="260" y="1050" as="geometry" />
+        </mxCell>
+        <mxCell id="38" edge="1" parent="1" source="36" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#10B981;fontColor=#10B981;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" target="37" value="官網直營">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="39" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF1F2;strokeColor=#FDA4AF;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="電商退貨 走各平台流程（7天鑑賞） 已安裝→原則不退 找 Vivi / Allen" vertex="1">
+          <mxGeometry height="70" width="220" x="570" y="1050" as="geometry" />
+        </mxCell>
+        <mxCell id="40" edge="1" parent="1" source="36" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#F59E0B;fontColor=#F59E0B;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;" target="39" value="電商平台">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="41" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF3C7;strokeColor=#FCD34D;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="📤 經銷商退貨 →退回經銷商處理 由鎖店自行負責" vertex="1">
+          <mxGeometry height="60" width="220" x="920" y="1050" as="geometry" />
+        </mxCell>
+        <mxCell id="42" edge="1" parent="1" source="36" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#EF4444;fontColor=#EF4444;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="41" value="經銷商購買">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="03 售後報修" id="p_03">
+    <mxGraphModel dx="1514" dy="822" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="3000" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="2" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#0F2744;fontColor=#FFFFFF;strokeColor=#0F2744;fontSize=12;fontStyle=1;fontFamily=Noto Sans TC;" value="開始：客戶報修進線" vertex="1">
+          <mxGeometry height="45" width="260" x="580" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E0F2FE;strokeColor=#7DD3FC;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="🔍 CRM 查詢客戶資料 型號/WF編號/保固狀態/安裝日/歷史" vertex="1">
+          <mxGeometry height="60" width="320" x="550" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="4" edge="1" parent="1" source="2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="5" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#CBD5E1;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="📝 收集報修資訊 問題描述+型號照片+地址+是否緊急" vertex="1">
+          <mxGeometry height="55" width="320" x="550" y="215" as="geometry" />
+        </mxCell>
+        <mxCell id="6" edge="1" parent="1" source="3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="7" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEF9C3;strokeColor=#FDE047;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;" value="問題類型？" vertex="1">
+          <mxGeometry height="90" width="220" x="600" y="310" as="geometry" />
+        </mxCell>
+        <mxCell id="8" edge="1" parent="1" source="5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="9" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FDF4FF;strokeColor=#E879F9;dashed=1;dashPattern=8 4;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="🤖 線上排除引導 [AI] 電池/9V/重設密碼/設定卡" vertex="1">
+          <mxGeometry height="60" width="250" x="280" y="325" as="geometry" />
+        </mxCell>
+        <mxCell id="10" edge="1" parent="1" source="7" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" target="9" value="硬體故障">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="11" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEF9C3;strokeColor=#FDE047;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;" value="線上解決？ （50-60%可）" vertex="1">
+          <mxGeometry height="80" width="200" x="305" y="540" as="geometry" />
+        </mxCell>
+        <mxCell id="12" edge="1" parent="1" source="9" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="11">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="13" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#10B981;fontColor=#FFFFFF;strokeColor=#059669;fontSize=12;fontStyle=1;fontFamily=Noto Sans TC;" value="✅ 線上結案 記錄CRM" vertex="1">
+          <mxGeometry height="45" width="140" x="130" y="557.5" as="geometry" />
+        </mxCell>
+        <mxCell id="14" edge="1" parent="1" source="11" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#10B981;fontColor=#10B981;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" target="13" value="是">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="15" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF3C7;strokeColor=#FCD34D;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="📋 建立報修單 WF+問題+地址" vertex="1">
+          <mxGeometry height="50" width="160" x="300" y="680" as="geometry" />
+        </mxCell>
+        <mxCell id="16" edge="1" parent="1" source="11" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#F59E0B;fontColor=#F59E0B;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.648;entryY=-0.005;entryDx=0;entryDy=0;entryPerimeter=0;" target="15" value="否">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="17" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FDF4FF;strokeColor=#E879F9;dashed=1;dashPattern=8 4;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="🤖 App FAQ排除 [AI] 重配對/版本確認/iOS Android&amp;nbsp;" vertex="1">
+          <mxGeometry height="65" width="260" x="580" y="440" as="geometry" />
+        </mxCell>
+        <mxCell id="18" edge="1" parent="1" source="7" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="17" value="App/藍牙/WiFi">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="19" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEF9C3;strokeColor=#FDE047;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;" value="解決？" vertex="1">
+          <mxGeometry height="80" width="180" x="620" y="550" as="geometry" />
+        </mxCell>
+        <mxCell id="20" edge="1" parent="1" source="17" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="19">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="21" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#10B981;fontColor=#FFFFFF;strokeColor=#059669;fontSize=12;fontStyle=1;fontFamily=Noto Sans TC;" value="✅ 結案" vertex="1">
+          <mxGeometry height="40" width="100" x="505" y="675" as="geometry" />
+        </mxCell>
+        <mxCell id="22" edge="1" parent="1" source="19" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#10B981;fontColor=#10B981;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="21" value="是">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="23" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF1F2;strokeColor=#FDA4AF;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="回報PM等更新 告知客戶時程" vertex="1">
+          <mxGeometry height="50" width="180" x="750" y="670" as="geometry" />
+        </mxCell>
+        <mxCell id="24" edge="1" parent="1" source="19" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#EF4444;fontColor=#EF4444;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="23" value="否">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="25" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#CBD5E1;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="門縫/結構問題 產品瑕疵 vs 外部因素 (地震/地板/門框)" vertex="1">
+          <mxGeometry height="65" width="240" x="940" y="325" as="geometry" />
+        </mxCell>
+        <mxCell id="26" edge="1" parent="1" source="7" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="25" value="門縫/結構">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="27" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEF9C3;strokeColor=#FDE047;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;" value="保固範圍？" vertex="1">
+          <mxGeometry height="80" width="200" x="960" y="550" as="geometry" />
+        </mxCell>
+        <mxCell id="28" edge="1" parent="1" source="25" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="27">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="29" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#6EE7B7;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;arcSize=12;" value="免費調整 派工務到府" vertex="1">
+          <mxGeometry height="50" width="150" x="985" y="680" as="geometry" />
+        </mxCell>
+        <mxCell id="30" edge="1" parent="1" source="27" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#10B981;fontColor=#10B981;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="29" value="保固內">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="31" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7ED;strokeColor=#FDBA74;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="付費調整 報價確認" vertex="1">
+          <mxGeometry height="50" width="150" x="1230" y="565" as="geometry" />
+        </mxCell>
+        <mxCell id="32" edge="1" parent="1" source="27" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#F59E0B;fontColor=#F59E0B;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="31" value="保固外">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="33" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEF9C3;strokeColor=#FDE047;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;" value="保固狀態？&amp;nbsp;" vertex="1">
+          <mxGeometry height="90" width="240" x="590" y="920" as="geometry" />
+        </mxCell>
+        <mxCell id="34" edge="1" parent="1" source="15" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="33">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="35" edge="1" parent="1" source="29" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="33">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="36" edge="1" parent="1" source="31" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="33">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1305" y="830" />
+              <mxPoint x="710" y="830" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="37" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#6EE7B7;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;arcSize=12;" value="✅ 免費派工 工務只負責保固內維修&amp;nbsp;" vertex="1">
+          <mxGeometry height="65" width="280" x="230" y="932.5" as="geometry" />
+        </mxCell>
+        <mxCell id="38" edge="1" parent="1" source="33" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#10B981;fontColor=#10B981;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" target="37" value="保固內">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="39" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7ED;strokeColor=#FDBA74;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="💰 告知收費需現場報價 客戶確認後才派工" vertex="1">
+          <mxGeometry height="65" width="260" x="970" y="932.5" as="geometry" />
+        </mxCell>
+        <mxCell id="40" edge="1" parent="1" source="33" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#F59E0B;fontColor=#F59E0B;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="39" value="保固外">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="41" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEF9C3;strokeColor=#FDE047;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;" value="緊急度？" vertex="1">
+          <mxGeometry height="90" width="220" x="600" y="1170" as="geometry" />
+        </mxCell>
+        <mxCell id="42" edge="1" parent="1" source="37" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="41">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="43" edge="1" parent="1" source="39" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="41">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="44" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEE2E2;strokeColor=#FCA5A5;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;arcSize=12;" value="🚨 廣播工班 ≤30分鐘派出 無回應→客服介入" vertex="1">
+          <mxGeometry height="65" width="260" x="230" y="1180" as="geometry" />
+        </mxCell>
+        <mxCell id="45" edge="1" parent="1" source="41" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" target="44" value="🚨 緊急">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="46" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF3C7;strokeColor=#FCD34D;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="📅 日曆排程 客戶選時段 依地區指定工班" vertex="1">
+          <mxGeometry height="65" width="240" x="970" y="1180" as="geometry" />
+        </mxCell>
+        <mxCell id="47" edge="1" parent="1" source="41" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="46" value="一般">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="48" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D1FAE5;strokeColor=#6EE7B7;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="📱 LINE 推播師傅資訊 [🤖自動] 師傅姓名+預計到達時間" vertex="1">
+          <mxGeometry height="55" width="300" x="560" y="1300" as="geometry" />
+        </mxCell>
+        <mxCell id="49" edge="1" parent="1" source="44" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="48">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="50" edge="1" parent="1" source="46" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="48">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="51" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#CBD5E1;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="師傅完工回報 拍照+客戶簽名+收費品項" vertex="1">
+          <mxGeometry height="55" width="300" x="560" y="1390" as="geometry" />
+        </mxCell>
+        <mxCell id="52" edge="1" parent="1" source="48" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="51">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="53" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#10B981;fontColor=#FFFFFF;strokeColor=#059669;fontSize=12;fontStyle=1;fontFamily=Noto Sans TC;" value="✅ 結案 + CSAT推播（2hr後）" vertex="1">
+          <mxGeometry height="45" width="260" x="580" y="1480" as="geometry" />
+        </mxCell>
+        <mxCell id="54" edge="1" parent="1" source="51" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="53">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="55" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E0F2FE;strokeColor=#7DD3FC;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="📋 CRM 更新完整服務歷程" vertex="1">
+          <mxGeometry height="45" width="280" x="570" y="1555" as="geometry" />
+        </mxCell>
+        <mxCell id="56" edge="1" parent="1" source="53" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="55">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="57" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#FFFBEB;strokeColor=#FDE047;fontSize=10;fontFamily=Noto Sans TC;align=left;spacingLeft=8;spacingTop=4;" value="⚖️ 責任釐清 • 安裝問題→回鎖店（鎖店師傅負責安裝） • 產品故障→原廠保固維修 • 工務只做保固內維修，不安裝 • 鎖店拒絕→主管介入" vertex="1">
+          <mxGeometry height="110" width="280" x="1190" y="1455" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="04 保固登錄" id="p_04">
+    <mxGraphModel dx="1514" dy="822" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="3000" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="2" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#0F2744;fontColor=#FFFFFF;strokeColor=#0F2744;fontSize=12;fontStyle=1;fontFamily=Noto Sans TC;" value="【A】安裝完成後引導保固登錄" vertex="1">
+          <mxGeometry height="45" width="280" x="80" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="3" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#FFFBEB;strokeColor=#FDE047;fontSize=10;fontFamily=Noto Sans TC;align=left;spacingLeft=8;spacingTop=4;" value="📦 隨貨保固登錄卡 每台鎖附實體卡片（印QR） ⚠️ 鎖店出貨：保固＝安裝日起算2年" vertex="1">
+          <mxGeometry height="70" width="290" x="400" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="4" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEF9C3;strokeColor=#FDE047;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;" value="登錄方式？" vertex="1">
+          <mxGeometry height="80" width="200" x="110" y="110" as="geometry" />
+        </mxCell>
+        <mxCell id="5" edge="1" parent="1" source="2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="6" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D1FAE5;strokeColor=#6EE7B7;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="📱 客戶掃保固卡QR →加入LINE官方 QR自帶序號參數" vertex="1">
+          <mxGeometry height="60" width="220" x="100" y="240" as="geometry" />
+        </mxCell>
+        <mxCell id="7" edge="1" parent="1" source="4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="6" value="客戶DIY">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="8" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF3C7;strokeColor=#FCD34D;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="👷 師傅引導掃碼 或代登（驗收單回傳）" vertex="1">
+          <mxGeometry height="60" width="200" x="400" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="9" edge="1" parent="1" source="4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="8" value="師傅引導/代登">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="10" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FDF4FF;strokeColor=#E879F9;dashed=1;dashPattern=8 4;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="🤖 LINE Bot三步驟 [AI] ①確認序號 ②安裝日期+地址 ③LINE自動綁定" vertex="1">
+          <mxGeometry height="65" width="240" x="90" y="345" as="geometry" />
+        </mxCell>
+        <mxCell id="11" edge="1" parent="1" source="6" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="10">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="12" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E0F2FE;strokeColor=#7DD3FC;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="🤖 CRM 自動建立 WF 編號 WF-YYYY-NNNNN 記錄保固起始日（安裝日） 記錄購買通路標籤" vertex="1">
+          <mxGeometry height="70" width="280" x="250" y="450" as="geometry" />
+        </mxCell>
+        <mxCell id="13" edge="1" parent="1" source="10" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="12">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="14" edge="1" parent="1" source="8" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="12">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="15" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D1FAE5;strokeColor=#6EE7B7;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="📱 LINE推播保固確認 「保固已登錄 ✅ WF-2026-XXXXX 保固到期日：YYYY/MM/DD」" vertex="1">
+          <mxGeometry height="60" width="280" x="250" y="570" as="geometry" />
+        </mxCell>
+        <mxCell id="16" edge="1" parent="1" source="12" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="15">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="17" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#10B981;fontColor=#FFFFFF;strokeColor=#059669;fontSize=12;fontStyle=1;fontFamily=Noto Sans TC;" value="✅ 保固登錄完成" vertex="1">
+          <mxGeometry height="40" width="200" x="290" y="670" as="geometry" />
+        </mxCell>
+        <mxCell id="18" edge="1" parent="1" source="15" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="17">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="19" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#FFFBEB;strokeColor=#FDE047;fontSize=10;fontFamily=Noto Sans TC;align=left;spacingLeft=8;spacingTop=4;" value="【經銷商】QR內嵌鎖店代碼 客戶掃碼→自動貼標 「來源：XX鎖店」" vertex="1">
+          <mxGeometry height="65" width="250" x="870" y="765" as="geometry" />
+        </mxCell>
+        <mxCell id="20" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#0F2744;fontColor=#FFFFFF;strokeColor=#0F2744;fontSize=12;fontStyle=1;fontFamily=Noto Sans TC;" value="【B】客戶查詢保固" vertex="1">
+          <mxGeometry height="45" width="250" x="720" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="21" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E0F2FE;strokeColor=#7DD3FC;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="🔍 CRM查詢 WF編號/電話/序號" vertex="1">
+          <mxGeometry height="55" width="250" x="720" y="110" as="geometry" />
+        </mxCell>
+        <mxCell id="22" edge="1" parent="1" source="20" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="21">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="23" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEF9C3;strokeColor=#FDE047;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;" value="有保固資料？" vertex="1">
+          <mxGeometry height="80" width="200" x="745" y="200" as="geometry" />
+        </mxCell>
+        <mxCell id="24" edge="1" parent="1" source="21" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="23">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="25" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#6EE7B7;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;arcSize=12;" value="📋 顯示保固資訊 登錄日/到期日/範圍/通路" vertex="1">
+          <mxGeometry height="55" width="260" x="715" y="355" as="geometry" />
+        </mxCell>
+        <mxCell id="26" edge="1" parent="1" source="23" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#10B981;fontColor=#10B981;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;" target="25" value="有">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="27" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEF9C3;strokeColor=#FDE047;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;" value="保固有效？ （安裝日起算2年）" vertex="1">
+          <mxGeometry height="80" width="220" x="735" y="450" as="geometry" />
+        </mxCell>
+        <mxCell id="28" edge="1" parent="1" source="25" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="27">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="29" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#6EE7B7;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;arcSize=12;" value="✅ 免費報修 →派工流程" vertex="1">
+          <mxGeometry height="50" width="150" x="770" y="580" as="geometry" />
+        </mxCell>
+        <mxCell id="30" edge="1" parent="1" source="27" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#10B981;fontColor=#10B981;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="29" value="保固內">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="31" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7ED;strokeColor=#FDBA74;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="💰 自費確認 →派工流程" vertex="1">
+          <mxGeometry height="50" width="150" x="1020" y="465" as="geometry" />
+        </mxCell>
+        <mxCell id="32" edge="1" parent="1" source="27" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#F59E0B;fontColor=#F59E0B;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="31" value="過期">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="33" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEE2E2;strokeColor=#FCA5A5;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;arcSize=12;" value="⚠️ 無保固資料 引導拿保固卡補掃 或提供購買憑證 無憑證→自費 爭議→轉主管" vertex="1">
+          <mxGeometry height="100" width="200" x="1000" y="190" as="geometry" />
+        </mxCell>
+        <mxCell id="34" edge="1" parent="1" source="23" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#EF4444;fontColor=#EF4444;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="33" value="無">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="35" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#CBD5E1;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="🏠 搬遷移機 需費用（各型號不同） →CRM更新地址 保固繼續計算" vertex="1">
+          <mxGeometry height="70" width="220" x="40" y="760" as="geometry" />
+        </mxCell>
+        <mxCell id="36" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#CBD5E1;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="🔑 設定卡/感應卡補發 確認型號→報價$2,500-3,500 確認後寄出+設定教學" vertex="1">
+          <mxGeometry height="70" width="220" x="290" y="760" as="geometry" />
+        </mxCell>
+        <mxCell id="37" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF1F2;strokeColor=#FDA4AF;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="⚠️ 不保固項目 ❌電池漏液 ❌人為損壞 ❌App問題 ❌天災 ❌門框改建 ❌自行安裝" vertex="1">
+          <mxGeometry height="75" width="220" x="540" y="760" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="05 安裝流程" id="p_05">
+    <mxGraphModel dx="1262" dy="685" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="3000" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="2" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#FFFBEB;strokeColor=#FDE047;fontSize=10;fontFamily=Noto Sans TC;align=left;spacingLeft=8;spacingTop=4;" value="⚠️ 安裝全部由鎖店師傅負責 維夫拉克工務不負責安裝 工務只做保固內維修" vertex="1">
+          <mxGeometry height="65" width="280" x="740" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="3" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#0F2744;fontColor=#FFFFFF;strokeColor=#0F2744;fontSize=12;fontStyle=1;fontFamily=Noto Sans TC;" value="開始：客戶確認安裝 （鎖店師傅到場）" vertex="1">
+          <mxGeometry height="50" width="260" x="370" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF3C7;strokeColor=#FCD34D;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="👷 鎖店師傅接收安裝工單 確認地址/型號/帶備品" vertex="1">
+          <mxGeometry height="55" width="300" x="350" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="5" edge="1" parent="1" source="3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="6" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#CBD5E1;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="師傅到達，通知系統 LINE推播「師傅已抵達」" vertex="1">
+          <mxGeometry height="50" width="300" x="350" y="210" as="geometry" />
+        </mxCell>
+        <mxCell id="7" edge="1" parent="1" source="4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="8" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#CBD5E1;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="現場評估 門厚/鎖孔/加工需求" vertex="1">
+          <mxGeometry height="50" width="300" x="350" y="295" as="geometry" />
+        </mxCell>
+        <mxCell id="9" edge="1" parent="1" source="6" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="10" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEF9C3;strokeColor=#FDE047;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;" value="可照原計畫安裝？" vertex="1">
+          <mxGeometry height="90" width="220" x="390" y="380" as="geometry" />
+        </mxCell>
+        <mxCell id="11" edge="1" parent="1" source="8" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="10">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="12" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF3C7;strokeColor=#FCD34D;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="⚠️ 現場報價 加工費+$1,500-2,500" vertex="1">
+          <mxGeometry height="55" width="220" x="800" y="397.5" as="geometry" />
+        </mxCell>
+        <mxCell id="13" edge="1" parent="1" source="10" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#F59E0B;fontColor=#F59E0B;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="12" value="需加工">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="14" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEE2E2;strokeColor=#FCA5A5;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;arcSize=12;" value="❌ 無法安裝 回報客服→退款/換型號" vertex="1">
+          <mxGeometry height="50" width="220" x="20" y="402.5" as="geometry" />
+        </mxCell>
+        <mxCell id="15" edge="1" parent="1" source="10" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#EF4444;fontColor=#EF4444;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" target="14" value="無法安裝">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="16" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#CBD5E1;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="🔧 施工安裝 拆舊鎖→定位開孔→安裝→排線" vertex="1">
+          <mxGeometry height="55" width="300" x="350" y="590" as="geometry" />
+        </mxCell>
+        <mxCell id="17" edge="1" parent="1" source="10" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#10B981;fontColor=#10B981;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;" target="16" value="可以">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="18" edge="1" parent="1" source="12" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="16">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="19" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EFF6FF;strokeColor=#93C5FD;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="🔬 完工驗收三步驟 ①鎖舌對位 ②自動上鎖 ③各解鎖方式(指紋/卡/密碼/鑰匙/App)" vertex="1">
+          <mxGeometry height="65" width="300" x="350" y="740" as="geometry" />
+        </mxCell>
+        <mxCell id="20" edge="1" parent="1" source="16" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="19">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="21" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEF9C3;strokeColor=#FDE047;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;" value="驗收通過？" vertex="1">
+          <mxGeometry height="90" width="220" x="390" y="840" as="geometry" />
+        </mxCell>
+        <mxCell id="22" edge="1" parent="1" source="19" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="21">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="23" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEE2E2;strokeColor=#FCA5A5;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;arcSize=12;" value="現場調整重試 仍無法→回報客服" vertex="1">
+          <mxGeometry height="50" width="200" x="750" y="860" as="geometry" />
+        </mxCell>
+        <mxCell id="24" edge="1" parent="1" source="21" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#EF4444;fontColor=#EF4444;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="23" value="未通過">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="25" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#CBD5E1;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="📖 現場操作教學 設密碼/指紋/App/9V/備用鑰匙" vertex="1">
+          <mxGeometry height="55" width="300" x="350" y="970" as="geometry" />
+        </mxCell>
+        <mxCell id="26" edge="1" parent="1" source="21" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#10B981;fontColor=#10B981;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;" target="25" value="通過">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="27" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FDF4FF;strokeColor=#E879F9;dashed=1;dashPattern=8 4;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="🤖 LINE Bot引導保固登錄 [AI] 掃保固卡QR→三步驟 ※保固起算＝今天（安裝日）起算2年" vertex="1">
+          <mxGeometry height="65" width="300" x="350" y="1060" as="geometry" />
+        </mxCell>
+        <mxCell id="28" edge="1" parent="1" source="25" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="27">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="29" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#10B981;fontColor=#FFFFFF;strokeColor=#059669;fontSize=12;fontStyle=1;fontFamily=Noto Sans TC;" value="✅ 安裝完成，保固開始計算 （安裝日起算2年）" vertex="1">
+          <mxGeometry height="45" width="260" x="370" y="1160" as="geometry" />
+        </mxCell>
+        <mxCell id="30" edge="1" parent="1" source="27" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="29">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="06 特殊情境" id="p_06">
+    <mxGraphModel dx="1262" dy="685" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="3000" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="2" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#FFFBEB;strokeColor=#FDE047;fontSize=10;fontFamily=Noto Sans TC;align=left;spacingLeft=8;spacingTop=4;" value="⚠️ 蝦皮不支援API 需獨立登入後台" vertex="1">
+          <mxGeometry height="50" width="180" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="3" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#0F2744;fontColor=#FFFFFF;strokeColor=#0F2744;fontSize=12;fontStyle=1;fontFamily=Noto Sans TC;" value="【A】蝦皮賣場來訊" vertex="1">
+          <mxGeometry height="40" width="200" x="200" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="4" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEF9C3;strokeColor=#FDE047;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;" value="有蝦皮訂單號？" vertex="1">
+          <mxGeometry height="80" width="200" x="200" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="5" edge="1" parent="1" source="3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="6" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#6EE7B7;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;arcSize=12;" value="查詢訂單記錄 比對CRM" vertex="1">
+          <mxGeometry height="50" width="160" y="115" as="geometry" />
+        </mxCell>
+        <mxCell id="7" edge="1" parent="1" source="4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#10B981;fontColor=#10B981;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" target="6" value="有">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="8" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#CBD5E1;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="詢問購買資訊 暫時記錄" vertex="1">
+          <mxGeometry height="50" width="160" x="440" y="115" as="geometry" />
+        </mxCell>
+        <mxCell id="9" edge="1" parent="1" source="4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#F59E0B;fontColor=#F59E0B;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="8" value="無">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="10" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEF9C3;strokeColor=#FDE047;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;" value="問題類型？" vertex="1">
+          <mxGeometry height="80" width="180" x="200" y="310" as="geometry" />
+        </mxCell>
+        <mxCell id="11" edge="1" parent="1" source="6" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="10">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="12" edge="1" parent="1" source="8" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="10">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="13" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF1F2;strokeColor=#FDA4AF;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="蝦皮平台 退換流程" vertex="1">
+          <mxGeometry height="50" width="130" x="30" y="325" as="geometry" />
+        </mxCell>
+        <mxCell id="14" edge="1" parent="1" source="10" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" target="13" value="退換貨">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="15" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D1FAE5;strokeColor=#6EE7B7;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="引導加入 LINE官方帳號" vertex="1">
+          <mxGeometry height="50" width="140" x="220" y="420" as="geometry" />
+        </mxCell>
+        <mxCell id="16" edge="1" parent="1" source="10" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="15" value="使用問題">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="17" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF3C7;strokeColor=#FCD34D;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="引導LINE 報修或留電" vertex="1">
+          <mxGeometry height="50" width="130" x="430" y="325" as="geometry" />
+        </mxCell>
+        <mxCell id="18" edge="1" parent="1" source="10" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="17" value="報修">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="19" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E0F2FE;strokeColor=#7DD3FC;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="⚠️ 手動同步至CRM （蝦皮不支援API）" vertex="1">
+          <mxGeometry height="45" width="260" x="160" y="630" as="geometry" />
+        </mxCell>
+        <mxCell id="20" edge="1" parent="1" source="13" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="19">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="21" edge="1" parent="1" source="15" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="19">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="22" edge="1" parent="1" source="17" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="19">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="23" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#FFFBEB;strokeColor=#FDE047;fontSize=10;fontFamily=Noto Sans TC;align=left;spacingLeft=8;spacingTop=4;" value="✅ 可直接服務 但需同步CRM" vertex="1">
+          <mxGeometry height="50" width="180" x="1170" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="24" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#0F2744;fontColor=#FFFFFF;strokeColor=#0F2744;fontSize=12;fontStyle=1;fontFamily=Noto Sans TC;" value="【B】客戶到訪門市" vertex="1">
+          <mxGeometry height="40" width="200" x="910" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="25" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEF9C3;strokeColor=#FDE047;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;" value="來訪目的？" vertex="1">
+          <mxGeometry height="80" width="180" x="910" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="26" edge="1" parent="1" source="24" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="25">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="27" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EFF6FF;strokeColor=#93C5FD;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="🛒 購買諮詢 展示/報價/下單" vertex="1">
+          <mxGeometry height="55" width="160" x="690" y="115" as="geometry" />
+        </mxCell>
+        <mxCell id="28" edge="1" parent="1" source="25" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" target="27" value="購買">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="29" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#CBD5E1;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="🔧 現場報修" vertex="1">
+          <mxGeometry height="45" width="140" x="930" y="230" as="geometry" />
+        </mxCell>
+        <mxCell id="30" edge="1" parent="1" source="25" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="29" value="報修">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="31" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#6EE7B7;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;arcSize=12;" value="🛡️ 保固查詢 CRM查狀態" vertex="1">
+          <mxGeometry height="50" width="150" x="1220" y="115" as="geometry" />
+        </mxCell>
+        <mxCell id="32" edge="1" parent="1" source="25" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="31" value="保固">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="34" edge="1" parent="1" source="29" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;exitX=0.5;exitY=1;exitDx=0;exitDy=0;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1000" y="360" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="39" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E0F2FE;strokeColor=#7DD3FC;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="📋 全程記錄CRM （門市來訪標記）" vertex="1">
+          <mxGeometry height="45" width="260" x="870" y="360" as="geometry" />
+        </mxCell>
+        <mxCell id="40" edge="1" parent="1" source="27" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="39">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="770" y="310" />
+              <mxPoint x="1000" y="310" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="43" edge="1" parent="1" source="31" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="39">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1295" y="310" />
+              <mxPoint x="1000" y="310" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="44" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#0F2744;fontColor=#FFFFFF;strokeColor=#0F2744;fontSize=12;fontStyle=1;fontFamily=Noto Sans TC;" value="【C】建案住戶來電/來訊報修" vertex="1">
+          <mxGeometry height="40" width="260" x="460" y="615" as="geometry" />
+        </mxCell>
+        <mxCell id="45" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEF9C3;strokeColor=#FDE047;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;" value="保固歸屬？" vertex="1">
+          <mxGeometry height="90" width="220" x="480" y="685" as="geometry" />
+        </mxCell>
+        <mxCell id="46" edge="1" parent="1" source="44" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="45">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="t_rTmV6qDzbOU8ZbD4TK-54" edge="1" parent="1" source="47" style="edgeStyle=none;curved=1;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.75;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=12;startSize=8;endSize=8;" target="49">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="320" y="880" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="47" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EFF6FF;strokeColor=#93C5FD;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="查詢CRM顯示建案或者管委會保固資訊" vertex="1">
+          <mxGeometry height="60" width="220" x="160" y="700" as="geometry" />
+        </mxCell>
+        <mxCell id="48" edge="1" parent="1" source="45" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#10B981;fontColor=#10B981;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" target="47" value="2B消費者">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="49" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#6EE7B7;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;arcSize=12;" value="建商保固後 走正常保固/報修流程" vertex="1">
+          <mxGeometry height="55" width="220" x="480" y="840" as="geometry" />
+        </mxCell>
+        <mxCell id="50" edge="1" parent="1" source="45" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="49" value="一般消費者">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="51" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEE2E2;strokeColor=#FCA5A5;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;arcSize=12;" value="🚨 飯店連線鎖故障 三課協助" vertex="1">
+          <mxGeometry height="55" width="220" x="800" y="702.5" as="geometry" />
+        </mxCell>
+        <mxCell id="52" edge="1" parent="1" source="45" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#EF4444;fontColor=#EF4444;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="51" value="飯店連線鎖">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="07 電商流程(代定)" id="p_07">
+    <mxGraphModel dx="1514" dy="822" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="3000" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="2" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#FFFBEB;strokeColor=#FDE047;fontSize=10;fontFamily=Noto Sans TC;align=left;spacingLeft=8;spacingTop=4;" value="電商LINE已合併至官方LINE 退貨/訂單問題找 Vivi / Allen 平台：momo/蝦皮/PChome/官網" vertex="1">
+          <mxGeometry height="65" width="280" x="740" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="3" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#0F2744;fontColor=#FFFFFF;strokeColor=#0F2744;fontSize=12;fontStyle=1;fontFamily=Noto Sans TC;" value="📱 電商客人進線" vertex="1">
+          <mxGeometry height="45" width="240" x="380" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E0F2FE;strokeColor=#7DD3FC;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="🔍 CRM查詢 訂單號/電話/LINE UID" vertex="1">
+          <mxGeometry height="55" width="280" x="360" y="110" as="geometry" />
+        </mxCell>
+        <mxCell id="5" edge="1" parent="1" source="3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="6" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEF9C3;strokeColor=#FDE047;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;" value="問題類型？" vertex="1">
+          <mxGeometry height="90" width="220" x="390" y="200" as="geometry" />
+        </mxCell>
+        <mxCell id="7" edge="1" parent="1" source="4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="8" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#CBD5E1;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="📦 訂單/物流查詢 官網→查後台 其他→引導平台查" vertex="1">
+          <mxGeometry height="60" width="220" x="80" y="215" as="geometry" />
+        </mxCell>
+        <mxCell id="9" edge="1" parent="1" source="6" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" target="8" value="訂單/物流">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="10" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEF9C3;strokeColor=#FDE047;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;" value="退換貨 購買平台？" vertex="1">
+          <mxGeometry height="80" width="200" x="400" y="350" as="geometry" />
+        </mxCell>
+        <mxCell id="11" edge="1" parent="1" source="6" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="10" value="退換貨">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="12" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EFF6FF;strokeColor=#93C5FD;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="📤 官網退貨 →轉支援課" vertex="1">
+          <mxGeometry height="50" width="170" x="280" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="13" edge="1" parent="1" source="10" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#10B981;fontColor=#10B981;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0.373;entryY=0.1;entryDx=0;entryDy=0;entryPerimeter=0;" target="12" value="官網">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="14" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEF9C3;strokeColor=#FDE047;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;" value="已安裝？" vertex="1">
+          <mxGeometry height="70" width="150" x="560" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="15" edge="1" parent="1" source="10" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="14" value="電商平台">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="16" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF1F2;strokeColor=#FDA4AF;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="走平台退貨 7天鑑賞期" vertex="1">
+          <mxGeometry height="50" width="150" x="450" y="620" as="geometry" />
+        </mxCell>
+        <mxCell id="17" edge="1" parent="1" source="14" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="16" value="未安裝">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="18" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEE2E2;strokeColor=#FCA5A5;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;arcSize=12;" value="⚠️ 已安裝不退 →走維修保固 找Vivi/Allen" vertex="1">
+          <mxGeometry height="55" width="170" x="660" y="617.5" as="geometry" />
+        </mxCell>
+        <mxCell id="19" edge="1" parent="1" source="14" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#EF4444;fontColor=#EF4444;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="18" value="已安裝">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="20" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#CBD5E1;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="🔧 產品問題" vertex="1">
+          <mxGeometry height="45" width="180" x="950" y="222.5" as="geometry" />
+        </mxCell>
+        <mxCell id="21" edge="1" parent="1" source="6" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="20" value="產品問題">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="22" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEF9C3;strokeColor=#FDE047;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;" value="問題性質？" vertex="1">
+          <mxGeometry height="70" width="180" x="950" y="400" as="geometry" />
+        </mxCell>
+        <mxCell id="23" edge="1" parent="1" source="20" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="22">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="24" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FDF4FF;strokeColor=#E879F9;dashed=1;dashPattern=8 4;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="🤖 知識庫回覆 [AI]" vertex="1">
+          <mxGeometry height="45" width="160" x="750" y="412.5" as="geometry" />
+        </mxCell>
+        <mxCell id="25" edge="1" parent="1" source="22" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" target="24" value="使用教學">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="26" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#6EE7B7;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;arcSize=12;" value="確認保固登錄 →報修流程" vertex="1">
+          <mxGeometry height="50" width="160" x="1170" y="410" as="geometry" />
+        </mxCell>
+        <mxCell id="27" edge="1" parent="1" source="22" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="26" value="故障報修">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="28" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D1FAE5;strokeColor=#6EE7B7;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="🛡️ 保固登錄 掃保固卡QR→LINE 貼標「電商」+「平台名」" vertex="1">
+          <mxGeometry height="60" width="220" x="1150" y="610" as="geometry" />
+        </mxCell>
+        <mxCell id="29" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7ED;strokeColor=#FDBA74;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="📤 其他→轉Vivi/Allen 促銷爭議/價差/團購" vertex="1">
+          <mxGeometry height="55" width="220" x="980" y="750" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="08 經銷商流程(代定)" id="p_08">
+    <mxGraphModel dx="1262" dy="685" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="3000" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="2" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#FFFBEB;strokeColor=#FDE047;fontSize=10;fontFamily=Noto Sans TC;align=left;spacingLeft=8;spacingTop=4;" value="【核心規則】 • 安裝由鎖店師傅負責（工務不安裝） • 保固＝安裝日起算2年 • 工務只做保固內維修 • 每間鎖店有專屬QR Code" vertex="1">
+          <mxGeometry height="90" width="280" x="280" y="610" as="geometry" />
+        </mxCell>
+        <mxCell id="3" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#0F2744;fontColor=#FFFFFF;strokeColor=#0F2744;fontSize=12;fontStyle=1;fontFamily=Noto Sans TC;" value="【A】經銷商客人導流" vertex="1">
+          <mxGeometry height="40" width="240" x="380" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="4" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEF9C3;strokeColor=#FDE047;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;" value="客人如何接觸？" vertex="1">
+          <mxGeometry height="90" width="220" x="390" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="5" edge="1" parent="1" source="3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="6" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D1FAE5;strokeColor=#6EE7B7;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="📱 客人掃鎖店專屬QR →加入LINE官方帳號 QR內嵌鎖店代碼 系統自動貼標來源" vertex="1">
+          <mxGeometry height="70" width="260" x="10" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="7" edge="1" parent="1" source="4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#10B981;fontColor=#10B981;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" target="6" value="鎖店提供QR （理想情境）">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="8" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FDF4FF;strokeColor=#E879F9;dashed=1;dashPattern=8 4;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="🤖 LINE Bot歡迎訊息 [AI] 「感謝透過【XX鎖行】購買 請完成保固登錄」" vertex="1">
+          <mxGeometry height="60" width="260" x="10" y="330" as="geometry" />
+        </mxCell>
+        <mxCell id="9" edge="1" parent="1" source="6" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="10" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#6EE7B7;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;arcSize=12;" value="→ 保固登錄流程 ※保固起算＝安裝日" vertex="1">
+          <mxGeometry height="45" width="220" x="30" y="420" as="geometry" />
+        </mxCell>
+        <mxCell id="11" edge="1" parent="1" source="8" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="10">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="12" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E0F2FE;strokeColor=#7DD3FC;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="📋 CRM記錄 標籤：經銷商+鎖店名稱 客戶↔鎖店↔產品 三方關聯" vertex="1">
+          <mxGeometry height="60" width="260" x="10" y="490" as="geometry" />
+        </mxCell>
+        <mxCell id="13" edge="1" parent="1" source="10" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="12">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="14" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#CBD5E1;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="客人自己打0800或加LINE 不知道是哪個鎖店賣的" vertex="1">
+          <mxGeometry height="55" width="240" x="380" y="240" as="geometry" />
+        </mxCell>
+        <mxCell id="15" edge="1" parent="1" source="4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="14" value="客人自己找上門">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="16" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEF9C3;strokeColor=#FDE047;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;" value="CRM有 經銷商資料？" vertex="1">
+          <mxGeometry height="75" width="180" x="410" y="330" as="geometry" />
+        </mxCell>
+        <mxCell id="17" edge="1" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="16">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="509.9999999999998" y="295" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="18" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#6EE7B7;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;arcSize=12;" value="有來源標籤 直接進入服務" vertex="1">
+          <mxGeometry height="45" width="180" x="290" y="500" as="geometry" />
+        </mxCell>
+        <mxCell id="19" edge="1" parent="1" source="16" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#10B981;fontColor=#10B981;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" value="有">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="390" y="500" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="20" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#CBD5E1;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="📝 詢問購買通路 ①鎖店名稱→手動貼標 ②記不清→序號反查 ③標記「經銷-未確認」" vertex="1">
+          <mxGeometry height="70" width="220" x="510" y="495" as="geometry" />
+        </mxCell>
+        <mxCell id="21" edge="1" parent="1" source="16" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#F59E0B;fontColor=#F59E0B;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="20" value="無">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="22" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF3C7;strokeColor=#FCD34D;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="🔧 鎖店直接轉介 代客戶報修/諮詢" vertex="1">
+          <mxGeometry height="50" width="220" x="750" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="23" edge="1" parent="1" source="4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="22" value="鎖店代客聯繫">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="24" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E0F2FE;strokeColor=#7DD3FC;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="確認鎖店身份+客戶資料 建立CRM+引導掃碼" vertex="1">
+          <mxGeometry height="55" width="220" x="750" y="310" as="geometry" />
+        </mxCell>
+        <mxCell id="25" edge="1" parent="1" source="22" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="24">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="26" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#0F2744;fontColor=#FFFFFF;strokeColor=#0F2744;fontSize=12;fontStyle=1;fontFamily=Noto Sans TC;" value="【B】經銷商客人報修 — 責任釐清" vertex="1">
+          <mxGeometry height="40" width="260" x="1310" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="27" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEF9C3;strokeColor=#FDE047;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;" value="誰安裝的？" vertex="1">
+          <mxGeometry height="90" width="220" x="1330" y="110" as="geometry" />
+        </mxCell>
+        <mxCell id="28" edge="1" parent="1" source="26" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="27">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="29" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEF9C3;strokeColor=#FDE047;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;" value="問題性質？" vertex="1">
+          <mxGeometry height="80" width="180" x="1060" y="115" as="geometry" />
+        </mxCell>
+        <mxCell id="30" edge="1" parent="1" source="27" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" target="29" value="鎖店師傅安裝">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="31" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#6EE7B7;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;arcSize=12;" value="✅ 產品故障 →原廠保固維修 派工務(Kelly/Julia/Mucus)" vertex="1">
+          <mxGeometry height="60" width="250" x="1440" y="380" as="geometry" />
+        </mxCell>
+        <mxCell id="32" edge="1" parent="1" source="29" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#10B981;fontColor=#10B981;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="31" value="產品故障">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="33" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF3C7;strokeColor=#FCD34D;fontSize=11;fontFamily=Noto Sans TC;arcSize=12;" value="⚠️ 安裝問題→回鎖店 安裝品質＝鎖店責任 工務不負責安裝" vertex="1">
+          <mxGeometry height="60" width="240" x="1030" y="412.5" as="geometry" />
+        </mxCell>
+        <mxCell id="34" edge="1" parent="1" source="29" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#F59E0B;fontColor=#F59E0B;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="33" value="安裝問題">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="35" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEF9C3;strokeColor=#FDE047;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;" value="鎖店拒絕？" vertex="1">
+          <mxGeometry height="70" width="160" x="1070" y="520" as="geometry" />
+        </mxCell>
+        <mxCell id="36" edge="1" parent="1" source="33" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;fontSize=10;fontFamily=Noto Sans TC;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="35">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="37" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEE2E2;strokeColor=#FCA5A5;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;arcSize=12;" value="⚖️ 轉主管介入 與鎖店協調" vertex="1">
+          <mxGeometry height="50" width="180" x="1060" y="660" as="geometry" />
+        </mxCell>
+        <mxCell id="38" edge="1" parent="1" source="35" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#EF4444;fontColor=#EF4444;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;" target="37" value="是">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="39" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#6EE7B7;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;arcSize=12;" value="鎖店自行處理 CRM記錄" vertex="1">
+          <mxGeometry height="45" width="150" x="1290" y="532.5" as="geometry" />
+        </mxCell>
+        <mxCell id="40" edge="1" parent="1" source="35" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#10B981;fontColor=#10B981;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="39" value="否">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="41" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEE2E2;strokeColor=#FCA5A5;fontSize=11;fontStyle=1;fontFamily=Noto Sans TC;arcSize=12;" value="⚖️ 客戶自行安裝 可能喪失保固 →主管判斷" vertex="1">
+          <mxGeometry height="60" width="200" x="1620" y="125" as="geometry" />
+        </mxCell>
+        <mxCell id="42" edge="1" parent="1" source="27" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#EF4444;fontColor=#EF4444;fontSize=10;fontStyle=1;fontFamily=Noto Sans TC;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="41" value="客戶自行安裝">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="43" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#FFFBEB;strokeColor=#FDE047;fontSize=10;fontFamily=Noto Sans TC;align=left;spacingLeft=8;spacingTop=4;" value="【C】經銷商管理 — CRM數據追蹤  📊 每間鎖店客戶數（掃碼數/登錄數） 📊 每間鎖店報修率（異常高→安裝品質問題） 📊 安裝問題轉回鎖店件數 📊 未標記來源客人數 📊 經銷商導流成效" vertex="1">
+          <mxGeometry height="110" width="600" x="960" y="790" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

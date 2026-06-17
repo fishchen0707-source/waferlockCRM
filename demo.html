@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>保固登錄頁 — 設計預覽（靜態 demo，正式版由 WordPress 外掛輸出）</title>
+<link rel="stylesheet" href="wp-plugin/lock-warranty/assets/form.css">
+<style>
+	body { background: #eef0f4; font-family: "Noto Sans TC", "Microsoft JhengHei", sans-serif; padding: 32px 0; }
+	.demo-banner { max-width: 640px; margin: 0 auto 16px; padding: 10px 16px; background: #fff3cd; border: 1px solid #e0c468; border-radius: 8px; font-size: 13px; color: #7a5c00; }
+</style>
+</head>
+<body>
+
+<div class="demo-banner">⚠ 此為設計預覽。正式版由 WordPress 外掛短代碼 [lock_warranty_form] 輸出，送出功能在此 demo 中僅模擬。</div>
+
+<div class="lw-wrap">
+	<div class="lw-card">
+		<div class="lw-head">
+			<span class="lw-head-icon" aria-hidden="true">&#128274;</span>
+			<h2 class="lw-title">產品保固登錄</h2>
+			<p class="lw-subtitle">完成登錄即啟用 2 年原廠保固，並享有到府維修服務</p>
+		</div>
+
+		<form id="lwForm" class="lw-form" novalidate>
+			<fieldset class="lw-fieldset">
+				<legend class="lw-legend">產品資訊</legend>
+
+				<div class="lw-field">
+					<label class="lw-label" for="lwModel">產品型號 <span class="lw-required">*</span></label>
+					<select class="lw-input" id="lwModel" name="model" required>
+						<option value="">請選擇型號</option>
+						<option>DL-100 指紋電子鎖</option>
+						<option>DL-200 指紋密碼鎖</option>
+						<option>DL-300 人臉辨識鎖</option>
+						<option>DL-500 全自動智慧鎖</option>
+					</select>
+				</div>
+
+				<div class="lw-field">
+					<label class="lw-label" for="lwSn">產品序號 <span class="lw-required">*</span></label>
+					<input class="lw-input" type="text" id="lwSn" name="sn" required placeholder="例：DL20250001234" autocomplete="off">
+					<p class="lw-hint">序號位於保固卡及產品包裝盒側面貼紙</p>
+				</div>
+
+				<div class="lw-row">
+					<div class="lw-field">
+						<label class="lw-label" for="lwPurchaseDate">購買日期 <span class="lw-required">*</span></label>
+						<input class="lw-input" type="date" id="lwPurchaseDate" name="purchaseDate" required>
+					</div>
+					<div class="lw-field">
+						<label class="lw-label" for="lwChannel">購買通路 <span class="lw-required">*</span></label>
+						<select class="lw-input" id="lwChannel" name="channel" required>
+							<option value="">請選擇</option>
+							<option>官方網站</option>
+							<option>經銷商門市</option>
+							<option>MOMO</option>
+							<option>PChome</option>
+							<option>蝦皮</option>
+							<option>其他</option>
+						</select>
+					</div>
+				</div>
+
+				<div class="lw-field">
+					<label class="lw-label" for="lwInvoice">發票號碼／訂單編號</label>
+					<input class="lw-input" type="text" id="lwInvoice" name="invoice" placeholder="例：AB-12345678（選填）">
+				</div>
+			</fieldset>
+
+			<fieldset class="lw-fieldset">
+				<legend class="lw-legend">聯絡資訊</legend>
+
+				<div class="lw-row">
+					<div class="lw-field">
+						<label class="lw-label" for="lwName">姓名 <span class="lw-required">*</span></label>
+						<input class="lw-input" type="text" id="lwName" name="name" required>
+					</div>
+					<div class="lw-field">
+						<label class="lw-label" for="lwPhone">手機號碼 <span class="lw-required">*</span></label>
+						<input class="lw-input" type="tel" id="lwPhone" name="phone" required placeholder="0912345678">
+					</div>
+				</div>
+
+				<div class="lw-field">
+					<label class="lw-label" for="lwEmail">電子信箱 <span class="lw-required">*</span></label>
+					<input class="lw-input" type="email" id="lwEmail" name="email" required>
+					<p class="lw-hint">保固憑證將寄送至此信箱，請務必填寫正確</p>
+				</div>
+
+				<div class="lw-field">
+					<label class="lw-label" for="lwAddress">安裝地址</label>
+					<input class="lw-input" type="text" id="lwAddress" name="address" placeholder="到府維修服務使用（選填）">
+				</div>
+			</fieldset>
+
+			<label class="lw-consent">
+				<input type="checkbox" id="lwConsent" name="consent" required>
+				<span>我同意貴公司依<a href="#" rel="noopener">隱私權政策</a>蒐集、處理及利用上述個人資料，作為保固服務與產品通知用途。</span>
+			</label>
+
+			<button type="submit" class="lw-submit" id="lwSubmit">送出保固登錄</button>
+			<div class="lw-msg" id="lwMsg" role="alert"></div>
+		</form>
+
+		<div class="lw-success" id="lwSuccess" hidden>
+			<div class="lw-success-icon" aria-hidden="true">&#10004;</div>
+			<h3>保固登錄完成！</h3>
+			<p>您的保固編號：<strong id="lwSuccessNo"></strong></p>
+			<p>保固到期日：<strong id="lwSuccessExpiry"></strong></p>
+			<p class="lw-hint">保固憑證已寄送至您的信箱，請妥善保留。</p>
+		</div>
+	</div>
+</div>
+
+<script>
+// demo 用：模擬送出成功流程（正式版的 AJAX 邏輯在 assets/form.js）
+document.getElementById('lwForm').addEventListener('submit', function (event) {
+	event.preventDefault();
+	if (!this.checkValidity()) {
+		document.getElementById('lwMsg').textContent = '請完整填寫所有必填欄位並勾選同意條款。';
+		return;
+	}
+	this.hidden = true;
+	document.querySelector('.lw-head .lw-subtitle').textContent = '感謝您的登錄';
+	document.getElementById('lwSuccessNo').textContent = 'W-000123';
+	var purchase = new Date(document.getElementById('lwPurchaseDate').value);
+	purchase.setFullYear(purchase.getFullYear() + 2);
+	document.getElementById('lwSuccessExpiry').textContent = purchase.toISOString().slice(0, 10);
+	document.getElementById('lwSuccess').hidden = false;
+});
+</script>
+
+</body>
+</html>
