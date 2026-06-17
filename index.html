@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WAFERLOCK 智慧服務平台入口</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0B132B;
+    --card-bg: rgba(26, 38, 57, 0.4);
+    --border: rgba(255, 255, 255, 0.08);
+    --text: #F8FAFC;
+    --brand-blue: #38BDF8;
+    --brand-green: #06C755;
+    --glow-blue: rgba(56, 189, 248, 0.2);
+    --glow-green: rgba(6, 199, 85, 0.15);
+  }
+  
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+  
+  body {
+    font-family: 'Outfit', 'Noto Sans TC', sans-serif;
+    background-color: var(--bg);
+    background-image: 
+      radial-gradient(circle at 10% 20%, rgba(56, 189, 248, 0.08) 0%, transparent 40%),
+      radial-gradient(circle at 90% 80%, rgba(6, 199, 85, 0.06) 0%, transparent 40%);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 24px;
+    overflow-x: hidden;
+  }
+  
+  .container {
+    max-width: 1000px;
+    width: 100%;
+    text-align: center;
+    z-index: 10;
+  }
+  
+  header {
+    margin-bottom: 48px;
+    animation: fadeInDown 0.8s ease-out;
+  }
+  
+  h1 {
+    font-size: 2.8rem;
+    font-weight: 800;
+    letter-spacing: -0.05em;
+    margin-bottom: 12px;
+    background: linear-gradient(135deg, #FFF 30%, var(--brand-blue) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  
+  header p {
+    color: #94A3B8;
+    font-size: 1.1rem;
+    font-weight: 400;
+  }
+  
+  .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 32px;
+    margin-bottom: 48px;
+    animation: fadeInUp 0.8s ease-out 0.2s both;
+  }
+  
+  .card {
+    background: var(--card-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 40px;
+    text-align: left;
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+  
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0%, transparent 100%);
+    pointer-events: none;
+  }
+  
+  /* Hover Effects */
+  .card.crm-card:hover {
+    transform: translateY(-8px);
+    border-color: rgba(56, 189, 248, 0.4);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3), 0 0 30px var(--glow-blue);
+  }
+  
+  .card.line-card:hover {
+    transform: translateY(-8px);
+    border-color: rgba(6, 199, 85, 0.4);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3), 0 0 30px var(--glow-green);
+  }
+  
+  .icon-wrapper {
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    margin-bottom: 28px;
+    transition: transform 0.3s ease;
+  }
+  
+  .crm-card .icon-wrapper {
+    background: rgba(56, 189, 248, 0.15);
+    color: var(--brand-blue);
+    box-shadow: 0 8px 16px rgba(56, 189, 248, 0.1);
+  }
+  
+  .line-card .icon-wrapper {
+    background: rgba(6, 199, 85, 0.15);
+    color: var(--brand-green);
+    box-shadow: 0 8px 16px rgba(6, 199, 85, 0.1);
+  }
+  
+  .card:hover .icon-wrapper {
+    transform: scale(1.1) rotate(4deg);
+  }
+  
+  .card h2 {
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin-bottom: 12px;
+  }
+  
+  .card p {
+    color: #94A3B8;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    margin-bottom: 24px;
+    flex-grow: 1;
+  }
+  
+  .features-list {
+    list-style: none;
+    margin-bottom: 32px;
+  }
+  
+  .features-list li {
+    font-size: 0.9rem;
+    color: #CBD5E1;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .features-list li::before {
+    content: '✦';
+    font-size: 0.8rem;
+  }
+  
+  .crm-card .features-list li::before {
+    color: var(--brand-blue);
+  }
+  
+  .line-card .features-list li::before {
+    color: var(--brand-green);
+  }
+  
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 14px;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 1rem;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    gap: 8px;
+  }
+  
+  .crm-btn {
+    background: var(--brand-blue);
+    color: #0B132B;
+  }
+  
+  .crm-btn:hover {
+    background: #7DD3FC;
+    box-shadow: 0 4px 12px rgba(56, 189, 248, 0.3);
+  }
+  
+  .line-btn {
+    background: var(--brand-green);
+    color: #FFFFFF;
+  }
+  
+  .line-btn:hover {
+    background: #22C55E;
+    box-shadow: 0 4px 12px rgba(6, 199, 85, 0.3);
+  }
+  
+  footer {
+    color: #64748B;
+    font-size: 0.85rem;
+    animation: fadeIn;
+    animation-duration: 1s;
+    animation-fill-mode: both;
+    animation-delay: 0.4s;
+  }
+  
+  @keyframes fadeInDown {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  
+  @media (max-width: 640px) {
+    h1 { font-size: 2rem; }
+    .card { padding: 28px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>WAFERLOCK 智慧服務平台</h1>
+    <p>Supabase 雲端資料同步 • 客服整合平台與用戶端模擬器</p>
+  </header>
+  
+  <div class="cards-grid">
+    <!-- CRM 後台 -->
+    <div class="card crm-card">
+      <div class="icon-wrapper">👤</div>
+      <h2>CRM 客服與後台管理</h2>
+      <p>面向客服與各業務課（內銷、外銷、電商等）的中央控制台。提供多層級場域搜尋、工單派發、客訴追蹤與跨部門協同處理。</p>
+      <ul class="features-list">
+        <li>Layer 1/2 客戶多地址場域搜尋</li>
+        <li>安裝工單與師傅派工管理</li>
+        <li>模擬多部門視角與收件匣過濾</li>
+        <li>互動歷史紀錄全知面板</li>
+      </ul>
+      <a href="./waferlock_crm.html" class="btn crm-btn">進入 CRM 後台 ➔</a>
+    </div>
+    
+    <!-- LINE 客戶端 -->
+    <div class="card line-card">
+      <div class="icon-wrapper">📱</div>
+      <h2>LINE 官方客服端</h2>
+      <p>模擬客戶在 LINE 上的互動介面。提供 AI 客服自動問答排除故障、產品與保固資訊查詢，並即時接收安裝/報修師傅的出發通知。</p>
+      <ul class="features-list">
+        <li>LINE 帳戶綁定與保固查詢</li>
+        <li>AI + RAG 故障排除自動問答</li>
+        <li>即時故障申報與報修</li>
+        <li>派工進度即時推播通知</li>
+      </ul>
+      <a href="./waferlock_LINE.html" class="btn line-btn">進入 LINE 客戶端 ➔</a>
+    </div>
+  </div>
+  
+  <footer>
+    <p>© 2026 WAFERLOCK. Powered by Supabase Realtime Database.</p>
+  </footer>
+</div>
+
+</body>
+</html>
