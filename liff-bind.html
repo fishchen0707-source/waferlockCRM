@@ -186,6 +186,8 @@ async function doBind(){
       consent_type:'pdpa_basic',agreed:true,version:CONSENT_VERSION,agreed_at:new Date().toISOString()});
     await sb.from('line_users').upsert({line_user_id:profile.userId,wf_id:wfId,display_name:profile.displayName,
       picture_url:profile.pictureUrl||null,bound_at:new Date().toISOString()});
+    // 回填既有對話的 wf_id（若先傳訊息才綁定，webhook 當下查不到 mapping）
+    await sb.from('conversations').update({wf_id:wfId,name:`${name}（LINE）`}).eq('id',profile.userId);
     const { data:c }=await sb.from('customers').select('*').eq('wf_id',wfId).maybeSingle();
     $('bindForm').style.display='none';
     showResult(c, isNew?'🎉 綁定成功（新會員）':'🎉 綁定成功（已連動既有客戶）');

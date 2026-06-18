@@ -562,11 +562,15 @@ function CRMPage(){
       note:caseForm.note||'',
       warrantyIn:wIn, createdBy:'CRM 客服', createdAt:today()+' '+now(),
       unread:false,arrivalPushed:false,rating:null,receiptNo:null,auditNote:''};
+    const uid=c.lineUid;
+    const pushTxt=`📋 已收到您的報修\n\n案件：${rid}\n問題：${caseForm.type} - ${caseForm.issue.trim()||'異常問題'}\n客服將盡快安排師傅 🔧`;
     updateDB(prev=>{
       const custs=(prev.customers||[]).map(x=>x.wfId===c.wfId?{...x,repairIds:[...(x.repairIds||[]),rid]}:x);
-      return {...prev,repairs:{...prev.repairs,[rid]:newRepair},customers:custs};
+      const convs=(prev.conversations||[]).map(cv=>(uid&&cv.id===uid)
+        ?{...cv,msgs:[...(cv.msgs||[]),{id:'p'+Date.now(),from:'bot',text:pushTxt,time:now()}],lastMsg:'已建立報修單',lastTime:now()}:cv);
+      return {...prev,repairs:{...prev.repairs,[rid]:newRepair},customers:custs,conversations:convs};
     });
-    pushLineTo(c.lineUid, `📋 已收到您的報修\n\n案件：${rid}\n問題：${caseForm.type} - ${caseForm.issue.trim()||'異常問題'}\n客服將盡快安排師傅 🔧`);
+    pushLineTo(uid, pushTxt);
     toast('📋 已立案',`${c.name} 報修單 ${rid} 已建立`,'ok');
     setCaseModal(false);
   };
@@ -1103,21 +1107,19 @@ function RepairPage(){
   const doDispatch=()=>{
     if(!disp) return;
     const w=WORKERS.find(x=>x.id===sw);
+    const cu=(db.customers||[]).find(c=>c.wfId===disp.wfId);
+    const uid=cu?.lineUid;
     const pushMsg={id:'p'+Date.now(),from:'bot',
       text:`🚗 派工通知\n\n師傅：${w?.name}\n預約：${sd||today()} ${st}\n師傅出發前將再次通知 📱`,time:now()};
     updateDB(prev=>{
       const nr={...prev.repairs,[disp.id]:{...prev.repairs[disp.id],status:'dispatched',workerId:sw,scheduledDate:`${sd||today()} ${st}`,arrivalPushed:true}};
-      // 同時寫入 wfId 對話 + conv_live（確保 LINE 端能收到）
-      const nc=(prev.conversations||[]).map(c=>{
-        if(c.id==='conv_live'||c.wfId===disp.wfId){
-          return {...c,msgs:[...(c.msgs||[]),pushMsg],lastMsg:'師傅通知已送出',lastTime:now()};
-        }
-        return c;
-      });
+      // 以對話 id === 客戶 lineUid 寫入通知（對話 id 即 lineUserId，最可靠）
+      const nc=(prev.conversations||[]).map(c=>(uid&&c.id===uid)
+        ?{...c,msgs:[...(c.msgs||[]),pushMsg],lastMsg:'師傅通知已送出',lastTime:now()}:c);
       return {...prev,repairs:nr,conversations:nc};
     });
-    const cu=(db.customers||[]).find(c=>c.wfId===disp.wfId); pushLineTo(cu?.lineUid, pushMsg.text);
-    toast('🚗 派工完成',`${w?.name} 已指派，住戶通知已推播`,'ok');
+    pushLineTo(uid, pushMsg.text);
+    toast('🚗 派工完成',`${w?.name} 已指派${uid?'，住戶通知已推播':'（客戶未綁定 LINE，未推播）'}`,'ok');
     setTimeout(()=>toast('📱 推播成功','LINE 通知已送達住戶','ok'),1500);
     setDisp(null);
   };
@@ -1251,21 +1253,19 @@ function RepairPage(){
             const chargeLine=(d.charges&&d.charges.length)?`\n費用：$${d.total}`:'\n本次維修免費（保固內）';
             const closeMsg={id:'p'+Date.now(),from:'bot',time:now(),
               text:`✅ 維修完成結案\n\n案件：${closing.id}\n問題：${closing.type} — ${closing.issue}${chargeLine}\n師傅：${WORKERS.find(w=>w.id===closing.workerId)?.name||'—'}\n簽收單號：${d.receiptNo}\n\n感謝您的使用 🙏 期待再為您服務\n⭐ 歡迎為本次服務評分`};
+            const ccu=(db.customers||[]).find(c=>c.wfId===closing.wfId);
+            const cuid=ccu?.lineUid;
             updateDB(prev=>({...prev,
               repairs:{...prev.repairs,[closing.id]:{...prev.repairs[closing.id],
                 status:'done',photos:d.photos,signature:d.signature,
                 charges:d.charges,chargeTotal:d.total,workNote:d.note,
                 auditNote:d.auditNote||'',receiptNo:d.receiptNo,
                 completedDate:today()}},
-              // 同時寫入 wfId 對話 + conv_live（確保 LINE 端能收到結案通知）
-              conversations:(prev.conversations||[]).map(c=>{
-                if(c.id==='conv_live'||c.wfId===closing.wfId){
-                  return {...c,msgs:[...(c.msgs||[]),closeMsg],lastMsg:'維修完成結案',lastTime:now()};
-                }
-                return c;
-              })
+              // 以對話 id === 客戶 lineUid 寫入結案通知
+              conversations:(prev.conversations||[]).map(c=>(cuid&&c.id===cuid)
+                ?{...c,msgs:[...(c.msgs||[]),closeMsg],lastMsg:'維修完成結案',lastTime:now()}:c)
             }));
-            const cu=(db.customers||[]).find(c=>c.wfId===closing.wfId); pushLineTo(cu?.lineUid, closeMsg.text);
+            pushLineTo(cuid, closeMsg.text);
             toast('✅ 已結案',`電子工單已簽收，簽收單號 ${d.receiptNo}`,'ok');
             setTimeout(()=>toast('📨 CSAT 已推播','滿意度問卷已發送住戶','ok'),1500);
             setClosing(null);
