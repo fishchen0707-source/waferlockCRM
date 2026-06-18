@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>WAFERLOCK 會員綁定</title>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:'Noto Sans TC',-apple-system,sans-serif}
+body{background:#EEF2F7;color:#1E293B;padding:18px;max-width:480px;margin:0 auto}
+.card{background:#fff;border-radius:14px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.hd{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.hd .ic{width:38px;height:38px;background:#0F2744;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:19px}
+.hd h1{font-size:16px;font-weight:700}
+.hd p{font-size:11px;color:#64748B}
+label{display:block;font-size:12px;font-weight:600;color:#475569;margin:12px 0 4px}
+input{width:100%;border:1px solid #E2E8F0;border-radius:7px;padding:9px 11px;font-size:14px;outline:none}
+input:focus{border-color:#38BDF8}
+.hint{font-size:10.5px;color:#94A3B8;margin-top:3px}
+.sn-state{font-size:11px;margin-top:3px;font-weight:600}
+.ok{color:#10B981}.err{color:#EF4444}
+.consent{display:flex;gap:8px;align-items:flex-start;margin:16px 0;font-size:12px;color:#475569;background:#F8FAFC;border-radius:8px;padding:10px}
+.consent input{width:16px;height:16px;margin-top:1px;flex-shrink:0}
+.btn{width:100%;margin-top:8px;padding:12px;background:#38BDF8;color:#0F2744;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer}
+.btn:disabled{background:#CBD5E1;color:#fff;cursor:not-allowed}
+.msg{margin-top:12px;padding:10px 12px;border-radius:8px;font-size:13px;line-height:1.6;display:none}
+.msg.show{display:block}
+.msg.success{background:#D1FAE5;color:#065F46}
+.msg.fail{background:#FEE2E2;color:#991B1B}
+.result{margin-top:14px;display:none}
+.result.show{display:block}
+.rrow{display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px solid #F1F5F9}
+.rrow b{color:#0F2744}
+.wbadge{display:inline-block;padding:3px 10px;border-radius:10px;font-size:12px;font-weight:700}
+.wbadge.in{background:#D1FAE5;color:#065F46}.wbadge.out{background:#FEE2E2;color:#991B1B}.wbadge.pend{background:#FEF3C7;color:#92400E}
+.center{text-align:center;color:#64748B;font-size:13px;padding:30px 0}
+</style>
+</head>
+<body>
+<div class="card" id="app">
+  <div class="hd"><div class="ic">🔒</div><div><h1>WAFERLOCK 會員綁定</h1><p id="who">連結中…</p></div></div>
+  <div class="center" id="loading">載入中…</div>
+
+  <div id="form" style="display:none">
+    <label>聯絡電話 <span style="color:#EF4444">*</span></label>
+    <input id="phone" type="tel" inputmode="tel" placeholder="0912345678"/>
+    <label>安裝地址（選填，加強比對）</label>
+    <input id="address" placeholder="例：台中市南屯區…"/>
+    <label>產品序號 SN（選填）</label>
+    <input id="sn" placeholder="掃描電池蓋上的 SN / QR"/>
+    <div class="sn-state" id="snState"></div>
+    <div class="hint">無 SN 的舊型門鎖可留空，改用電話 / 地址綁定。</div>
+
+    <div class="consent">
+      <input type="checkbox" id="consent"/>
+      <span>我同意 WAFERLOCK 蒐集與處理上述個人資料，用於保固登錄、報修與客服服務（個資法）。</span>
+    </div>
+    <button class="btn" id="submit" disabled>完成綁定</button>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <div class="result" id="result"></div>
+</div>
+
+<script>
+const LIFF_ID = '2010432600-XRCwdf5J';
+const SUPABASE_URL = 'https://nkyanyjgfrmovjoqevro.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5reWFueWpnZnJtb3Zqb3FldnJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2ODIxMTMsImV4cCI6MjA5NzI1ODExM30.LPnQyceYS7Z1-rlqUtXm3B8dGBOqnmnavTV-PAOSPZ8';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const CONSENT_VERSION = 'pdpa-2026-06';
+
+let profile = null;
+const $ = id => document.getElementById(id);
+const todayStr = () => new Date().toLocaleDateString('zh-TW');
+
+function pctWarranty(install, months){
+  if(!install || !months) return null;
+  const s = new Date(install); if(isNaN(s)) return null;
+  const e = new Date(s); e.setMonth(e.getMonth()+Number(months));
+  const n = new Date();
+  if(n > e) return 0;
+  return Math.max(0, Math.min(100, Math.round((1-(n-s)/(e-s))*100)));
+}
+
+async function main(){
+  try{
+    await liff.init({ liffId: LIFF_ID });
+    if(!liff.isLoggedIn()){ liff.login(); return; }
+    profile = await liff.getProfile();
+    $('who').textContent = profile.displayName + '，您好';
+    // 已綁定？
+    const { data: existing } = await sb.from('line_users').select('wf_id').eq('line_user_id', profile.userId).maybeSingle();
+    if(existing && existing.wf_id){
+      await showBound(existing.wf_id, true);
+      return;
+    }
+    $('loading').style.display = 'none';
+    $('form').style.display = 'block';
+  }catch(e){
+    $('loading').textContent = '初始化失敗：' + e.message;
+  }
+}
+
+// 表單啟用條件
+function refreshSubmit(){ $('submit').disabled = !($('phone').value.trim() && $('consent').checked); }
+$('phone').addEventListener('input', refreshSubmit);
+$('consent').addEventListener('change', refreshSubmit);
+
+// SN 即時防呆（比對出貨庫）
+let snTimer;
+$('sn').addEventListener('input', ()=>{
+  clearTimeout(snTimer);
+  const sn = $('sn').value.trim();
+  $('snState').textContent = '';
+  if(!sn) return;
+  snTimer = setTimeout(async ()=>{
+    const { data } = await sb.from('shipment_stock').select('sn,valid').eq('sn', sn).maybeSingle();
+    if(data && data.valid){ $('snState').textContent = '✅ 序號驗證成功'; $('snState').className = 'sn-state ok'; }
+    else { $('snState').textContent = '⚠️ 查無此序號，請確認或留空改用電話綁定'; $('snState').className = 'sn-state err'; }
+  }, 400);
+});
+
+$('submit').addEventListener('click', doBind);
+
+async function doBind(){
+  $('submit').disabled = true;
+  const phone = $('phone').value.trim().replace(/\s/g,'');
+  const address = $('address').value.trim();
+  const sn = $('sn').value.trim();
+  try{
+    let match = null;
+
+    // 1) SN 優先（最強關聯）：已安裝裝置 → 客戶
+    if(sn){
+      const { data: dev } = await sb.from('devices').select('wf_id').eq('sn', sn).maybeSingle();
+      if(dev && dev.wf_id){
+        const { data: c } = await sb.from('customers').select('*').eq('wf_id', dev.wf_id).maybeSingle();
+        match = c;
+      }
+    }
+    // 2) 電話比對
+    if(!match){
+      const { data } = await sb.from('customers').select('*').eq('phone', phone).limit(1);
+      if(data && data.length) match = data[0];
+    }
+    // 3) 地址比對
+    if(!match && address){
+      const { data } = await sb.from('customers').select('*').ilike('address', '%'+address+'%').limit(1);
+      if(data && data.length) match = data[0];
+    }
+
+    let wfId, isNew=false;
+    if(match){
+      wfId = match.wf_id;
+      const tags = Array.from(new Set([...(match.tags||[]), '會員']));
+      await sb.from('customers').update({ line_uid: profile.userId, tags }).eq('wf_id', wfId);
+    }else{
+      // 查無 → 配發新編號建會員（待安裝）
+      const { count } = await sb.from('customers').select('*', { count:'exact', head:true });
+      wfId = `WF-${new Date().getFullYear()}-${String((count||0)+1).padStart(5,'0')}`;
+      isNew = true;
+      await sb.from('customers').insert({
+        wf_id: wfId, name: profile.displayName || 'LINE會員', phone, address: address || '待填寫',
+        line_uid: profile.userId, reg_type: 'line_bind', reg_date: todayStr(),
+        tags: ['會員','待安裝'], repair_ids: [], product_id: null
+      });
+    }
+
+    // PDPA 同意紀錄
+    await sb.from('consents').insert({
+      id: 'CS'+Date.now(), subject: profile.userId, subject_type: 'line',
+      consent_type: 'pdpa_basic', agreed: true, version: CONSENT_VERSION, agreed_at: new Date().toISOString()
+    });
+    // line_users 綁定
+    await sb.from('line_users').upsert({
+      line_user_id: profile.userId, wf_id: wfId,
+      display_name: profile.displayName, picture_url: profile.pictureUrl || null,
+      bound_at: new Date().toISOString()
+    });
+
+    $('form').style.display = 'none';
+    await showBound(wfId, false, isNew);
+  }catch(e){
+    const m = $('msg'); m.className = 'msg fail show'; m.textContent = '綁定失敗：' + e.message;
+    $('submit').disabled = false;
+  }
+}
+
+async function showBound(wfId, already, isNew){
+  const { data: c } = await sb.from('customers').select('*').eq('wf_id', wfId).maybeSingle();
+  const hasW = c && c.product_id && c.install_date;
+  const p = hasW ? pctWarranty(c.install_date, c.warranty_months) : null;
+  let badge;
+  if(!hasW) badge = '<span class="wbadge pend">待安裝登錄</span>';
+  else if(p>0) badge = `<span class="wbadge in">保固中 · 至 ${c.warranty_end}</span>`;
+  else badge = `<span class="wbadge out">已到期（${c.warranty_end||'—'}）</span>`;
+
+  const head = already ? '✅ 您已完成綁定' : (isNew ? '🎉 綁定成功（新會員）' : '🎉 綁定成功（已連動既有客戶）');
+  let html = `<div class="msg success show">${head}</div>
+    <div class="rrow"><span>會員編號</span><b>${c.wf_id}</b></div>
+    <div class="rrow"><span>姓名</span><b>${c.name||'—'}</b></div>
+    <div class="rrow"><span>電話</span><b>${c.phone||'—'}</b></div>`;
+  if(hasW){
+    html += `<div class="rrow"><span>安裝日</span><b>${c.install_date}</b></div>`;
+  }
+  html += `<div class="rrow"><span>保固狀態</span>${badge}</div>`;
+  if(!hasW) html += `<p class="hint" style="margin-top:10px">🛠️ 待師傅到府安裝登錄後，即可查詢完整保固期限。</p>`;
+  $('result').innerHTML = html;
+  $('result').classList.add('show');
+}
+
+main();
+</script>
+</body>
+</html>
