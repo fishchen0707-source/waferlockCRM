@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>WAFERLOCK 會員綁定</title>
+<title>WAFERLOCK 會員服務</title>
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
@@ -14,8 +14,9 @@ body{background:#EEF2F7;color:#1E293B;padding:18px;max-width:480px;margin:0 auto
 .hd h1{font-size:16px;font-weight:700}
 .hd p{font-size:11px;color:#64748B}
 label{display:block;font-size:12px;font-weight:600;color:#475569;margin:12px 0 4px}
-input{width:100%;border:1px solid #E2E8F0;border-radius:7px;padding:9px 11px;font-size:14px;outline:none}
-input:focus{border-color:#38BDF8}
+input,select,textarea{width:100%;border:1px solid #E2E8F0;border-radius:7px;padding:9px 11px;font-size:14px;outline:none;font-family:inherit}
+input:focus,select:focus,textarea:focus{border-color:#38BDF8}
+textarea{resize:vertical;min-height:64px}
 .hint{font-size:10.5px;color:#94A3B8;margin-top:3px}
 .sn-state{font-size:11px;margin-top:3px;font-weight:600}
 .ok{color:#10B981}.err{color:#EF4444}
@@ -23,25 +24,32 @@ input:focus{border-color:#38BDF8}
 .consent input{width:16px;height:16px;margin-top:1px;flex-shrink:0}
 .btn{width:100%;margin-top:8px;padding:12px;background:#38BDF8;color:#0F2744;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer}
 .btn:disabled{background:#CBD5E1;color:#fff;cursor:not-allowed}
+.btn.ghost{background:#F1F5F9;color:#334155}
 .msg{margin-top:12px;padding:10px 12px;border-radius:8px;font-size:13px;line-height:1.6;display:none}
 .msg.show{display:block}
 .msg.success{background:#D1FAE5;color:#065F46}
 .msg.fail{background:#FEE2E2;color:#991B1B}
+.warn-box{background:#FFF7ED;border:1px solid #FED7AA;color:#92400E;border-radius:8px;padding:10px;font-size:12px;margin-top:10px;display:none}
+.warn-box.show{display:block}
 .result{margin-top:14px;display:none}
 .result.show{display:block}
 .rrow{display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px solid #F1F5F9}
 .rrow b{color:#0F2744}
 .wbadge{display:inline-block;padding:3px 10px;border-radius:10px;font-size:12px;font-weight:700}
 .wbadge.in{background:#D1FAE5;color:#065F46}.wbadge.out{background:#FEE2E2;color:#991B1B}.wbadge.pend{background:#FEF3C7;color:#92400E}
+.sec-t{font-size:13px;font-weight:700;margin:16px 0 6px;color:#334155}
+.hist{background:#F8FAFC;border-radius:8px;padding:9px 11px;margin-bottom:6px;font-size:12px}
+.hist .st{font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:8px;background:#E2E8F0}
 .center{text-align:center;color:#64748B;font-size:13px;padding:30px 0}
 </style>
 </head>
 <body>
 <div class="card" id="app">
-  <div class="hd"><div class="ic">🔒</div><div><h1>WAFERLOCK 會員綁定</h1><p id="who">連結中…</p></div></div>
+  <div class="hd"><div class="ic">🔒</div><div><h1 id="title">WAFERLOCK 會員服務</h1><p id="who">連結中…</p></div></div>
   <div class="center" id="loading">載入中…</div>
 
-  <div id="form" style="display:none">
+  <!-- 綁定 -->
+  <div id="bindForm" style="display:none">
     <label>聯絡電話 <span style="color:#EF4444">*</span></label>
     <input id="phone" type="tel" inputmode="tel" placeholder="0912345678"/>
     <label>安裝地址（選填，加強比對）</label>
@@ -50,13 +58,29 @@ input:focus{border-color:#38BDF8}
     <input id="sn" placeholder="掃描電池蓋上的 SN / QR"/>
     <div class="sn-state" id="snState"></div>
     <div class="hint">無 SN 的舊型門鎖可留空，改用電話 / 地址綁定。</div>
-
     <div class="consent">
       <input type="checkbox" id="consent"/>
       <span>我同意 WAFERLOCK 蒐集與處理上述個人資料，用於保固登錄、報修與客服服務（個資法）。</span>
     </div>
-    <button class="btn" id="submit" disabled>完成綁定</button>
-    <div class="msg" id="msg"></div>
+    <button class="btn" id="submitBind" disabled>完成綁定</button>
+    <div class="msg" id="bindMsg"></div>
+  </div>
+
+  <!-- 報修 -->
+  <div id="repairForm" style="display:none">
+    <label>您的身分 <span style="color:#EF4444">*</span></label>
+    <select id="rRole"><option value="owner">我是屋主</option><option value="family">家人</option><option value="tenant">租客</option></select>
+    <label>問題類別</label>
+    <select id="rType">
+      <option>電子鎖故障</option><option>安裝相關</option>
+      <option>重設密碼 / 設定卡</option><option>開鎖 / 破壞</option><option>其他</option>
+    </select>
+    <label>問題描述 <span style="color:#EF4444">*</span></label>
+    <textarea id="rIssue" placeholder="請描述故障情形（建議補充照片 / 錄影給客服）"></textarea>
+    <label style="display:flex;align-items:center;gap:7px;margin-top:12px"><input type="checkbox" id="rUrgent" style="width:16px"/> 緊急（如被反鎖門外、營業場所）</label>
+    <div class="warn-box" id="landlordWarn">⚠️ 涉及重設設定卡 / 開鎖破壞等高風險需求，租客需先與房東（屋主）確認，客服將請您提供屋主同意。</div>
+    <button class="btn" id="submitRepair" style="margin-top:14px">送出報修</button>
+    <div class="msg" id="repairMsg"></div>
   </div>
 
   <div class="result" id="result"></div>
@@ -68,18 +92,33 @@ const SUPABASE_URL = 'https://nkyanyjgfrmovjoqevro.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5reWFueWpnZnJtb3Zqb3FldnJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2ODIxMTMsImV4cCI6MjA5NzI1ODExM30.LPnQyceYS7Z1-rlqUtXm3B8dGBOqnmnavTV-PAOSPZ8';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const CONSENT_VERSION = 'pdpa-2026-06';
+const PAGE = new URLSearchParams(location.search).get('p') || 'bind';
 
-let profile = null;
+let profile = null, member = null;
 const $ = id => document.getElementById(id);
 const todayStr = () => new Date().toLocaleDateString('zh-TW');
+const show = (id,disp='block') => { $(id).style.display = disp; };
 
 function pctWarranty(install, months){
   if(!install || !months) return null;
   const s = new Date(install); if(isNaN(s)) return null;
   const e = new Date(s); e.setMonth(e.getMonth()+Number(months));
-  const n = new Date();
-  if(n > e) return 0;
+  const n = new Date(); if(n > e) return 0;
   return Math.max(0, Math.min(100, Math.round((1-(n-s)/(e-s))*100)));
+}
+
+async function loadMember(){
+  const { data } = await sb.from('line_users').select('wf_id').eq('line_user_id', profile.userId).maybeSingle();
+  if(!data || !data.wf_id) return null;
+  const { data: c } = await sb.from('customers').select('*').eq('wf_id', data.wf_id).maybeSingle();
+  return c || null;
+}
+
+function needBind(action){
+  $('loading').style.display='none';
+  $('result').classList.add('show');
+  $('result').innerHTML = `<div class="msg fail show">尚未綁定會員，無法${action}。</div>
+    <button class="btn" onclick="location.search='?p=bind'">前往 LINE 綁定</button>`;
 }
 
 async function main(){
@@ -88,124 +127,145 @@ async function main(){
     if(!liff.isLoggedIn()){ liff.login(); return; }
     profile = await liff.getProfile();
     $('who').textContent = profile.displayName + '，您好';
-    // 已綁定？
-    const { data: existing } = await sb.from('line_users').select('wf_id').eq('line_user_id', profile.userId).maybeSingle();
-    if(existing && existing.wf_id){
-      await showBound(existing.wf_id, true);
-      return;
-    }
-    $('loading').style.display = 'none';
-    $('form').style.display = 'block';
+    member = await loadMember();
+
+    if(PAGE === 'warranty'){ $('title').textContent='保固查詢'; return renderWarranty(); }
+    if(PAGE === 'repair'){ $('title').textContent='我要報修'; return renderRepair(); }
+    return renderBind();
   }catch(e){
     $('loading').textContent = '初始化失敗：' + e.message;
   }
 }
 
-// 表單啟用條件
-function refreshSubmit(){ $('submit').disabled = !($('phone').value.trim() && $('consent').checked); }
-$('phone').addEventListener('input', refreshSubmit);
-$('consent').addEventListener('change', refreshSubmit);
-
-// SN 即時防呆（比對出貨庫）
-let snTimer;
-$('sn').addEventListener('input', ()=>{
-  clearTimeout(snTimer);
-  const sn = $('sn').value.trim();
-  $('snState').textContent = '';
-  if(!sn) return;
-  snTimer = setTimeout(async ()=>{
-    const { data } = await sb.from('shipment_stock').select('sn,valid').eq('sn', sn).maybeSingle();
-    if(data && data.valid){ $('snState').textContent = '✅ 序號驗證成功'; $('snState').className = 'sn-state ok'; }
-    else { $('snState').textContent = '⚠️ 查無此序號，請確認或留空改用電話綁定'; $('snState').className = 'sn-state err'; }
-  }, 400);
-});
-
-$('submit').addEventListener('click', doBind);
+/* ───── 綁定 ───── */
+function renderBind(){
+  $('title').textContent='會員綁定';
+  if(member){ $('loading').style.display='none'; return showResult(member, '✅ 您已完成綁定'); }
+  $('loading').style.display='none';
+  show('bindForm');
+  const refresh = ()=> $('submitBind').disabled = !($('phone').value.trim() && $('consent').checked);
+  $('phone').addEventListener('input', refresh);
+  $('consent').addEventListener('change', refresh);
+  let snTimer;
+  $('sn').addEventListener('input', ()=>{
+    clearTimeout(snTimer); const sn=$('sn').value.trim(); $('snState').textContent='';
+    if(!sn) return;
+    snTimer=setTimeout(async()=>{
+      const { data } = await sb.from('shipment_stock').select('sn,valid').eq('sn', sn).maybeSingle();
+      if(data && data.valid){ $('snState').textContent='✅ 序號驗證成功'; $('snState').className='sn-state ok'; }
+      else { $('snState').textContent='⚠️ 查無此序號，請確認或留空改用電話綁定'; $('snState').className='sn-state err'; }
+    },400);
+  });
+  $('submitBind').addEventListener('click', doBind);
+}
 
 async function doBind(){
-  $('submit').disabled = true;
-  const phone = $('phone').value.trim().replace(/\s/g,'');
-  const address = $('address').value.trim();
-  const sn = $('sn').value.trim();
+  $('submitBind').disabled=true;
+  const phone=$('phone').value.trim().replace(/\s/g,''), address=$('address').value.trim(), sn=$('sn').value.trim();
   try{
-    let match = null;
-
-    // 1) SN 優先（最強關聯）：已安裝裝置 → 客戶
+    let match=null;
     if(sn){
       const { data: dev } = await sb.from('devices').select('wf_id').eq('sn', sn).maybeSingle();
-      if(dev && dev.wf_id){
-        const { data: c } = await sb.from('customers').select('*').eq('wf_id', dev.wf_id).maybeSingle();
-        match = c;
-      }
+      if(dev && dev.wf_id){ const { data:c }=await sb.from('customers').select('*').eq('wf_id',dev.wf_id).maybeSingle(); match=c; }
     }
-    // 2) 電話比對
-    if(!match){
-      const { data } = await sb.from('customers').select('*').eq('phone', phone).limit(1);
-      if(data && data.length) match = data[0];
-    }
-    // 3) 地址比對
-    if(!match && address){
-      const { data } = await sb.from('customers').select('*').ilike('address', '%'+address+'%').limit(1);
-      if(data && data.length) match = data[0];
-    }
+    if(!match){ const { data }=await sb.from('customers').select('*').eq('phone',phone).limit(1); if(data&&data.length) match=data[0]; }
+    if(!match && address){ const { data }=await sb.from('customers').select('*').ilike('address','%'+address+'%').limit(1); if(data&&data.length) match=data[0]; }
 
-    let wfId, isNew=false;
+    let wfId,isNew=false;
     if(match){
-      wfId = match.wf_id;
-      const tags = Array.from(new Set([...(match.tags||[]), '會員']));
-      await sb.from('customers').update({ line_uid: profile.userId, tags }).eq('wf_id', wfId);
+      wfId=match.wf_id;
+      const tags=Array.from(new Set([...(match.tags||[]),'會員']));
+      await sb.from('customers').update({line_uid:profile.userId,tags}).eq('wf_id',wfId);
     }else{
-      // 查無 → 配發新編號建會員（待安裝）
-      const { count } = await sb.from('customers').select('*', { count:'exact', head:true });
-      wfId = `WF-${new Date().getFullYear()}-${String((count||0)+1).padStart(5,'0')}`;
-      isNew = true;
-      await sb.from('customers').insert({
-        wf_id: wfId, name: profile.displayName || 'LINE會員', phone, address: address || '待填寫',
-        line_uid: profile.userId, reg_type: 'line_bind', reg_date: todayStr(),
-        tags: ['會員','待安裝'], repair_ids: [], product_id: null
-      });
+      const { count }=await sb.from('customers').select('*',{count:'exact',head:true});
+      wfId=`WF-${new Date().getFullYear()}-${String((count||0)+1).padStart(5,'0')}`; isNew=true;
+      await sb.from('customers').insert({wf_id:wfId,name:profile.displayName||'LINE會員',phone,address:address||'待填寫',
+        line_uid:profile.userId,reg_type:'line_bind',reg_date:todayStr(),tags:['會員','待安裝'],repair_ids:[],product_id:null});
     }
+    await sb.from('consents').insert({id:'CS'+Date.now(),subject:profile.userId,subject_type:'line',
+      consent_type:'pdpa_basic',agreed:true,version:CONSENT_VERSION,agreed_at:new Date().toISOString()});
+    await sb.from('line_users').upsert({line_user_id:profile.userId,wf_id:wfId,display_name:profile.displayName,
+      picture_url:profile.pictureUrl||null,bound_at:new Date().toISOString()});
+    const { data:c }=await sb.from('customers').select('*').eq('wf_id',wfId).maybeSingle();
+    $('bindForm').style.display='none';
+    showResult(c, isNew?'🎉 綁定成功（新會員）':'🎉 綁定成功（已連動既有客戶）');
+  }catch(e){ const m=$('bindMsg'); m.className='msg fail show'; m.textContent='綁定失敗：'+e.message; $('submitBind').disabled=false; }
+}
 
-    // PDPA 同意紀錄
-    await sb.from('consents').insert({
-      id: 'CS'+Date.now(), subject: profile.userId, subject_type: 'line',
-      consent_type: 'pdpa_basic', agreed: true, version: CONSENT_VERSION, agreed_at: new Date().toISOString()
+/* ───── 保固查詢 ───── */
+async function renderWarranty(){
+  if(!member) return needBind('查詢保固');
+  $('loading').style.display='none';
+  showResult(member, '🛡️ 保固查詢');
+  // 報修紀錄
+  const { data: reps } = await sb.from('repairs').select('*').eq('wf_id', member.wf_id).order('date',{ascending:false}).limit(5);
+  if(reps && reps.length){
+    let h='<div class="sec-t">🔧 最近報修</div>';
+    reps.forEach(r=>{
+      const st = r.status==='done'?'已完成':r.status==='dispatched'?'派工中':'待處理';
+      h += `<div class="hist"><div style="display:flex;justify-content:space-between"><b>${r.type||''} - ${r.issue||''}</b><span class="st">${st}</span></div><div style="color:#94A3B8;margin-top:2px">${r.date||''}</div></div>`;
     });
-    // line_users 綁定
-    await sb.from('line_users').upsert({
-      line_user_id: profile.userId, wf_id: wfId,
-      display_name: profile.displayName, picture_url: profile.pictureUrl || null,
-      bound_at: new Date().toISOString()
-    });
-
-    $('form').style.display = 'none';
-    await showBound(wfId, false, isNew);
-  }catch(e){
-    const m = $('msg'); m.className = 'msg fail show'; m.textContent = '綁定失敗：' + e.message;
-    $('submit').disabled = false;
+    $('result').insertAdjacentHTML('beforeend', h);
   }
 }
 
-async function showBound(wfId, already, isNew){
-  const { data: c } = await sb.from('customers').select('*').eq('wf_id', wfId).maybeSingle();
+/* ───── 我要報修 ───── */
+function renderRepair(){
+  if(!member) return needBind('報修');
+  $('loading').style.display='none';
+  show('repairForm');
+  const hi = ()=> ['重設密碼 / 設定卡','開鎖 / 破壞'].includes($('rType').value);
+  const upd = ()=> $('landlordWarn').classList.toggle('show', $('rRole').value==='tenant' && hi());
+  $('rRole').addEventListener('change', upd);
+  $('rType').addEventListener('change', upd);
+  $('submitRepair').addEventListener('click', doRepair);
+}
+
+async function doRepair(){
+  const issue=$('rIssue').value.trim();
+  if(!issue){ const m=$('repairMsg'); m.className='msg fail show'; m.textContent='請填寫問題描述'; return; }
+  $('submitRepair').disabled=true;
+  try{
+    const role=$('rRole').value, type=$('rType').value;
+    const highRisk=['重設密碼 / 設定卡','開鎖 / 破壞'].includes(type);
+    const wIn = !!(member.product_id && member.install_date && pctWarranty(member.install_date, member.warranty_months)>0);
+    const rid='R-'+Date.now();
+    await sb.from('repairs').insert({
+      id:rid, wf_id:member.wf_id, name:member.name, phone:member.phone,
+      district:member.district, area:member.area, building:member.address,
+      date:todayStr(), type, issue, status:'pending', urgency:$('rUrgent').checked?'urgent':'normal',
+      is_owner: role==='owner', reporter_role: role,
+      requires_landlord_confirm: (role==='tenant' && highRisk),
+      warranty_in: wIn, created_by:'LINE客戶', created_at:new Date().toISOString(), unread:true
+    });
+    $('repairForm').style.display='none';
+    $('result').classList.add('show');
+    $('result').innerHTML = `<div class="msg success show">📋 報修已送出，客服將盡快與您聯繫並安排師傅。</div>
+      <div class="rrow"><span>案件編號</span><b>${rid}</b></div>
+      <div class="rrow"><span>問題</span><b>${type} - ${issue}</b></div>
+      ${role==='tenant'&&highRisk?'<p class="hint" style="margin-top:10px;color:#92400E">⚠️ 此需求涉及高風險，客服將請您提供屋主同意。</p>':''}`;
+  }catch(e){ const m=$('repairMsg'); m.className='msg fail show'; m.textContent='送出失敗：'+e.message; $('submitRepair').disabled=false; }
+}
+
+/* ───── 共用：會員卡 ───── */
+function showResult(c, head){
   const hasW = c && c.product_id && c.install_date;
   const p = hasW ? pctWarranty(c.install_date, c.warranty_months) : null;
   let badge;
-  if(!hasW) badge = '<span class="wbadge pend">待安裝登錄</span>';
-  else if(p>0) badge = `<span class="wbadge in">保固中 · 至 ${c.warranty_end}</span>`;
-  else badge = `<span class="wbadge out">已到期（${c.warranty_end||'—'}）</span>`;
-
-  const head = already ? '✅ 您已完成綁定' : (isNew ? '🎉 綁定成功（新會員）' : '🎉 綁定成功（已連動既有客戶）');
-  let html = `<div class="msg success show">${head}</div>
+  if(!hasW) badge='<span class="wbadge pend">待安裝登錄</span>';
+  else if(p>0) badge=`<span class="wbadge in">保固中 · 至 ${c.warranty_end}</span>`;
+  else badge=`<span class="wbadge out">已到期（${c.warranty_end||'—'}）</span>`;
+  let html=`<div class="msg success show">${head}</div>
     <div class="rrow"><span>會員編號</span><b>${c.wf_id}</b></div>
     <div class="rrow"><span>姓名</span><b>${c.name||'—'}</b></div>
     <div class="rrow"><span>電話</span><b>${c.phone||'—'}</b></div>`;
   if(hasW){
-    html += `<div class="rrow"><span>安裝日</span><b>${c.install_date}</b></div>`;
+    html+=`<div class="rrow"><span>安裝產品</span><b>${c.product_id}</b></div>
+      <div class="rrow"><span>安裝日</span><b>${c.install_date}</b></div>`;
   }
-  html += `<div class="rrow"><span>保固狀態</span>${badge}</div>`;
-  if(!hasW) html += `<p class="hint" style="margin-top:10px">🛠️ 待師傅到府安裝登錄後，即可查詢完整保固期限。</p>`;
-  $('result').innerHTML = html;
+  html+=`<div class="rrow"><span>保固狀態</span>${badge}</div>`;
+  if(!hasW) html+=`<p class="hint" style="margin-top:10px">🛠️ 待師傅到府安裝登錄後，即可查詢完整保固期限。</p>`;
+  $('result').innerHTML=html;
   $('result').classList.add('show');
 }
 
