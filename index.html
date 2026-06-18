@@ -115,6 +115,12 @@
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3), 0 0 30px var(--glow-green);
   }
   
+  .card.tech-card:hover {
+    transform: translateY(-8px);
+    border-color: rgba(139, 92, 246, 0.4);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3), 0 0 30px rgba(139, 92, 246, 0.15);
+  }
+  
   .icon-wrapper {
     width: 64px;
     height: 64px;
@@ -137,6 +143,12 @@
     background: rgba(6, 199, 85, 0.15);
     color: var(--brand-green);
     box-shadow: 0 8px 16px rgba(6, 199, 85, 0.1);
+  }
+  
+  .tech-card .icon-wrapper {
+    background: rgba(139, 92, 246, 0.15);
+    color: #A78BFA;
+    box-shadow: 0 8px 16px rgba(139, 92, 246, 0.1);
   }
   
   .card:hover .icon-wrapper {
@@ -218,6 +230,20 @@
     box-shadow: 0 4px 12px rgba(6, 199, 85, 0.3);
   }
   
+  .tech-btn {
+    background: #8B5CF6;
+    color: #FFFFFF;
+  }
+  
+  .tech-btn:hover {
+    background: #A78BFA;
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+  }
+  
+  .tech-card .features-list li::before {
+    color: #A78BFA;
+  }
+  
   footer {
     color: #64748B;
     font-size: 0.85rem;
@@ -283,6 +309,20 @@
         <li>派工進度即時推播通知</li>
       </ul>
       <a href="./waferlock_LINE.html" class="btn line-btn">進入 LINE 客戶端 ➔</a>
+    </div>
+
+    <!-- 師傅端 -->
+    <div class="card tech-card">
+      <div class="icon-wrapper">🔧</div>
+      <h2>師傅接案與回報端</h2>
+      <p>面向外勤安裝與維修師傅的行動控制台。提供師傅登入接案、查詢派工詳情、施工完工照上傳、電子簽名驗收與收款結案回報。</p>
+      <ul class="features-list">
+        <li>師傅帳密登入與個案狀態追蹤</li>
+        <li>案件詳情查閱與客戶資訊核對</li>
+        <li>現場拍照上傳與客戶簽名驗收</li>
+        <li>現場收費回報與一鍵完工結案</li>
+      </ul>
+      <a href="./waferlock_tech.html" class="btn tech-btn">進入 師傅接案端 ➔</a>
     </div>
   </div>
   
