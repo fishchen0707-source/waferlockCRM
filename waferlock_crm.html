@@ -214,6 +214,12 @@ const SUPABASE_URL = 'https://nkyanyjgfrmovjoqevro.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5reWFueWpnZnJtb3Zqb3FldnJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2ODIxMTMsImV4cCI6MjA5NzI1ODExM30.LPnQyceYS7Z1-rlqUtXm3B8dGBOqnmnavTV-PAOSPZ8';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// 推回真實 LINE（to 必須是 lineUserId，以 U 開頭；未綁定者略過）
+const pushLineTo = (to, text) => {
+  if(!to || !String(to).startsWith('U')) return;
+  sb.functions.invoke('line-push', { body:{ to, text } }).catch(e=>console.error('line-push', e));
+};
+
 // ── DB 欄位轉換（camelCase <-> snake_case） ──
 const custToDb = c => ({wf_id:c.wfId,name:c.name,phone:c.phone,email:c.email,address:c.address,district:c.district,area:c.area,channel:c.channel,product_id:c.productId,serial_no:c.serialNo,install_date:c.installDate,warranty_months:c.warrantyMonths,warranty_end:c.warrantyEnd,tags:c.tags||[],reg_type:c.regType,reg_date:c.regDate,line_uid:c.lineUid,fb_id:c.fbId,ig_id:c.igId,repair_ids:c.repairIds||[],complaint_ids:c.complaintIds||[],site:c.site,unit:c.unit,order_no:c.orderNo});
 const dbToCust = r => ({wfId:r.wf_id,name:r.name,phone:r.phone,email:r.email,address:r.address,district:r.district,area:r.area,channel:r.channel,productId:r.product_id,serialNo:r.serial_no,installDate:r.install_date,warrantyMonths:r.warranty_months,warrantyEnd:r.warranty_end,tags:r.tags||[],regType:r.reg_type,regDate:r.reg_date,lineUid:r.line_uid,fbId:r.fb_id,igId:r.ig_id,repairIds:r.repair_ids||[],complaintIds:r.complaint_ids||[],site:r.site,unit:r.unit,orderNo:r.order_no});
@@ -560,6 +566,7 @@ function CRMPage(){
       const custs=(prev.customers||[]).map(x=>x.wfId===c.wfId?{...x,repairIds:[...(x.repairIds||[]),rid]}:x);
       return {...prev,repairs:{...prev.repairs,[rid]:newRepair},customers:custs};
     });
+    pushLineTo(c.lineUid, `📋 已收到您的報修\n\n案件：${rid}\n問題：${caseForm.type} - ${caseForm.issue.trim()||'異常問題'}\n客服將盡快安排師傅 🔧`);
     toast('📋 已立案',`${c.name} 報修單 ${rid} 已建立`,'ok');
     setCaseModal(false);
   };
@@ -1109,6 +1116,7 @@ function RepairPage(){
       });
       return {...prev,repairs:nr,conversations:nc};
     });
+    const cu=(db.customers||[]).find(c=>c.wfId===disp.wfId); pushLineTo(cu?.lineUid, pushMsg.text);
     toast('🚗 派工完成',`${w?.name} 已指派，住戶通知已推播`,'ok');
     setTimeout(()=>toast('📱 推播成功','LINE 通知已送達住戶','ok'),1500);
     setDisp(null);
@@ -1257,6 +1265,7 @@ function RepairPage(){
                 return c;
               })
             }));
+            const cu=(db.customers||[]).find(c=>c.wfId===closing.wfId); pushLineTo(cu?.lineUid, closeMsg.text);
             toast('✅ 已結案',`電子工單已簽收，簽收單號 ${d.receiptNo}`,'ok');
             setTimeout(()=>toast('📨 CSAT 已推播','滿意度問卷已發送住戶','ok'),1500);
             setClosing(null);
@@ -1289,7 +1298,14 @@ function InstallPage(){
     updateDB(prev=>({...prev,installs:{...prev.installs,[id]:{...prev.installs[id],...patch}}}));
     if(msg)toast(msg.t,msg.b,msg.type||'ok');
   };
-  const arrive=o=>setStatus(o.id,{status:'arrived',arrivalPushed:true},{t:'📱 已推播',b:'「師傅已抵達」通知已送達住戶 LINE'});
+  const lineUidByPhone=(phone)=>(db.customers||[]).find(x=>x.phone===phone && x.lineUid)?.lineUid;
+  const arrive=o=>{
+    const uid=lineUidByPhone(o.phone);
+    setStatus(o.id,{status:'arrived',arrivalPushed:!!uid},
+      uid?{t:'📱 已推播',b:'「師傅已抵達」通知已送達住戶 LINE'}
+         :{t:'📍 已標記到場',b:'客戶尚未綁定 LINE，未發送推播',type:'warn'});
+    if(uid) pushLineTo(uid, `🚪 安裝通知\n\n您預約的安裝師傅已抵達現場，即將開始安裝。`);
+  };
   const installed=o=>setStatus(o.id,{status:'installed'},{t:'🔧 施工完成',b:'請進行完工驗收'});
   const fail=o=>setStatus(o.id,{status:'failed'},{t:'❌ 無法安裝',b:'已回報客服（退款 / 換型號）',type:'err'});
 
@@ -1301,6 +1317,8 @@ function InstallPage(){
       installs:{...prev.installs,[o.id]:{...prev.installs[o.id],status:'done',photos:d.photos,signature:d.signature,verify:d.verify,taught:d.taught,workNote:d.note,completedDate:today(),wfId,warrantyEnd:cust.warrantyEnd}},
       customers:[...(prev.customers||[]),cust]
     }));
+    const uid=lineUidByPhone(o.phone);
+    if(uid) pushLineTo(uid, `✅ 安裝完成\n\n您的 ${PRODUCTS[o.productId]?.name||'門鎖'} 已安裝驗收完成，保固自今日起算至 ${cust.warrantyEnd}。感謝您的使用 🙏`);
     toast('✅ 安裝完成','保固開始計算（安裝日起算）','ok');
     setTimeout(()=>toast('🎉 已建立 CRM 客資',`${o.name} 保固至 ${cust.warrantyEnd}`,'ok'),1400);
     setVerifying(null);
