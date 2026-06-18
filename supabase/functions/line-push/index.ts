@@ -18,14 +18,16 @@ const cors = {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
-    const { to, text } = await req.json();
+    const { to, text, sender } = await req.json();
     if (!to || !text) {
       return new Response(JSON.stringify({ error: "to/text required" }), { status: 400, headers: cors });
     }
+    const message: any = { type: "text", text };
+    if (sender && sender.name) message.sender = sender; // {name, iconUrl?} 逐則顯示小名/頭像
     const r = await fetch("https://api.line.me/v2/bot/message/push", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${ACCESS_TOKEN}` },
-      body: JSON.stringify({ to, messages: [{ type: "text", text }] }),
+      body: JSON.stringify({ to, messages: [message] }),
     });
     if (!r.ok) {
       const err = await r.text();

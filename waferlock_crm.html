@@ -215,9 +215,9 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // 推回真實 LINE（to 必須是 lineUserId，以 U 開頭；未綁定者略過）
-const pushLineTo = (to, text) => {
+const pushLineTo = (to, text, sender={name:'維夫拉克客服'}) => {
   if(!to || !String(to).startsWith('U')) return;
-  sb.functions.invoke('line-push', { body:{ to, text } }).catch(e=>console.error('line-push', e));
+  sb.functions.invoke('line-push', { body:{ to, text, sender } }).catch(e=>console.error('line-push', e));
 };
 
 // ── DB 欄位轉換（camelCase <-> snake_case） ──

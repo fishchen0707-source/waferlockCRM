@@ -44,13 +44,16 @@ async function getDisplayName(userId: string) {
   return null;
 }
 
-async function replyText(replyToken: string, text: string) {
+async function replyText(replyToken: string, text: string, sender?: { name: string; iconUrl?: string }) {
+  const message: any = { type: "text", text };
+  if (sender?.name) message.sender = sender;
   await fetch("https://api.line.me/v2/bot/message/reply", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${ACCESS_TOKEN}` },
-    body: JSON.stringify({ replyToken, messages: [{ type: "text", text }] }),
+    body: JSON.stringify({ replyToken, messages: [message] }),
   });
 }
+const AI_SENDER = { name: "維夫拉克AI 小拉" };
 
 async function handleMessage(ev: any) {
   const userId: string = ev.source?.userId;
@@ -91,7 +94,7 @@ async function handleMessage(ev: any) {
 
   // 首則自動回覆「已收到」（未被客服接手時）。先不接 AI，故不做問答。
   if (ev.replyToken && isNew && !takeover) {
-    await replyText(ev.replyToken, "您好，已收到您的訊息 🙏\n客服將盡快為您服務。如需報修或查保固，可點下方選單。");
+    await replyText(ev.replyToken, "您好，已收到您的訊息 🙏\n客服將盡快為您服務。如需報修或查保固，可點下方選單。", AI_SENDER);
   }
 }
 
@@ -105,7 +108,7 @@ Deno.serve(async (req) => {
     try {
       if (ev.type === "message") await handleMessage(ev);
       else if (ev.type === "follow" && ev.replyToken) {
-        await replyText(ev.replyToken, "歡迎加入 WAFERLOCK 維夫拉克 🔒\n請點下方選單「LINE綁定」連結帳戶，即可查詢保固與報修。");
+        await replyText(ev.replyToken, "歡迎加入 WAFERLOCK 維夫拉克 🔒\n請點下方選單「LINE綁定」連結帳戶，即可查詢保固與報修。", AI_SENDER);
       }
     } catch (e) {
       console.error("event error", e);

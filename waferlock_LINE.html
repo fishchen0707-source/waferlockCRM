@@ -914,9 +914,9 @@ function AgentPage(){
   };
 
   // 推回真實 LINE（對話 id 即 lineUserId，以 U 開頭；模擬對話略過）
-  const pushLine=(to,text)=>{
+  const pushLine=(to,text,sender={name:'維夫拉克客服'})=>{
     if(!to || !String(to).startsWith('U')) return;
-    sb.functions.invoke('line-push',{ body:{ to, text } }).catch(e=>console.error('line-push',e));
+    sb.functions.invoke('line-push',{ body:{ to, text, sender } }).catch(e=>console.error('line-push',e));
   };
 
   const sendMsg=()=>{
@@ -926,7 +926,7 @@ function AgentPage(){
     updateDB(prev=>({...prev,conversations:prev.conversations.map(c=>c.id===active.id
       ?{...c,msgs:[...(c.msgs||[]),m],lastMsg:t,lastTime:now(),agentTakeover:true}:c)}));
     setActive(p=>({...p,msgs:[...(p.msgs||[]),m],agentTakeover:true}));
-    pushLine(active.id, t);
+    pushLine(active.id, t, {name:'真人客服'});
     toast('✉️ 已送出',`回覆 ${active.name}`,'ok');
   };
 

@@ -65,7 +65,7 @@ let tab='avail', cases={avail:[],mine:[],done:[]}, custMap={}, rep=null;
 
 function pctW(install,months){if(!install||!months)return null;const s=new Date(install);if(isNaN(s))return null;const e=new Date(s);e.setMonth(e.getMonth()+months);const n=new Date();if(n>e)return 0;return Math.max(0,Math.min(100,Math.round((1-(n-s)/(e-s))*100)));}
 function warrantyBadge(r){ if(r.warranty_in===true)return '<span class="badge b-in">保固內</span>'; if(r.warranty_in===false)return '<span class="badge b-out">保固外</span>'; return ''; }
-async function pushCustomer(wfId,text){ const c=custMap[wfId]; if(c&&c.line_uid&&String(c.line_uid).startsWith('U')){ sb.functions.invoke('line-push',{body:{to:c.line_uid,text}}).catch(e=>console.error(e)); } }
+async function pushCustomer(wfId,text,sender={name:'維夫拉克客服'}){ const c=custMap[wfId]; if(c&&c.line_uid&&String(c.line_uid).startsWith('U')){ sb.functions.invoke('line-push',{body:{to:c.line_uid,text,sender}}).catch(e=>console.error(e)); } }
 
 // ───── 登入 ─────
 function renderLogin(){
