@@ -21,15 +21,15 @@ const LIFF = (p) => `https://liff.line.me/2010432600-XRCwdf5J?p=${p}`;
 
 // 版面：2500x1686。上方分頁列高 250（兩格各 1250）；下方內容三欄各約 833 寬、高 1436。
 const tabRow = (selfAlias, otherAlias, otherData) => ([
-  { bounds: { x: 0,    y: 0, width: 1250, height: 250 },
+  { bounds: { x: 0,   y: 0, width: 600, height: 120 },
     action: { type: "richmenuswitch", richMenuAliasId: selfAlias, data: "tab=self" } },
-  { bounds: { x: 1250, y: 0, width: 1250, height: 250 },
+  { bounds: { x: 600, y: 0, width: 600, height: 120 },
     action: { type: "richmenuswitch", richMenuAliasId: otherAlias, data: otherData } },
 ]);
-const col = (i) => ({ x: i * 833, y: 250, width: i === 1 ? 834 : 833, height: 1436 });
+const col = (i) => ({ x: i * 400, y: 120, width: 400, height: 690 });
 
 const menuMember = {
-  size: { width: 2500, height: 1686 },
+  size: { width: 1200, height: 810 },
   selected: true,
   name: "WAFERLOCK 會員服務",
   chatBarText: "會員服務 / 報修",
@@ -42,7 +42,7 @@ const menuMember = {
 };
 
 const menuOther = {
-  size: { width: 2500, height: 1686 },
+  size: { width: 1200, height: 810 },
   selected: false,
   name: "WAFERLOCK 其他服務",
   chatBarText: "會員服務 / 報修",
@@ -86,11 +86,11 @@ async function setAlias(aliasId, richMenuId) {
 (async () => {
   console.log("建立 會員服務 選單…");
   const idMember = await createMenu(menuMember);
-  await uploadImage(idMember, "richmenu-member.png");
+  await uploadImage(idMember, "richmenu-member.jpg");
 
   console.log("建立 其他服務 選單…");
   const idOther = await createMenu(menuOther);
-  await uploadImage(idOther, "richmenu-other.png");
+  await uploadImage(idOther, "richmenu-other.jpg");
 
   console.log("設定別名…");
   await setAlias("rm-member", idMember);
