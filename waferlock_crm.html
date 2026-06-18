@@ -546,11 +546,11 @@ function CRMPage(){
     setCaseModal(true);
   };
 
-  const createCase=()=>{
+  const createCase=async()=>{
     const c=customers.find(x=>x.wfId===sel?.wfId);
     if(!c){ toast('無法立案','請先選擇客戶','warn'); return; }
     if(!caseForm.issue.trim()){ toast('請填寫問題描述','問題描述不可空白','warn'); return; }
-    const rid='R-'+Date.now();
+    const rid=(await sb.rpc('next_case_no',{p_prefix:'R'})).data || ('R-'+Date.now());
     const wIn=isInWarranty(c);
     const newRepair={id:rid,wfId:c.wfId,name:c.name,phone:c.phone,
       district:c.district,area:c.area,building:c.address,date:today(),
@@ -580,11 +580,11 @@ function CRMPage(){
     setCtModal(true);
   };
 
-  const createComplaint=()=>{
+  const createComplaint=async()=>{
     const c=customers.find(x=>x.wfId===sel?.wfId);
     if(!c){ toast('請先選擇客戶','','warn'); return; }
     if(!ctForm.cat1){ toast('請選擇判斷原因1','主類不可空白','warn'); return; }
-    const cid='CT-'+Date.now();
+    const cid=(await sb.rpc('next_case_no',{p_prefix:'C'})).data || ('CT-'+Date.now());
     const ts=today()+' '+now();
     const newCt={
       id:cid, wfId:c.wfId, name:c.name, phone:c.phone,

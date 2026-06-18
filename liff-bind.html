@@ -231,7 +231,7 @@ async function doRepair(){
     const role=$('rRole').value, type=$('rType').value;
     const highRisk=['重設密碼 / 設定卡','開鎖 / 破壞'].includes(type);
     const wIn = !!(member.product_id && member.install_date && pctWarranty(member.install_date, member.warranty_months)>0);
-    const rid='R-'+Date.now();
+    const rid=(await sb.rpc('next_case_no',{p_prefix:'R'})).data || ('R-'+Date.now());
     await sb.from('repairs').insert({
       id:rid, wf_id:member.wf_id, name:member.name, phone:member.phone,
       district:member.district, area:member.area, building:member.address,
