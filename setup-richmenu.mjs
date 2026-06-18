@@ -83,7 +83,16 @@ async function setAlias(aliasId, richMenuId) {
   });
 }
 
+async function cleanup() {
+  const { richmenus } = await api("/v2/bot/richmenu/list", { headers: H });
+  for (const m of richmenus || []) {
+    await fetch(`https://api.line.me/v2/bot/richmenu/${m.richMenuId}`, { method: "DELETE", headers: H });
+  }
+  if ((richmenus || []).length) console.log(`已清除 ${richmenus.length} 個舊選單`);
+}
+
 (async () => {
+  await cleanup();
   console.log("建立 會員服務 選單…");
   const idMember = await createMenu(menuMember);
   await uploadImage(idMember, "richmenu-member.jpg");
