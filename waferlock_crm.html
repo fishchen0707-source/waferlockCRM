@@ -1727,16 +1727,20 @@ function SchedulePage(){
         <input type="date" value={date} onChange={e=>setDate(e.target.value)} style={{border:'1px solid var(--g200)',borderRadius:6,padding:'7px 10px',fontSize:13}}/>
       </div>
       <div className="sched-wrap">
-        <table className="sched">
-          <thead><tr><th>師傅</th>{SLOT_HOURS.map(h=><th key={h}>{hourLabel(h)}</th>)}</tr></thead>
-          <tbody>{list.length?list.map(w=>{
-            const byHour={}; (db.bookings||[]).filter(b=>b.workerId===w.id&&b.date===date).forEach(b=>byHour[b.hour]=b);
-            return <tr key={w.id}>
-              <td className="wk">{w.name}<div style={{fontSize:10,color:'var(--g400)'}}>{w.type==='internal'?'原廠工務':'配合鎖店'}</div></td>
-              {SLOT_HOURS.map(h=>{const b=byHour[h];return <td key={h} className={b?('busy'+(b.refType==='install'?' inst':'')):''}>{b?(b.refType==='install'?'安裝':'維修'):''}</td>;})}
-            </tr>;
-          }):<tr><td className="wk">—</td><td colSpan={SLOT_HOURS.length} style={{color:'var(--g400)'}}>此區尚無師傅</td></tr>}</tbody>
-        </table>
+        {list.length?(
+          <table className="sched">
+            <thead><tr><th>時間</th>{list.map(w=><th key={w.id}>{w.name}<div style={{fontSize:9,fontWeight:400,opacity:.7}}>{w.type==='internal'?'原廠工務':'配合鎖店'}</div></th>)}</tr></thead>
+            <tbody>{SLOT_HOURS.map(h=>(
+              <tr key={h}>
+                <td className="wk">{hourLabel(h)}</td>
+                {list.map(w=>{
+                  const b=(db.bookings||[]).find(x=>x.workerId===w.id&&x.date===date&&x.hour===h);
+                  return <td key={w.id} className={b?('busy'+(b.refType==='install'?' inst':'')):''}>{b?(b.refType==='install'?'安裝':'維修'):''}</td>;
+                })}
+              </tr>
+            ))}</tbody>
+          </table>
+        ):<div style={{color:'var(--g400)',fontSize:13,padding:'30px 0',textAlign:'center'}}>此區尚無師傅</div>}
       </div>
       <div style={{fontSize:11,color:'var(--g500)',marginTop:8}}>🟦 維修（1 格）　🟪 安裝（2 格）　空白＝可約</div>
     </div>
