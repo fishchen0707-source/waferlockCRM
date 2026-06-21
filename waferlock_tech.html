@@ -61,11 +61,14 @@ const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 const $=s=>document.querySelector(s);
 const today=()=>new Date().toLocaleDateString('zh-TW');
 let worker=JSON.parse(localStorage.getItem('wl_tech')||'null');
-let tab='avail', cases={avail:[],mine:[],done:[]}, custMap={}, rep=null;
+let tab='avail', cases={avail:[],mine:[],done:[],installs:[],doneInstalls:[]}, custMap={}, rep=null;
+const PRODUCT_NAMES={L376:'L376 智能電子鎖',L396:'L396 進階電子鎖',L600:'L600 人臉辨識旗艦',L901:'L901 掌靜脈頂規',L900:'L900 旗艦款'};
+const INSTALL_STATUS={pending:'待到場',arrived:'已到場',installed:'施工完成(待驗收)',done:'已完成',failed:'無法安裝'};
 
 function pctW(install,months){if(!install||!months)return null;const s=new Date(install);if(isNaN(s))return null;const e=new Date(s);e.setMonth(e.getMonth()+months);const n=new Date();if(n>e)return 0;return Math.max(0,Math.min(100,Math.round((1-(n-s)/(e-s))*100)));}
 function warrantyBadge(r){ if(r.warranty_in===true)return '<span class="badge b-in">保固內</span>'; if(r.warranty_in===false)return '<span class="badge b-out">保固外</span>'; return ''; }
 async function pushCustomer(wfId,text,sender={name:'維夫拉克客服'}){ const c=custMap[wfId]; if(c&&c.line_uid&&String(c.line_uid).startsWith('U')){ sb.functions.invoke('line-push',{body:{to:c.line_uid,text,sender}}).catch(e=>console.error(e)); } }
+async function pushByPhone(phone,text,sender={name:'維夫拉克客服'}){ if(!phone)return; const {data}=await sb.from('customers').select('line_uid').eq('phone',phone).maybeSingle(); if(data?.line_uid&&String(data.line_uid).startsWith('U')){ sb.functions.invoke('line-push',{body:{to:data.line_uid,text,sender}}).catch(e=>console.error(e)); } }
 
 // ───── 登入 ─────
 function renderLogin(){
@@ -102,14 +105,14 @@ function setTab(t){ tab=t; renderApp(); }
 
 async function loadCases(){
   if(!worker) return;
-  const sel='*';
-  const [a,m,d]=await Promise.all([
-    sb.from('repairs').select(sel).eq('status','pending').is('worker_id',null).order('date',{ascending:false}),
-    sb.from('repairs').select(sel).eq('worker_id',worker.id).eq('status','dispatched').order('date',{ascending:false}),
-    sb.from('repairs').select(sel).eq('worker_id',worker.id).eq('status','done').order('completed_date',{ascending:false}).limit(20),
+  const [a,m,d,mi,di]=await Promise.all([
+    sb.from('repairs').select('*').eq('status','pending').is('worker_id',null).order('date',{ascending:false}),
+    sb.from('repairs').select('*').eq('worker_id',worker.id).eq('status','dispatched').order('date',{ascending:false}),
+    sb.from('repairs').select('*').eq('worker_id',worker.id).eq('status','done').order('completed_date',{ascending:false}).limit(20),
+    sb.from('installs').select('*').eq('worker_id',worker.id).in('status',['pending','arrived','installed']).order('created_ts',{ascending:false}),
+    sb.from('installs').select('*').eq('worker_id',worker.id).eq('status','done').order('completed_date',{ascending:false}).limit(10),
   ]);
-  cases={avail:a.data||[],mine:m.data||[],done:d.data||[]};
-  // 載入客戶（取地址/lineUid）
+  cases={avail:a.data||[],mine:m.data||[],done:d.data||[],installs:mi.data||[],doneInstalls:di.data||[]};
   const wfIds=[...new Set([...cases.avail,...cases.mine,...cases.done].map(r=>r.wf_id).filter(Boolean))];
   if(wfIds.length){ const {data}=await sb.from('customers').select('wf_id,name,phone,address,line_uid,product_id,install_date,warranty_months,warranty_end').in('wf_id',wfIds); (data||[]).forEach(c=>custMap[c.wf_id]=c); }
   renderApp();
@@ -131,12 +134,47 @@ function caseCard(r,kind){
 }
 function renderList(){
   const map={avail:'可接案',mine:'進行中',done:'已完成'};
-  const arr=cases[tab]||[];
   $('#n-avail')&&toggleBadge('n-avail',cases.avail.length);
-  $('#n-mine')&&toggleBadge('n-mine',cases.mine.length);
-  $('#list').innerHTML = arr.length ? arr.map(r=>caseCard(r,tab)).join('') : `<div class="empty">目前沒有${map[tab]}案件</div>`;
+  $('#n-mine')&&toggleBadge('n-mine',cases.mine.length+cases.installs.length);
+  let html='';
+  if(tab==='mine'){
+    const all=[...cases.mine.map(r=>({...r,_k:'r'})),...cases.installs.map(o=>({...o,_k:'i'}))];
+    html=all.length?all.map(x=>x._k==='i'?installCard(x,'mine'):caseCard(x,'mine')).join(''):`<div class="empty">目前沒有進行中案件</div>`;
+  } else if(tab==='done'){
+    const rc=cases.done.map(r=>caseCard(r,'done')).join('');
+    const ic=cases.doneInstalls.map(o=>installCard(o,'done')).join('');
+    html=(rc+ic)||`<div class="empty">目前沒有已完成案件</div>`;
+  } else {
+    const arr=cases[tab]||[];
+    html=arr.length?arr.map(r=>caseCard(r,tab)).join(''):`<div class="empty">目前沒有${map[tab]}案件</div>`;
+  }
+  $('#list').innerHTML=html;
 }
 function toggleBadge(id,n){ const el=$('#'+id); if(!el)return; if(n>0){el.style.display='inline-block';el.textContent=n;}else el.style.display='none'; }
+
+function installCard(o,kind){
+  const prod=PRODUCT_NAMES[o.product_id]||o.product_id||'門鎖';
+  const sLabel=INSTALL_STATUS[o.status]||o.status;
+  const sched=o.sched_date?`📅 ${o.sched_date} ${String(o.sched_start||9).padStart(2,'0')}:00-${String((o.sched_start||9)+2).padStart(2,'0')}:00`:'';
+  const hasDocs=o.photos&&o.photos.length>0&&o.signature;
+  return `<div class="card" style="border-left-color:#7C3AED">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+      <span class="cno">${o.id}</span>
+      <span style="background:#EDE9FE;color:#5B21B6;font-size:10px;padding:2px 7px;border-radius:6px;font-weight:700">安裝</span>
+    </div>
+    <div class="cname">${o.name||'—'}</div>
+    <div class="crow">📞 ${o.phone||'—'}</div>
+    <div class="crow">🏠 ${o.address||'地址待補'}</div>
+    <div class="crow">📦 ${prod}${o.serial_no?` (${o.serial_no})`:''}</div>
+    ${sched?`<div class="crow" style="color:#7C3AED;font-weight:600">${sched}</div>`:''}
+    <div class="crow" style="font-weight:700;color:#5B21B6">狀態：${sLabel}</div>
+    ${kind==='mine'&&o.status==='pending'?`<button class="btn go" style="background:#7C3AED;color:#fff;margin-top:10px" onclick="arriveInstall('${o.id}')">📍 標記到場（推播通知）</button>`:''}
+    ${kind==='mine'&&o.status==='arrived'?`<button class="btn done" style="margin-top:10px" onclick="installedInstall('${o.id}')">🔧 標記施工完成</button>`:''}
+    ${kind==='mine'&&o.status==='installed'&&!hasDocs?`<button class="btn done" style="background:#7C3AED;margin-top:10px" onclick="openInstallReport('${o.id}')">📸 上傳照片 + 客戶簽名</button>`:''}
+    ${kind==='mine'&&o.status==='installed'&&hasDocs?`<div style="margin-top:8px;font-size:12px;color:#10B981;font-weight:700">✅ 已上傳照片與簽名，等待 CRM 完工驗收</div>`:''}
+    ${kind==='done'?`<div class="crow" style="color:#10B981;font-weight:700;margin-top:6px">✅ 安裝完成 ${o.completed_date||''}</div>`:''}
+  </div>`;
+}
 
 // ───── 接案 ─────
 async function accept(id){
@@ -144,6 +182,18 @@ async function accept(id){
   const r=cases.avail.find(x=>x.id===id);
   if(r) pushCustomer(r.wf_id, `🧰 ${worker.name} 已接下您的案件（${r.id}），將盡快與您聯繫並前往處理。`);
   tab='mine'; await loadCases();
+}
+
+// ───── 安裝動作 ─────
+async function arriveInstall(id){
+  const o=cases.installs.find(x=>x.id===id); if(!o)return;
+  await sb.from('installs').update({status:'arrived'}).eq('id',id);
+  pushByPhone(o.phone,`🚪 安裝通知\n\n您預約的安裝師傅（${worker.name}）已抵達現場，即將開始安裝 🔧`);
+  await loadCases();
+}
+async function installedInstall(id){
+  await sb.from('installs').update({status:'installed'}).eq('id',id);
+  await loadCases();
 }
 
 // ───── 現場回報 ─────
@@ -212,12 +262,12 @@ function rmCharge(i){ charges.splice(i,1); renderCharges(); }
 function renderCharges(){ $('#charges').innerHTML=charges.map((c,i)=>`<div class="crow2"><span style="flex:1">${c.item} ${c.gift?'<b style=\"color:#10B981\">[贈]</b>':`×${c.qty} @$${c.price}`}</span><span>$${c.amount}</span><span class="del" onclick="rmCharge(${i})">×</span></div>`).join(''); const t=charges.reduce((s,c)=>s+(c.amount||0),0); $('#total').textContent=t?('合計 $'+t):''; }
 function setPay(v){ pay=v; document.querySelectorAll('#pm button').forEach(b=>b.classList.toggle('on',b.dataset.v===v)); }
 function clearSig(){ const c=$('#sig'); c.getContext('2d').clearRect(0,0,c.width,c.height); sig=null; }
-function initSig(cv){
+function initSig(cv,onEnd){
   let dr=false; const ctx=cv.getContext('2d');
   const pos=e=>{const r=cv.getBoundingClientRect();const t=e.touches?e.touches[0]:e;return{x:(t.clientX-r.left)*(cv.width/r.width),y:(t.clientY-r.top)*(cv.height/r.height)};};
   const st=e=>{dr=true;const p=pos(e);ctx.beginPath();ctx.moveTo(p.x,p.y);e.preventDefault();};
   const mv=e=>{if(!dr)return;const p=pos(e);ctx.lineTo(p.x,p.y);ctx.strokeStyle='#0F2744';ctx.lineWidth=2.5;ctx.lineCap='round';ctx.stroke();e.preventDefault();};
-  const en=()=>{if(dr){dr=false;sig=cv.toDataURL();}};
+  const en=()=>{if(dr){dr=false;const s=cv.toDataURL();if(onEnd)onEnd(s);else sig=s;}};
   cv.addEventListener('mousedown',st);cv.addEventListener('mousemove',mv);window.addEventListener('mouseup',en);
   cv.addEventListener('touchstart',st);cv.addEventListener('touchmove',mv);cv.addEventListener('touchend',en);
 }
@@ -240,6 +290,56 @@ async function submitReport(){
   const chargeLine = total>0 ? `\n費用：$${total}（${ {cash:'現金',transfer:'轉帳',card:'刷卡'}[pay]||'—' }）` : '\n本次免費（保固內）';
   pushCustomer(rep.wf_id, `✅ 維修完成結案\n\n案件：${rep.id}\n問題：${rep.type} － ${rep.issue}${chargeLine}\n師傅：${worker.name}\n簽收單號：${receipt}\n\n感謝您的使用 🙏 ⭐ 歡迎評分`);
   closeReport(); tab='done'; await loadCases();
+}
+
+// ───── 安裝回報 modal ─────
+let instRep=null, instPhotos=[], instSig=null;
+function openInstallReport(id){
+  instRep=cases.installs.find(x=>x.id===id); if(!instRep)return;
+  instPhotos=[]; instSig=null;
+  const prod=PRODUCT_NAMES[instRep.product_id]||instRep.product_id||'門鎖';
+  const d=document.createElement('div'); d.className='mo'; d.id='instrmo';
+  d.onclick=e=>{if(e.target===d)closeInstallReport();};
+  d.innerHTML=`<div class="sheet">
+    <h3>📸 安裝回報 — ${instRep.id}</h3>
+    <div style="background:#F8FAFC;border-radius:8px;padding:10px;font-size:13px;margin-bottom:6px">
+      <b>${instRep.name}</b><br>📞 ${instRep.phone}<br>🏠 ${instRep.address||'—'}<br>📦 ${prod}${instRep.serial_no?` (${instRep.serial_no})`:''}
+    </div>
+    <div class="sec">現場安裝照片（至少 1 張）</div>
+    <label class="photo-add">📷 拍照 / 選擇<input id="iph" type="file" accept="image/*" capture="environment" multiple style="display:none"></label>
+    <div class="thumbs" id="ithumbs"></div>
+    <div class="sec">師傅施工說明</div>
+    <textarea id="iwnote" rows="2" placeholder="安裝過程說明、教學內容、注意事項…"></textarea>
+    <div class="sec">客戶簽名確認安裝完成</div>
+    <canvas id="isig" class="sig" width="500" height="150"></canvas>
+    <div style="text-align:right"><button class="btn gray" style="width:auto;margin-top:4px;padding:5px 12px" onclick="clearInstSig()">清除簽名</button></div>
+    <div class="act"><button class="cancel" onclick="closeInstallReport()">取消</button><button class="ok" onclick="submitInstallReport()">送出回報</button></div>
+    <div id="ierr" style="color:#EF4444;font-size:13px;margin-top:8px"></div>
+  </div>`;
+  document.body.appendChild(d);
+  $('#iph').addEventListener('change',e=>{
+    const files=[...e.target.files];
+    Promise.all(files.map(f=>new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result);r.readAsDataURL(f);}))).then(imgs=>{instPhotos.push(...imgs);renderInstThumbs();});
+    e.target.value='';
+  });
+  initSig($('#isig'),s=>instSig=s);
+}
+function closeInstallReport(){ const m=$('#instrmo'); if(m)m.remove(); instRep=null; }
+function renderInstThumbs(){ $('#ithumbs').innerHTML=instPhotos.map((s,i)=>`<div class="thumb" style="background-image:url(${s})"><span onclick="rmInstPhoto(${i})">×</span></div>`).join(''); }
+function rmInstPhoto(i){ instPhotos.splice(i,1); renderInstThumbs(); }
+function clearInstSig(){ const c=$('#isig'); c.getContext('2d').clearRect(0,0,c.width,c.height); instSig=null; }
+async function submitInstallReport(){
+  if(instPhotos.length===0){ $('#ierr').textContent='請至少上傳一張安裝照片'; return; }
+  if(!instSig){ $('#ierr').textContent='請讓客戶簽名確認'; return; }
+  const btn=$('#instrmo .ok'); if(btn) btn.disabled=true;
+  await sb.from('installs').update({
+    photos:instPhotos, signature:instSig,
+    work_note:$('#iwnote').value.trim(),
+  }).eq('id',instRep.id);
+  const prod=PRODUCT_NAMES[instRep.product_id]||instRep.product_id||'門鎖';
+  pushByPhone(instRep.phone,`🔧 安裝師傅已完成施工並請您簽名確認。\n師傅：${worker.name}\n安裝項目：${prod}\n\n後續保固登錄將由客服確認，感謝 🙏`);
+  closeInstallReport();
+  await loadCases();
 }
 
 // 啟動 + 每 20 秒刷新
