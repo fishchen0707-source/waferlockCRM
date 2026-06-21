@@ -147,10 +147,10 @@ async function accept(id){
 }
 
 // ───── 現場回報 ─────
-let photos=[], sig=null, charges=[], pay='cash', paid=false;
+let photos=[], sig=null, charges=[], pay='cash', paid=false, wj='out', excl='';
 function openReport(id){
   rep=cases.mine.find(x=>x.id===id); if(!rep)return;
-  photos=[]; sig=null; charges=[]; pay=(rep.warranty_in?'free':'cash'); paid=false;
+  photos=[]; sig=null; charges=[]; pay=(rep.warranty_in?'free':'cash'); paid=false; wj=(rep.warranty_in?'in':'out'); excl='';
   const c=custMap[rep.wf_id]||{};
   const d=document.createElement('div'); d.className='mo'; d.id='repmo';
   d.onclick=e=>{if(e.target===d)closeReport();};
@@ -164,9 +164,16 @@ function openReport(id){
     <div class="thumbs" id="thumbs"></div>
     <div class="sec">處理說明</div>
     <textarea id="wnote" rows="2" placeholder="維修內容摘要"></textarea>
-    <div class="sec">收費</div>
+    <div class="sec">保固判定</div>
+    <select id="wj" onchange="onWj()" style="width:100%;border:1px solid #E2E8F0;border-radius:8px;padding:10px;font-size:14px">
+      <option value="in">保固內 — 免費</option>
+      <option value="out">保固外 — 需收費</option>
+      <option value="in_excluded">保內但不保固 — 需收費（如電池漏液）</option>
+    </select>
+    <input id="excl" placeholder="不保固原因（如：鹼性電池漏液腐蝕主板）" style="display:none;margin-top:6px;width:100%;border:1px solid #EF4444;border-radius:8px;padding:9px 11px;font-size:13px">
+    <div class="sec">收費品項（數量×單價，可勾贈品）</div>
     <div id="charges"></div>
-    <div class="cadd"><input id="ci" placeholder="品項（如：更換鋰電池）"><input id="ca" type="number" placeholder="金額" style="max-width:90px"><button class="btn go" style="width:auto;margin:0;padding:9px 12px" onclick="addCharge()">加</button></div>
+    <div class="cadd"><input id="ci" placeholder="品項"><input id="cq" type="number" value="1" style="max-width:52px" title="數量"><input id="cp" type="number" placeholder="單價" style="max-width:74px"><label style="display:flex;align-items:center;gap:3px;font-size:12px;white-space:nowrap"><input type="checkbox" id="cg">贈</label><button class="btn go" style="width:auto;margin:0;padding:9px 12px" onclick="addCharge()">加</button></div>
     <div class="total" id="total"></div>
     <div class="sec">收款方式</div>
     <div class="pm" id="pm">
@@ -185,7 +192,12 @@ function openReport(id){
   document.body.appendChild(d);
   $('#ph').addEventListener('change',onPhotos);
   initSig($('#sig'));
-  setPay(pay); renderCharges();
+  $('#wj').value=wj; onWj(); renderCharges();
+}
+function onWj(){
+  wj=$('#wj').value;
+  $('#excl').style.display = wj==='in_excluded' ? 'block' : 'none';
+  if(wj==='in') setPay('free'); else if(pay==='free') setPay('cash');
 }
 function closeReport(){ const m=$('#repmo'); if(m)m.remove(); rep=null; }
 function onPhotos(e){
@@ -195,9 +207,9 @@ function onPhotos(e){
 }
 function renderThumbs(){ $('#thumbs').innerHTML=photos.map((s,i)=>`<div class="thumb" style="background-image:url(${s})"><span onclick="rmPhoto(${i})">×</span></div>`).join(''); }
 function rmPhoto(i){ photos.splice(i,1); renderThumbs(); }
-function addCharge(){ const it=$('#ci').value.trim(), am=Number($('#ca').value)||0; if(!it)return; charges.push({item:it,amount:am}); $('#ci').value='';$('#ca').value=''; renderCharges(); }
+function addCharge(){ const it=$('#ci').value.trim(); if(!it)return; const qty=Number($('#cq').value)||1, gift=$('#cg').checked, price=gift?0:(Number($('#cp').value)||0); charges.push({item:it,qty,price,gift,amount:gift?0:qty*price}); $('#ci').value='';$('#cq').value='1';$('#cp').value='';$('#cg').checked=false; renderCharges(); }
 function rmCharge(i){ charges.splice(i,1); renderCharges(); }
-function renderCharges(){ $('#charges').innerHTML=charges.map((c,i)=>`<div class="crow2"><span style="flex:1">${c.item}</span><span>$${c.amount}</span><span class="del" onclick="rmCharge(${i})">×</span></div>`).join(''); const t=charges.reduce((s,c)=>s+(c.amount||0),0); $('#total').textContent=t?('合計 $'+t):''; }
+function renderCharges(){ $('#charges').innerHTML=charges.map((c,i)=>`<div class="crow2"><span style="flex:1">${c.item} ${c.gift?'<b style=\"color:#10B981\">[贈]</b>':`×${c.qty} @$${c.price}`}</span><span>$${c.amount}</span><span class="del" onclick="rmCharge(${i})">×</span></div>`).join(''); const t=charges.reduce((s,c)=>s+(c.amount||0),0); $('#total').textContent=t?('合計 $'+t):''; }
 function setPay(v){ pay=v; document.querySelectorAll('#pm button').forEach(b=>b.classList.toggle('on',b.dataset.v===v)); }
 function clearSig(){ const c=$('#sig'); c.getContext('2d').clearRect(0,0,c.width,c.height); sig=null; }
 function initSig(cv){
@@ -211,15 +223,18 @@ function initSig(cv){
 }
 async function submitReport(){
   const total=charges.reduce((s,c)=>s+(c.amount||0),0);
+  const exclVal=$('#excl').value.trim();
   if(photos.length===0){ $('#rerr').textContent='請至少拍一張現場照片'; return; }
   if(!sig){ $('#rerr').textContent='請讓客戶簽名'; return; }
-  if(pay!=='free' && total>0 && !$('#paid').checked){ /* 允許未收款，但提醒 */ }
+  if(wj==='in_excluded' && !exclVal){ $('#rerr').textContent='「保內但不保固」需填寫原因'; return; }
+  if(wj!=='in' && total<=0){ $('#rerr').textContent='需收費案件請填寫收費品項'; return; }
   $('.act .ok')&&($('.act .ok').disabled=true);
   let receipt=null;
   try{ const {data}=await sb.rpc('next_case_no',{p_prefix:'SR'}); receipt=data; }catch(e){ receipt='SR'+Date.now(); }
   await sb.from('repairs').update({
     status:'done', photos, signature:sig, charges, charge_total:total,
     payment_method:pay, paid:pay==='free'?true:$('#paid').checked,
+    warranty_judgment:wj, exclude_reason:exclVal,
     work_note:$('#wnote').value.trim(), receipt_no:receipt, completed_date:today()
   }).eq('id',rep.id);
   const chargeLine = total>0 ? `\n費用：$${total}（${ {cash:'現金',transfer:'轉帳',card:'刷卡'}[pay]||'—' }）` : '\n本次免費（保固內）';
