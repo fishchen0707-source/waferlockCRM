@@ -1742,7 +1742,14 @@ function SchedulePage(){
   const {db}=useContext(Ctx);
   const [region,setRegion]=useState('central');
   const [date,setDate]=useState(todayISO());
+  const [sel,setSel]=useState(null);
   const list=workersByRegion(db.workers||[],region);
+  // 由 booking 反查案件物件（帶 _type 供 CaseDetailPanel 使用）
+  const caseOf=b=>{
+    if(!b)return null;
+    if(b.refType==='install'){ const o=db.installs?.[b.refId]; return o?{...o,_type:'install'}:null; }
+    const r=db.repairs?.[b.refId]; return r?{...r,_type:'repair'}:null;
+  };
   return(
     <div className="rapage">
       <div className="ra-hdr"><h2>📅 工務時刻表</h2></div>
@@ -1759,14 +1766,25 @@ function SchedulePage(){
                 <td className="wk">{hourLabel(h)}</td>
                 {list.map(w=>{
                   const b=(db.bookings||[]).find(x=>x.workerId===w.id&&x.date===date&&x.hour===h);
-                  return <td key={w.id} className={b?('busy'+(b.refType==='install'?' inst':'')):''}>{b?(b.refType==='install'?'安裝':'維修'):''}</td>;
+                  if(!b) return <td key={w.id}></td>;
+                  return <td key={w.id} className={'busy'+(b.refType==='install'?' inst':'')} style={{cursor:'pointer'}}
+                    title={`點擊查看案件 ${b.refId}`} onClick={()=>{const cc=caseOf(b); cc?setSel(cc):alert('找不到對應案件（'+b.refId+'）');}}>
+                    <div style={{fontWeight:700,fontSize:11}}>{b.refType==='install'?'🛠️ 安裝':'🔧 維修'}</div>
+                    <div style={{fontSize:9.5,opacity:.8,fontFamily:'JetBrains Mono',marginTop:1}}>{b.refId}</div>
+                  </td>;
                 })}
               </tr>
             ))}</tbody>
           </table>
         ):<div style={{color:'var(--g400)',fontSize:13,padding:'30px 0',textAlign:'center'}}>此區尚無師傅</div>}
       </div>
-      <div style={{fontSize:11,color:'var(--g500)',marginTop:8}}>🟦 維修（1 格）　🟪 安裝（2 格）　空白＝可約</div>
+      <div style={{fontSize:11,color:'var(--g500)',marginTop:8}}>🟦 維修（1 格）　🟪 安裝（2 格）　空白＝可約　·　點格子可查看案件與異動紀錄</div>
+      {sel&&(
+        <div style={{position:'fixed',inset:0,top:48,zIndex:40}}>
+          <div onClick={()=>setSel(null)} style={{position:'absolute',inset:0,background:'rgba(15,39,68,.25)'}}/>
+          <div style={{position:'absolute',top:0,right:0,bottom:0,display:'flex'}}><CaseDetailPanel c={sel} onClose={()=>setSel(null)}/></div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1813,6 +1831,11 @@ function CaseDetailPanel({c,onClose,onOpenFull}){
     ...custComplaints.map(ct=>({...ct,_k:'c',_date:ct.date||'',_label:'客訴件'})),
   ].sort((a,b)=>b._date.localeCompare(a._date));
   const ST=CASE_STATUS;
+  // 案件異動紀錄（repair/install 用 history；complaint 用 timeline）
+  const fmtTs=ts=>{ if(!ts)return'—'; if(typeof ts==='number'||/^\d+$/.test(String(ts))){const d=new Date(Number(ts)); return d.toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});} return String(ts); };
+  const hist = c._type==='complaint'
+    ? (c.timeline||[]).map(t=>({ts:t.ts,by:t.by,action:t.note}))
+    : (c.history||[]);
   return(
     <div style={{width:360,background:'#fff',borderLeft:'1px solid #E2E8F0',overflowY:'auto',flexShrink:0,display:'flex',flexDirection:'column'}}>
       <div style={{padding:'12px 16px',borderBottom:'1px solid #E2E8F0',display:'flex',alignItems:'center',justifyContent:'space-between',background:'#0F2744'}}>
@@ -1867,6 +1890,18 @@ function CaseDetailPanel({c,onClose,onOpenFull}){
         <div style={{padding:'13px 16px',borderBottom:'1px solid #E2E8F0'}}>
           <div style={{fontSize:10,color:'#94A3B8',marginBottom:4}}>尚無保固登錄資料</div>
           <div style={{fontSize:12.5,color:'#334155'}}><b>{c.name}</b>　{c.phone}</div>
+        </div>
+      )}
+      {c._type!=='customer'&&hist.length>0&&(
+        <div style={{padding:'13px 16px',borderBottom:'1px solid #E2E8F0',background:'#F8FAFC'}}>
+          <div style={{fontSize:10,color:'#64748B',fontWeight:700,marginBottom:8,letterSpacing:.5}}>📝 本案異動紀錄（{hist.length}）</div>
+          {hist.slice().reverse().map((h,i)=>(
+            <div key={i} style={{display:'flex',gap:8,fontSize:11.5,padding:'5px 0',borderBottom:i<hist.length-1?'1px dashed #E2E8F0':'none'}}>
+              <span style={{color:'#94A3B8',whiteSpace:'nowrap',fontVariantNumeric:'tabular-nums'}}>{fmtTs(h.ts)}</span>
+              <span style={{flex:1,color:'#334155'}}>{h.action||'—'}</span>
+              <span style={{color:'#0F2744',fontWeight:600,whiteSpace:'nowrap'}}>{h.by||'—'}</span>
+            </div>
+          ))}
         </div>
       )}
       <div style={{padding:'13px 16px',flex:1}}>
