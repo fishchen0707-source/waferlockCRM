@@ -1405,8 +1405,23 @@ function InstallPage(){
   const createOrder=()=>{
     if(!f.name.trim()||!f.phone.trim()){alert('請填寫客戶姓名與電話');return;}
     const id='IW'+Date.now();
-    updateDB(prev=>({...prev,installs:{...prev.installs,[id]:{id,...f,status:'pending',createdDate:today(),createdTs:Date.now(),arrivalPushed:false}}}));
-    toast('📋 安裝工單已建立',`${f.name}｜${LOCKSMITHS.find(s=>s.id===f.locksmithId)?.name}`,'ok');
+    let newWf=null;
+    updateDB(prev=>{
+      // 案件發生即發客編：電話查既有客戶，無則建立新客編（保固欄位待安裝完工後補）
+      let customers=prev.customers||[];
+      const exist=customers.find(c=>c.phone===f.phone.trim());
+      let wfId;
+      if(exist){ wfId=exist.wfId; }
+      else{
+        wfId='WF'+String(Date.now()).slice(-8); newWf=wfId;
+        customers=[...customers,{wfId,name:f.name.trim(),phone:f.phone.trim(),address:f.address,channel:f.channel,
+          productId:f.productId,serialNo:f.serialNo,regType:'auto',regDate:today(),
+          installDate:null,warrantyMonths:null,warrantyEnd:null,tags:['待安裝'],repairIds:[],complaintIds:[]}];
+      }
+      return {...prev,customers,
+        installs:{...prev.installs,[id]:{id,...f,wfId,status:'pending',createdDate:today(),createdTs:Date.now(),arrivalPushed:false}}};
+    });
+    toast('📋 安裝工單已建立',newWf?`${f.name}｜已建立客編 ${newWf}`:`${f.name}｜歸入既有客編`,'ok');
     setCreating(false);
     setF({name:'',phone:'',address:'',channel:'lock_shop',productId:'L376',serialNo:'',locksmithId:'S1'});
   };
@@ -1442,16 +1457,30 @@ function InstallPage(){
 
   const finishVerify=(o,d)=>{
     const months=PRODUCTS[o.productId]?.warranty||36;
-    const wfId='WF'+String(Date.now()).slice(-8);
-    const cust={wfId,name:o.name,phone:o.phone,address:o.address,channel:o.channel,productId:o.productId,serialNo:o.serialNo,regType:'auto',regDate:today(),installDate:today(),warrantyMonths:months,warrantyEnd:addMonthsStr(months),tags:['保固中','新客'],repairIds:[]};
-    updateDB(prev=>({...prev,
-      installs:{...prev.installs,[o.id]:{...prev.installs[o.id],status:'done',photos:d.photos,signature:d.signature,verify:d.verify,taught:d.taught,workNote:d.note,completedDate:today(),wfId,warrantyEnd:cust.warrantyEnd}},
-      customers:[...(prev.customers||[]),cust]
-    }));
+    const warrantyEnd=addMonthsStr(months);
+    let wfId=o.wfId;
+    updateDB(prev=>{
+      let customers=prev.customers||[];
+      const has=wfId && customers.some(c=>c.wfId===wfId);
+      if(has){
+        // 更新既有客編：補上保固登錄欄位、待安裝→保固中
+        customers=customers.map(c=>c.wfId!==wfId?c:{...c,
+          name:o.name,phone:o.phone,address:o.address||c.address,channel:o.channel||c.channel,
+          productId:o.productId,serialNo:o.serialNo,installDate:today(),warrantyMonths:months,warrantyEnd,
+          tags:[...new Set([...(c.tags||[]).filter(t=>t!=='待安裝'),'保固中'])]});
+      }else{
+        // 舊資料 fallback：無客編則新建
+        wfId='WF'+String(Date.now()).slice(-8);
+        customers=[...customers,{wfId,name:o.name,phone:o.phone,address:o.address,channel:o.channel,productId:o.productId,serialNo:o.serialNo,regType:'auto',regDate:today(),installDate:today(),warrantyMonths:months,warrantyEnd,tags:['保固中','新客'],repairIds:[],complaintIds:[]}];
+      }
+      return {...prev,
+        installs:{...prev.installs,[o.id]:{...prev.installs[o.id],status:'done',photos:d.photos,signature:d.signature,verify:d.verify,taught:d.taught,workNote:d.note,completedDate:today(),wfId,warrantyEnd}},
+        customers};
+    });
     const uid=lineUidByPhone(o.phone);
-    if(uid) pushLineTo(uid, `✅ 安裝完成\n\n您的 ${PRODUCTS[o.productId]?.name||'門鎖'} 已安裝驗收完成，保固自今日起算至 ${cust.warrantyEnd}。感謝您的使用 🙏`);
+    if(uid) pushLineTo(uid, `✅ 安裝完成\n\n您的 ${PRODUCTS[o.productId]?.name||'門鎖'} 已安裝驗收完成，保固自今日起算至 ${warrantyEnd}。感謝您的使用 🙏`);
     toast('✅ 安裝完成','保固開始計算（安裝日起算）','ok');
-    setTimeout(()=>toast('🎉 已建立 CRM 客資',`${o.name} 保固至 ${cust.warrantyEnd}`,'ok'),1400);
+    setTimeout(()=>toast('🎉 客編保固已更新',`${o.name} 保固至 ${warrantyEnd}`,'ok'),1400);
     setVerifying(null);
   };
 
