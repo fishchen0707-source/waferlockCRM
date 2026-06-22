@@ -613,7 +613,7 @@ const normCharges = rows => rows.filter(r=>r.item&&r.item.trim()).map(r=>({item:
 
 // ─── CRM Page ───
 function CRMPage(){
-  const {db,updateDB,toast,newIds} = useContext(Ctx);
+  const {db,updateDB,toast,newIds,crmTarget,setCrmTarget} = useContext(Ctx);
   const [q,setQ] = useState('');
   const [res,setRes] = useState(null);
   const [sel,setSel] = useState(null);
@@ -643,6 +643,15 @@ function CRMPage(){
   useEffect(()=>{
     if(sel){ const updated=customers.find(c=>c.wfId===sel.wfId); if(updated) setSel(updated); }
   },[db.version]);
+
+  // 首頁搜尋跳轉：自動選定指定客戶並開啟完整詳情頁
+  useEffect(()=>{
+    if(crmTarget){
+      const c=customers.find(x=>x.wfId===crmTarget);
+      if(c){ setSel(c); setQ(''); setRes(null); }
+      setCrmTarget(null);
+    }
+  },[crmTarget]);
 
   const doSearch=()=>{
     const lq=q.trim().toLowerCase();
@@ -1768,7 +1777,7 @@ const maskPhone=phone=>{
   return phone.slice(0,4)+'***'+phone.slice(-3);
 };
 
-function CaseDetailPanel({c,onClose}){
+function CaseDetailPanel({c,onClose,onOpenFull}){
   const {db}=useContext(Ctx);
   const customers=db.customers||[];
   const repairs=db.repairs||{};
@@ -1836,6 +1845,8 @@ function CaseDetailPanel({c,onClose}){
               <div style={{fontSize:10,color:'#94A3B8',marginTop:3}}>保固至 {cust.warrantyEnd||'—'}</div>
             </div>
           )}
+          {onOpenFull&&<button onClick={()=>onOpenFull(cust.wfId)}
+            style={{width:'100%',marginTop:12,background:'#0F2744',color:'#fff',border:'none',borderRadius:7,padding:'8px',fontSize:12,fontWeight:700,cursor:'pointer'}}>📋 查看完整客戶資料 →</button>}
         </div>
       ):(
         <div style={{padding:'13px 16px',borderBottom:'1px solid #E2E8F0'}}>
@@ -1868,11 +1879,12 @@ function CaseDetailPanel({c,onClose}){
 }
 
 function HomePage(){
-  const {db}=useContext(Ctx);
+  const {db,setPage,setCrmTarget}=useContext(Ctx);
   const [search,setSearch]=useState('');
   const [typeFilter,setTypeFilter]=useState('all');
   const [dept,setDept]=useState('all');
   const [selected,setSelected]=useState(null);
+  const [results,setResults]=useState(null); // null=案件池模式, array=客戶搜尋結果
   const installs=Object.values(db.installs||{});
   const repairs=Object.values(db.repairs||{});
   const complaints=Object.values(db.complaints||{});
@@ -1888,27 +1900,41 @@ function HomePage(){
     if(dept!=='all'&&c._type==='complaint'&&c.department!==dept)return false;
     return true;
   });
+  const openCustomer=wfId=>{ setCrmTarget(wfId); setPage('crm'); };
   const doSearch=()=>{
     const term=search.trim();
-    if(!term){setSelected(null);return;}
+    if(!term){ setResults(null); return; }
     const lo=term.toLowerCase();
     const customers=db.customers||[];
-    // 1. 先精準找客戶（電話完全相符 → 包含 → 姓名/編號）
-    let cust=customers.find(x=>x.phone===term)
-      ||customers.find(x=>(x.phone||'').includes(term))
-      ||customers.find(x=>(x.name||'').includes(term)||(x.wfId||'').toLowerCase()===lo);
-    if(cust){ setSelected({_type:'customer',id:cust.wfId,wfId:cust.wfId,phone:cust.phone,name:cust.name}); return; }
-    // 2. 客戶未登錄時，從所有案件（含已完成）找電話/姓名/案號
+    const cntCases=c=>[
+      ...installs.filter(o=>(c.wfId&&o.wfId===c.wfId)||(c.phone&&o.phone===c.phone)),
+      ...repairs.filter(r=>(c.wfId&&r.wfId===c.wfId)||(c.phone&&r.phone===c.phone)),
+      ...complaints.filter(t=>(c.wfId&&t.wfId===c.wfId)||(c.phone&&t.phone===c.phone)),
+    ].length;
+    // 1. 已登錄客戶（模糊比對 姓名/電話/編號/序號/地址）
+    const matched=customers.filter(c=>
+      (c.name||'').toLowerCase().includes(lo)||(c.phone||'').includes(term)||
+      (c.wfId||'').toLowerCase().includes(lo)||(c.serialNo||'').toLowerCase().includes(lo)||
+      (c.address||'').includes(term)
+    ).map(c=>({...c,_registered:true,_caseCount:cntCases(c)}));
+    // 2. 未登錄但有案件的電話（去重，建立候選）
+    const known=new Set(matched.map(c=>c.phone));
     const allRaw=[
       ...installs.map(o=>({...o,_type:'install'})),
       ...repairs.map(r=>({...r,_type:'repair'})),
-      ...complaints.map(ct=>({...ct,_type:'complaint'})),
+      ...complaints.map(t=>({...t,_type:'complaint'})),
     ];
-    const hit=allRaw.find(c=>c.phone===term)
-      ||allRaw.find(c=>(c.phone||'').includes(term)||(c.name||'').includes(term)||
-        (c.id||'').toLowerCase().includes(lo)||(c.address||'').includes(term)||(c.building||'').includes(term));
-    if(hit){ setSelected(hit); return; }
-    alert('查無符合「'+term+'」的客戶或案件');
+    const extra={};
+    allRaw.forEach(c=>{
+      const hit=(c.phone||'').includes(term)||(c.name||'').includes(term)||
+        (c.id||'').toLowerCase().includes(lo)||(c.address||'').includes(term)||(c.building||'').includes(term);
+      if(!hit)return;
+      const key=c.phone||c.id;
+      if(known.has(c.phone))return;
+      if(!extra[key]) extra[key]={wfId:null,name:c.name,phone:c.phone,address:c.address||c.building||c.district,_registered:false,_caseCount:0,_anchor:c};
+      extra[key]._caseCount++;
+    });
+    setResults([...matched,...Object.values(extra)]);
   };
   const typeLabelMap={install:'安裝件',repair:'維修件',complaint:'客訴件'};
   const typeBg={install:'#EDE9FE',repair:'#E0F2FE',complaint:'#FEF3C7'};
@@ -1926,6 +1952,8 @@ function HomePage(){
             style={{width:'100%',background:'#334155',border:'1px solid #475569',borderRadius:7,padding:'7px 10px',color:'#F1F5F9',fontSize:12,outline:'none',boxSizing:'border-box',marginBottom:7}}/>
           <button onClick={doSearch}
             style={{width:'100%',background:'#38BDF8',color:'#0F2744',border:'none',borderRadius:7,padding:'7px',fontSize:12,fontWeight:700,cursor:'pointer'}}>🔍 搜尋客戶</button>
+          {results!==null&&<button onClick={()=>{setSearch('');setResults(null);}}
+            style={{width:'100%',background:'transparent',color:'#94A3B8',border:'1px solid #475569',borderRadius:7,padding:'5px',fontSize:11,fontWeight:600,cursor:'pointer',marginTop:6}}>← 返回案件列表</button>}
         </div>
         <div style={{padding:'8px 0',borderBottom:'1px solid #334155'}}>
           <div style={{padding:'4px 12px',fontSize:9.5,color:'#475569',fontWeight:700,letterSpacing:1,marginBottom:2}}>案件類型</div>
@@ -1957,6 +1985,61 @@ function HomePage(){
         </div>
       </div>
       <div style={{flex:1,overflowY:'auto',background:'#F0F4F8',display:'flex',flexDirection:'column'}}>
+        {results!==null?(
+          // ── 搜尋結果：候選客戶列表 ──
+          <>
+            <div style={{padding:'13px 20px',background:'#fff',borderBottom:'1px solid #E2E8F0',display:'flex',alignItems:'center',gap:12,flexShrink:0}}>
+              <h2 style={{fontSize:16,fontWeight:700,color:'#0F2744',margin:0}}>🔍 搜尋結果</h2>
+              <span style={{fontSize:11.5,color:'#64748B',background:'#F1F5F9',padding:'2px 10px',borderRadius:9}}>{results.length} 位客戶</span>
+              <span style={{fontSize:11,color:'#64748B'}}>關鍵字「{search}」</span>
+            </div>
+            <div style={{padding:'12px 20px',flex:1}}>
+              {results.length===0&&(
+                <div style={{textAlign:'center',color:'#94A3B8',padding:'80px 0',fontSize:14}}>
+                  <div style={{fontSize:32,marginBottom:12}}>🔍</div>
+                  <div>查無符合「{search}」的客戶</div>
+                </div>
+              )}
+              {results.map((c,i)=>{
+                const prod=PRODUCTS[c.productId];
+                const inWar=c.installDate&&pctW(c.installDate,c.warrantyMonths||36)>0;
+                return(
+                  <div key={(c.wfId||c.phone||i)+''} onClick={()=>c._registered?openCustomer(c.wfId):setSelected(c._anchor)}
+                    style={{background:'#fff',borderRadius:10,padding:'13px 18px',cursor:'pointer',
+                      boxShadow:'0 1px 3px rgba(0,0,0,.06)',borderLeft:`4px solid ${c._registered?'#10B981':'#94A3B8'}`,
+                      display:'flex',alignItems:'center',gap:14,marginBottom:8,transition:'box-shadow .12s'}}
+                    onMouseEnter={e=>e.currentTarget.style.boxShadow='0 4px 12px rgba(0,0,0,.12)'}
+                    onMouseLeave={e=>e.currentTarget.style.boxShadow='0 1px 3px rgba(0,0,0,.06)'}>
+                    <div style={{width:42,height:42,borderRadius:'50%',background:c._registered?'linear-gradient(135deg,#0F2744,#1E4080)':'#94A3B8',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:17,fontWeight:700,flexShrink:0}}>
+                      {(c.name||'?')[0]}
+                    </div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:14,fontWeight:700,color:'#1E293B',marginBottom:2,display:'flex',alignItems:'center',gap:8}}>
+                        {c.name||'未具名'}
+                        {!c._registered&&<span style={{background:'#F1F5F9',color:'#94A3B8',fontSize:9.5,fontWeight:700,padding:'1px 7px',borderRadius:8}}>未登錄保固</span>}
+                        {inWar&&<span style={{background:'#D1FAE5',color:'#065F46',fontSize:9.5,fontWeight:700,padding:'1px 7px',borderRadius:8}}>保固中</span>}
+                      </div>
+                      <div style={{fontSize:12,color:'#64748B',display:'flex',gap:14,flexWrap:'wrap'}}>
+                        <span>📱 {c.phone||'—'}</span>
+                        {(c.address||c.district)&&<span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:320}}>🏠 {c.address||c.district}</span>}
+                      </div>
+                      {(prod||c.serialNo)&&<div style={{fontSize:10.5,color:'#94A3B8',marginTop:3}}>
+                        {prod&&<span>📦 {prod.name}　</span>}
+                        {c.serialNo&&<span style={{fontFamily:'monospace'}}>SN: {c.serialNo}</span>}
+                      </div>}
+                    </div>
+                    <div style={{textAlign:'right',flexShrink:0}}>
+                      <div style={{fontSize:11,color:'#64748B'}}>歷程 <b style={{color:'#0F2744',fontSize:14}}>{c._caseCount}</b> 件</div>
+                      <div style={{fontSize:11,color:'#38BDF8',fontWeight:700,marginTop:3}}>查看完整資料 →</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        ):(
+          // ── 案件池：客訴單列表 ──
+          <>
         <div style={{padding:'13px 20px',background:'#fff',borderBottom:'1px solid #E2E8F0',display:'flex',alignItems:'center',gap:12,flexShrink:0}}>
           <h2 style={{fontSize:16,fontWeight:700,color:'#0F2744',margin:0}}>📋 客訴單列表</h2>
           <span style={{fontSize:11.5,color:'#64748B',background:'#F1F5F9',padding:'2px 10px',borderRadius:9}}>{filtered.length} 筆</span>
@@ -2003,14 +2086,17 @@ function HomePage(){
             );
           })}
         </div>
+          </>
+        )}
       </div>
-      {selected&&<CaseDetailPanel c={selected} onClose={()=>setSelected(null)}/>}
+      {selected&&<CaseDetailPanel c={selected} onClose={()=>setSelected(null)} onOpenFull={openCustomer}/>}
     </div>
   );
 }
 
 function App(){
   const [page,setPage] = useState('home');
+  const [crmTarget,setCrmTarget] = useState(null); // 首頁搜尋→跳 CRM 指定客戶 wfId
   const [currentRole,setCurrentRole] = useState('管理員(全知)');
   const [db,setDB] = useState(EMPTY_DB);
   const [loading,setLoading] = useState(true);
@@ -2098,7 +2184,7 @@ function App(){
   }).length;
 
   return(
-    <Ctx.Provider value={{db,updateDB,toast,newIds,currentRole}}>
+    <Ctx.Provider value={{db,updateDB,toast,newIds,currentRole,setPage,crmTarget,setCrmTarget}}>
       <nav className="nav">
         <div className="nav-logo">🔒 WAFERLOCK <span>CRM</span></div>
         <button className={`nbtn ${page==='home'?'on':''}`} onClick={()=>setPage('home')}>🏠 首頁</button>
