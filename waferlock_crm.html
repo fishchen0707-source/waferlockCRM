@@ -613,7 +613,7 @@ const normCharges = rows => rows.filter(r=>r.item&&r.item.trim()).map(r=>({item:
 
 // ─── CRM Page ───
 function CRMPage(){
-  const {db,updateDB,toast,newIds,crmTarget,setCrmTarget} = useContext(Ctx);
+  const {db,updateDB,toast,newIds,crmTarget,setCrmTarget,setPage} = useContext(Ctx);
   const [q,setQ] = useState('');
   const [res,setRes] = useState(null);
   const [sel,setSel] = useState(null);
@@ -796,47 +796,12 @@ function CRMPage(){
   };
 
   if (!sel) {
+    if(crmTarget) return null; // 跳轉中，等 effect 選定客戶
     return (
-      <div className="crm-layer1">
-        <div className="crm-search-hero">
-          <h2>🔍 尋找客戶場域</h2>
-          <input className="crm-big-search" value={q} onChange={e=>setQ(e.target.value)}
-            onKeyDown={e=>e.key==='Enter'&&doSearch()}
-            placeholder="輸入姓名、電話、地址、WF編號或序號，按 Enter 搜尋"/>
-        </div>
-        
-        {res!==null && (
-          <>
-            <div style={{width:'100%',marginBottom:12,fontSize:13,color:'var(--g600)',fontWeight:600}}>
-              搜尋結果：共找到 {res.length} 個場域
-            </div>
-            <div className="crm-site-grid">
-              {res.length===0&&(
-                <div style={{gridColumn:'1/-1',textAlign:'center',padding:'40px',color:'var(--g400)'}}>
-                  找不到符合的客戶資料
-                </div>
-              )}
-              {res.map(c=>{
-                const isNew = newIds.includes(c.wfId);
-                const repairs = Object.values(db.repairs||{}).filter(r=>r.wfId===c.wfId);
-                return(
-                  <div key={c.wfId} className={`site-card ${isNew?'new-glow':''}`} onClick={()=>setSel(c)}>
-                    {isNew&&<div className="new-badge">NEW</div>}
-                    <div className="sc-name">{c.name} <span style={{fontSize:12,color:'var(--g500)',fontWeight:400}}>{c.phone}</span></div>
-                    <div className="sc-addr">🏠 {c.address||'地址待填寫'}</div>
-                    <div style={{display:'flex',gap:4,marginBottom:10,flexWrap:'wrap'}}>
-                      {(c.tags||[]).map(t=><span key={t} className={`ctag ${t==='保固中'?'ok':t==='保固已到期'?'exp':t==='新客'?'new':t==='建案客戶'?'builder':'vip'}`}>{t}</span>)}
-                    </div>
-                    <div className="sc-meta">
-                      <span className="sc-wfid">{c.wfId}</span>
-                      <span>🔧 歷史報修 {repairs.length} 次</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </>
-        )}
+      <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'calc(100vh - 48px)',gap:14,color:'var(--g500)'}}>
+        <div style={{fontSize:32}}>🔍</div>
+        <div style={{fontSize:14,fontWeight:600}}>請從首頁搜尋客戶後進入完整資料</div>
+        <button onClick={()=>setPage('home')} style={{padding:'8px 18px',background:'var(--brand)',color:'#fff',border:'none',borderRadius:7,fontSize:13,fontWeight:700,cursor:'pointer'}}>← 回首頁查詢</button>
       </div>
     );
   }
@@ -849,7 +814,7 @@ function CRMPage(){
 
   return(
     <div className="crm-layer2">
-      <button className="crm-back" onClick={()=>setSel(null)}>← 返回搜尋</button>
+      <button className="crm-back" onClick={()=>{setSel(null);setPage('home');}}>← 返回首頁</button>
       
       <div className="card">
                 <div className="c-ph">
@@ -2187,8 +2152,7 @@ function App(){
     <Ctx.Provider value={{db,updateDB,toast,newIds,currentRole,setPage,crmTarget,setCrmTarget}}>
       <nav className="nav">
         <div className="nav-logo">🔒 WAFERLOCK <span>CRM</span></div>
-        <button className={`nbtn ${page==='home'?'on':''}`} onClick={()=>setPage('home')}>🏠 首頁</button>
-        <button className={`nbtn ${page==='crm'?'on':''}`} onClick={()=>setPage('crm')}>👤 CRM 客戶與場域</button>
+        <button className={`nbtn ${page==='home'||page==='crm'?'on':''}`} onClick={()=>setPage('home')}>🏠 首頁 / 客戶查詢</button>
         <button className={`nbtn ${page==='install'?'on':''}`} onClick={()=>setPage('install')}>
           🛠️ 安裝工單
           {installPending>0&&<span className="nbadge" style={{background:'var(--accent)',color:'var(--brand)'}}>{installPending}</span>}
