@@ -1775,9 +1775,12 @@ function CaseDetailPanel({c,onClose}){
   const installs=db.installs||{};
   const complaints=db.complaints||{};
   const cust=customers.find(x=>x.wfId===c.wfId)||(c.phone?customers.find(x=>x.phone===c.phone):null);
-  const custRepairs=cust?Object.values(repairs).filter(r=>r.wfId===cust.wfId||r.phone===cust.phone):(c._type==='repair'?[c]:[]);
-  const custInstalls=cust?Object.values(installs).filter(o=>o.wfId===cust.wfId||o.phone===cust.phone):(c._type==='install'?[c]:[]);
-  const custComplaints=cust?Object.values(complaints).filter(ct=>ct.wfId===cust.wfId||ct.phone===cust.phone):[];
+  const keyWf=cust?cust.wfId:c.wfId;
+  const keyPhone=cust?cust.phone:c.phone;
+  const match=r=>(keyWf&&r.wfId===keyWf)||(keyPhone&&r.phone===keyPhone);
+  const custRepairs=Object.values(repairs).filter(match);
+  const custInstalls=Object.values(installs).filter(match);
+  const custComplaints=Object.values(complaints).filter(match);
   const p=cust?pctW(cust.installDate,cust.warrantyMonths||36):0;
   const prod=cust?PRODUCTS[cust.productId]:null;
   const timeline=[
@@ -1789,9 +1792,10 @@ function CaseDetailPanel({c,onClose}){
   return(
     <div style={{width:360,background:'#fff',borderLeft:'1px solid #E2E8F0',overflowY:'auto',flexShrink:0,display:'flex',flexDirection:'column'}}>
       <div style={{padding:'12px 16px',borderBottom:'1px solid #E2E8F0',display:'flex',alignItems:'center',justifyContent:'space-between',background:'#0F2744'}}>
-        <div><div style={{fontSize:10.5,color:'rgba(255,255,255,.45)',marginBottom:2}}>案件詳情</div><div style={{fontSize:13,fontWeight:700,color:'#fff'}}>{c.id}</div></div>
+        <div><div style={{fontSize:10.5,color:'rgba(255,255,255,.45)',marginBottom:2}}>{c._type==='customer'?'客戶總覽':'案件詳情'}</div><div style={{fontSize:13,fontWeight:700,color:'#fff'}}>{c._type==='customer'?(cust?.name||c.name||c.id):c.id}</div></div>
         <button onClick={onClose} style={{background:'rgba(255,255,255,.12)',border:'none',borderRadius:6,padding:'5px 11px',cursor:'pointer',fontSize:14,color:'#fff'}}>✕</button>
       </div>
+      {c._type!=='customer'&&(
       <div style={{padding:'13px 16px',background:'#F8FAFC',borderBottom:'1px solid #E2E8F0'}}>
         <div style={{display:'flex',gap:6,marginBottom:8,flexWrap:'wrap'}}>
           <span style={{background:c._type==='install'?'#EDE9FE':c._type==='complaint'?'#FEF3C7':'#E0F2FE',color:c._type==='install'?'#5B21B6':c._type==='complaint'?'#B45309':'#0369A1',fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:9}}>
@@ -1809,6 +1813,7 @@ function CaseDetailPanel({c,onClose}){
           {c.schedDate&&<span style={{marginLeft:8}}>🗓️ 約工 {c.schedDate}{c.schedStart!=null?` ${String(c.schedStart).padStart(2,'0')}:00`:''}</span>}
         </div>
       </div>
+      )}
       {cust?(
         <div style={{padding:'13px 16px',borderBottom:'1px solid #E2E8F0'}}>
           <div style={{fontSize:10,color:'#64748B',fontWeight:700,marginBottom:8,letterSpacing:.5}}>客戶資料</div>
@@ -1881,15 +1886,30 @@ function HomePage(){
   const filtered=allCases.filter(c=>{
     if(typeFilter!=='all'&&c._type!==typeFilter)return false;
     if(dept!=='all'&&c._type==='complaint'&&c.department!==dept)return false;
-    if(search){
-      const s=search.toLowerCase();
-      return(c.name||'').includes(s)||(c.phone||'').includes(s)||
-        (c.address||'').includes(s)||(c.building||'').includes(s)||
-        (c.district||'').includes(s)||(c.id||'').toLowerCase().includes(s)||
-        (c.issue||'').includes(s)||(c.type||'').includes(s);
-    }
     return true;
   });
+  const doSearch=()=>{
+    const term=search.trim();
+    if(!term){setSelected(null);return;}
+    const lo=term.toLowerCase();
+    const customers=db.customers||[];
+    // 1. 先精準找客戶（電話完全相符 → 包含 → 姓名/編號）
+    let cust=customers.find(x=>x.phone===term)
+      ||customers.find(x=>(x.phone||'').includes(term))
+      ||customers.find(x=>(x.name||'').includes(term)||(x.wfId||'').toLowerCase()===lo);
+    if(cust){ setSelected({_type:'customer',id:cust.wfId,wfId:cust.wfId,phone:cust.phone,name:cust.name}); return; }
+    // 2. 客戶未登錄時，從所有案件（含已完成）找電話/姓名/案號
+    const allRaw=[
+      ...installs.map(o=>({...o,_type:'install'})),
+      ...repairs.map(r=>({...r,_type:'repair'})),
+      ...complaints.map(ct=>({...ct,_type:'complaint'})),
+    ];
+    const hit=allRaw.find(c=>c.phone===term)
+      ||allRaw.find(c=>(c.phone||'').includes(term)||(c.name||'').includes(term)||
+        (c.id||'').toLowerCase().includes(lo)||(c.address||'').includes(term)||(c.building||'').includes(term));
+    if(hit){ setSelected(hit); return; }
+    alert('查無符合「'+term+'」的客戶或案件');
+  };
   const typeLabelMap={install:'安裝件',repair:'維修件',complaint:'客訴件'};
   const typeBg={install:'#EDE9FE',repair:'#E0F2FE',complaint:'#FEF3C7'};
   const typeFg={install:'#5B21B6',repair:'#0369A1',complaint:'#B45309'};
@@ -1901,9 +1921,11 @@ function HomePage(){
     <div style={{display:'flex',height:'calc(100vh - 48px)',overflow:'hidden'}}>
       <div style={{width:'20%',minWidth:190,maxWidth:260,background:'#1E293B',display:'flex',flexDirection:'column',flexShrink:0}}>
         <div style={{padding:'14px 12px',borderBottom:'1px solid #334155'}}>
-          <div style={{fontSize:9.5,color:'rgba(255,255,255,.35)',fontWeight:700,letterSpacing:.5,marginBottom:7}}>🔍 全域搜尋</div>
-          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="姓名、電話、地址、案號"
-            style={{width:'100%',background:'#334155',border:'1px solid #475569',borderRadius:7,padding:'7px 10px',color:'#F1F5F9',fontSize:12,outline:'none',boxSizing:'border-box'}}/>
+          <div style={{fontSize:9.5,color:'rgba(255,255,255,.35)',fontWeight:700,letterSpacing:.5,marginBottom:7}}>🔍 客戶查詢</div>
+          <input value={search} onChange={e=>setSearch(e.target.value)} onKeyDown={e=>e.key==='Enter'&&doSearch()} placeholder="輸入電話 / 姓名 / 案號"
+            style={{width:'100%',background:'#334155',border:'1px solid #475569',borderRadius:7,padding:'7px 10px',color:'#F1F5F9',fontSize:12,outline:'none',boxSizing:'border-box',marginBottom:7}}/>
+          <button onClick={doSearch}
+            style={{width:'100%',background:'#38BDF8',color:'#0F2744',border:'none',borderRadius:7,padding:'7px',fontSize:12,fontWeight:700,cursor:'pointer'}}>🔍 搜尋客戶</button>
         </div>
         <div style={{padding:'8px 0',borderBottom:'1px solid #334155'}}>
           <div style={{padding:'4px 12px',fontSize:9.5,color:'#475569',fontWeight:700,letterSpacing:1,marginBottom:2}}>案件類型</div>
@@ -1938,7 +1960,6 @@ function HomePage(){
         <div style={{padding:'13px 20px',background:'#fff',borderBottom:'1px solid #E2E8F0',display:'flex',alignItems:'center',gap:12,flexShrink:0}}>
           <h2 style={{fontSize:16,fontWeight:700,color:'#0F2744',margin:0}}>📋 客訴單列表</h2>
           <span style={{fontSize:11.5,color:'#64748B',background:'#F1F5F9',padding:'2px 10px',borderRadius:9}}>{filtered.length} 筆</span>
-          {search&&<span style={{fontSize:11,color:'#3B82F6'}}>搜尋：「{search}」</span>}
         </div>
         <div style={{padding:'12px 20px',flex:1}}>
           {filtered.length===0&&(
