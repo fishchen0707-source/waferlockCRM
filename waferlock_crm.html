@@ -257,17 +257,33 @@ const pushLineTo = (to, text, sender={name:'維夫拉克客服'}) => {
 // ── DB 欄位轉換（camelCase <-> snake_case） ──
 const custToDb = c => ({wf_id:c.wfId,name:c.name,phone:c.phone,email:c.email,address:c.address,district:c.district,area:c.area,channel:c.channel,product_id:c.productId,serial_no:c.serialNo,install_date:c.installDate,warranty_months:c.warrantyMonths,warranty_end:c.warrantyEnd,tags:c.tags||[],reg_type:c.regType,reg_date:c.regDate,line_uid:c.lineUid,fb_id:c.fbId,ig_id:c.igId,repair_ids:c.repairIds||[],complaint_ids:c.complaintIds||[],site:c.site,unit:c.unit,order_no:c.orderNo});
 const dbToCust = r => ({wfId:r.wf_id,name:r.name,phone:r.phone,email:r.email,address:r.address,district:r.district,area:r.area,channel:r.channel,productId:r.product_id,serialNo:r.serial_no,installDate:r.install_date,warrantyMonths:r.warranty_months,warrantyEnd:r.warranty_end,tags:r.tags||[],regType:r.reg_type,regDate:r.reg_date,lineUid:r.line_uid,fbId:r.fb_id,igId:r.ig_id,repairIds:r.repair_ids||[],complaintIds:r.complaint_ids||[],site:r.site,unit:r.unit,orderNo:r.order_no});
-const repairToDb = r => ({id:r.id,wf_id:r.wfId,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,worker_id:r.workerId,scheduled_date:r.scheduledDate,desc:r.desc,contact_name:r.contactName,contact_phone:r.contactPhone,site:r.site,unit:r.unit,handling_unit:r.handlingUnit,note:r.note,warranty_in:r.warrantyIn,created_by:r.createdBy,created_at:r.createdAt,unread:r.unread,arrival_pushed:r.arrivalPushed,rating:r.rating,receipt_no:r.receiptNo,audit_note:r.auditNote,completed_date:r.completedDate,sched_date:r.schedDate,sched_start:r.schedStart,sched_span:r.schedSpan,charges:r.charges||[],charge_total:r.chargeTotal,payment_method:r.paymentMethod,paid:r.paid,work_note:r.workNote,warranty_judgment:r.warrantyJudgment,exclude_reason:r.excludeReason,photos:r.photos||[],signature:r.signature,sla_level:r.slaLevel});
-const dbToRepair = r => ({id:r.id,wfId:r.wf_id,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,workerId:r.worker_id,scheduledDate:r.scheduled_date,desc:r.desc,contactName:r.contact_name,contactPhone:r.contact_phone,site:r.site,unit:r.unit,handlingUnit:r.handling_unit,note:r.note,warrantyIn:r.warranty_in,createdBy:r.created_by,createdAt:r.created_at,unread:r.unread,arrivalPushed:r.arrival_pushed,rating:r.rating,receiptNo:r.receipt_no,auditNote:r.audit_note,completedDate:r.completed_date,schedDate:r.sched_date,schedStart:r.sched_start,schedSpan:r.sched_span,charges:r.charges||[],chargeTotal:r.charge_total,paymentMethod:r.payment_method,paid:r.paid,workNote:r.work_note,warrantyJudgment:r.warranty_judgment,excludeReason:r.exclude_reason,photos:r.photos||[],signature:r.signature,slaLevel:r.sla_level});
+const repairToDb = r => ({id:r.id,wf_id:r.wfId,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,worker_id:r.workerId,scheduled_date:r.scheduledDate,desc:r.desc,contact_name:r.contactName,contact_phone:r.contactPhone,site:r.site,unit:r.unit,handling_unit:r.handlingUnit,note:r.note,warranty_in:r.warrantyIn,created_by:r.createdBy,created_at:r.createdAt,unread:r.unread,arrival_pushed:r.arrivalPushed,rating:r.rating,receipt_no:r.receiptNo,audit_note:r.auditNote,completed_date:r.completedDate,sched_date:r.schedDate,sched_start:r.schedStart,sched_span:r.schedSpan,charges:r.charges||[],charge_total:r.chargeTotal,payment_method:r.paymentMethod,paid:r.paid,work_note:r.workNote,warranty_judgment:r.warrantyJudgment,exclude_reason:r.excludeReason,photos:r.photos||[],signature:r.signature,sla_level:r.slaLevel,history:r.history||[]});
+const dbToRepair = r => ({id:r.id,wfId:r.wf_id,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,workerId:r.worker_id,scheduledDate:r.scheduled_date,desc:r.desc,contactName:r.contact_name,contactPhone:r.contact_phone,site:r.site,unit:r.unit,handlingUnit:r.handling_unit,note:r.note,warrantyIn:r.warranty_in,createdBy:r.created_by,createdAt:r.created_at,unread:r.unread,arrivalPushed:r.arrival_pushed,rating:r.rating,receiptNo:r.receipt_no,auditNote:r.audit_note,completedDate:r.completed_date,schedDate:r.sched_date,schedStart:r.sched_start,schedSpan:r.sched_span,charges:r.charges||[],chargeTotal:r.charge_total,paymentMethod:r.payment_method,paid:r.paid,workNote:r.work_note,warrantyJudgment:r.warranty_judgment,excludeReason:r.exclude_reason,photos:r.photos||[],signature:r.signature,slaLevel:r.sla_level,history:r.history||[]});
 const ctToDb = c => ({id:c.id,wf_id:c.wfId,name:c.name,phone:c.phone,date:c.date,created_at:c.createdAt,created_by:c.createdBy,call_channel:c.callChannel,department:c.department,cat1:c.cat1,cat2:c.cat2,cat3:c.cat3,process:c.process,status:c.status,closed_date:c.closedDate,timeline:c.timeline||[]});
 const dbToCt = r => ({id:r.id,wfId:r.wf_id,name:r.name,phone:r.phone,date:r.date,createdAt:r.created_at,createdBy:r.created_by,callChannel:r.call_channel,department:r.department,cat1:r.cat1,cat2:r.cat2,cat3:r.cat3,process:r.process,status:r.status,closedDate:r.closed_date,timeline:r.timeline||[]});
-const installToDb = o => ({id:o.id,name:o.name,phone:o.phone,address:o.address,channel:o.channel,product_id:o.productId,serial_no:o.serialNo,locksmith_id:o.locksmithId,status:o.status,created_date:o.createdDate,created_ts:o.createdTs,arrival_pushed:o.arrivalPushed,photos:o.photos||[],signature:o.signature,verify:o.verify||{},taught:o.taught||{},work_note:o.workNote,completed_date:o.completedDate,wf_id:o.wfId,warranty_end:o.warrantyEnd,worker_id:o.workerId,sched_date:o.schedDate,sched_start:o.schedStart,sched_span:o.schedSpan});
-const dbToInstall = r => ({id:r.id,name:r.name,phone:r.phone,address:r.address,channel:r.channel,productId:r.product_id,serialNo:r.serial_no,locksmithId:r.locksmith_id,status:r.status,createdDate:r.created_date,createdTs:r.created_ts?parseInt(r.created_ts):null,arrivalPushed:r.arrival_pushed,photos:r.photos||[],signature:r.signature,verify:r.verify||{},taught:r.taught||{},workNote:r.work_note,completedDate:r.completed_date,wfId:r.wf_id,warrantyEnd:r.warranty_end,workerId:r.worker_id,schedDate:r.sched_date,schedStart:r.sched_start,schedSpan:r.sched_span});
+const installToDb = o => ({id:o.id,name:o.name,phone:o.phone,address:o.address,channel:o.channel,product_id:o.productId,serial_no:o.serialNo,locksmith_id:o.locksmithId,status:o.status,created_date:o.createdDate,created_ts:o.createdTs,arrival_pushed:o.arrivalPushed,photos:o.photos||[],signature:o.signature,verify:o.verify||{},taught:o.taught||{},work_note:o.workNote,completed_date:o.completedDate,wf_id:o.wfId,warranty_end:o.warrantyEnd,worker_id:o.workerId,sched_date:o.schedDate,sched_start:o.schedStart,sched_span:o.schedSpan,history:o.history||[]});
+const dbToInstall = r => ({id:r.id,name:r.name,phone:r.phone,address:r.address,channel:r.channel,productId:r.product_id,serialNo:r.serial_no,locksmithId:r.locksmith_id,status:r.status,createdDate:r.created_date,createdTs:r.created_ts?parseInt(r.created_ts):null,arrivalPushed:r.arrival_pushed,photos:r.photos||[],signature:r.signature,verify:r.verify||{},taught:r.taught||{},workNote:r.work_note,completedDate:r.completed_date,wfId:r.wf_id,warrantyEnd:r.warranty_end,workerId:r.worker_id,schedDate:r.sched_date,schedStart:r.sched_start,schedSpan:r.sched_span,history:r.history||[]});
 const convToDb = c => ({id:c.id,wf_id:c.wfId,name:c.name,platform:c.platform,av:c.av,unread:c.unread||0,last_msg:c.lastMsg,last_time:c.lastTime,msgs:c.msgs||[],agent_takeover:c.agentTakeover||false,need_case:c.needCase||false,biz_inquiry:c.bizInquiry||false});
 const dbToConv = r => ({id:r.id,wfId:r.wf_id,name:r.name,platform:r.platform,av:r.av,unread:r.unread||0,lastMsg:r.last_msg,lastTime:r.last_time,msgs:r.msgs||[],agentTakeover:r.agent_takeover||false,needCase:r.need_case||false,bizInquiry:r.biz_inquiry||false});
 
 const dbToWorker = w => ({id:w.id,name:w.name,type:w.type,region:w.region,district:w.district,rating:w.rating,jobs:w.jobs,active:w.active});
 const dbToBooking = b => ({id:b.id,workerId:b.worker_id,date:b.date,hour:b.hour,refType:b.ref_type,refId:b.ref_id});
+
+// ── 案件異動紀錄：附加一筆 {ts,by,action} 到物件的 history 陣列 ──
+const pushHist = (obj,by,action) => ({...obj, history:[...(obj.history||[]), {ts:Date.now(), by:by||'未知', action}]});
+
+// ── 操作者姓名背景浮水印（責任歸屬 / 防截圖）──
+function Watermark({text}){
+  if(!text) return null;
+  return (
+    <div aria-hidden="true" style={{position:'fixed',inset:0,zIndex:0,pointerEvents:'none',overflow:'hidden',
+      display:'flex',flexWrap:'wrap',alignContent:'flex-start',transform:'rotate(-24deg) scale(1.6)',transformOrigin:'center',opacity:.05}}>
+      {Array.from({length:160}).map((_,i)=>(
+        <div key={i} style={{flex:'0 0 25%',padding:'34px 18px',fontSize:20,fontWeight:800,color:'#0F2744',whiteSpace:'nowrap',textAlign:'center'}}>{text}</div>
+      ))}
+    </div>
+  );
+}
 
 const EMPTY_DB = {customers:[],repairs:{},complaints:{},installs:{},conversations:[],workers:[],bookings:[],wfCounter:0,version:0};
 
@@ -613,7 +629,7 @@ const normCharges = rows => rows.filter(r=>r.item&&r.item.trim()).map(r=>({item:
 
 // ─── CRM Page ───
 function CRMPage(){
-  const {db,updateDB,toast,newIds,crmTarget,setCrmTarget,setPage} = useContext(Ctx);
+  const {db,updateDB,toast,newIds,crmTarget,setCrmTarget,setPage,currentUser} = useContext(Ctx);
   const [q,setQ] = useState('');
   const [res,setRes] = useState(null);
   const [sel,setSel] = useState(null);
@@ -717,7 +733,7 @@ function CRMPage(){
     const ts=today()+' '+now();
     const newCt={
       id:cid, wfId:c.wfId, name:c.name, phone:c.phone,
-      date:today(), createdAt:ts, createdBy:'CRM 客服',
+      date:today(), createdAt:ts, createdBy:currentUser?.name||'CRM 客服',
       callChannel:ctForm.callChannel, department:ctForm.department,
       cat1:ctForm.cat1, cat2:ctForm.cat2, cat3:ctForm.cat3,
       process:ctForm.process,
@@ -742,7 +758,7 @@ function CRMPage(){
       if(!ct) return prev;
       const updated={...ct,
         status: ct.status==='pending'?'following':ct.status,
-        timeline:[...(ct.timeline||[]),{ts,note:note.trim()}],
+        timeline:[...(ct.timeline||[]),{ts,by:currentUser?.name,note:note.trim()}],
       };
       return {...prev,complaints:{...(prev.complaints||{}),[ctId]:updated}};
     });
@@ -758,7 +774,7 @@ function CRMPage(){
       if(!ct) return prev;
       return {...prev,complaints:{...(prev.complaints||{}),[ctId]:{
         ...ct,status:'closed',closedDate:today(),
-        timeline:[...(ct.timeline||[]),{ts,note:'結案'}],
+        timeline:[...(ct.timeline||[]),{ts,by:currentUser?.name,note:'結案'}],
       }}};
     });
     toast('✅ 客訴已結案','','ok');
@@ -813,7 +829,8 @@ function CRMPage(){
   const repairs = getRepairs(cur);
 
   return(
-    <div className="crm-layer2">
+    <div className="crm-layer2" style={{position:'relative',zIndex:1}}>
+      <Watermark text={currentUser?.name}/>
       <button className="crm-back" onClick={()=>{setSel(null);setPage('home');}}>← 返回首頁</button>
       
       <div className="card">
@@ -1173,7 +1190,7 @@ function CRMPage(){
 
 // ─── Repair Admin Page ───
 function RepairPage(){
-  const {db,updateDB,toast} = useContext(Ctx);
+  const {db,updateDB,toast,currentUser} = useContext(Ctx);
   const [tab,setTab] = useState('all');
   const [disp,setDisp] = useState(null);
   const [region,setRegion] = useState('central');
@@ -1219,10 +1236,10 @@ function RepairPage(){
       text:`🚗 派工通知\n\n師傅：${w?.name}\n預約：${slotTxt}\n師傅出發前將再次通知 📱`,time:now()};
     updateDB(prev=>{
       const cur=prev.repairs[disp.id];
-      const nr={...prev.repairs,[disp.id]:{...cur,status:'dispatched',workerId:sw,scheduledDate:slotTxt,
+      const nr={...prev.repairs,[disp.id]:pushHist({...cur,status:'dispatched',workerId:sw,scheduledDate:slotTxt,
         schedDate:sd,schedStart:start,schedSpan:1,arrivalPushed:true,charges,chargeTotal:ctotal,
         slaLevel:hiRisk?'high':cur.slaLevel,
-        note:[cur.note,hiRisk?'⚠️高風險維修':'',hardJob?'困難施工':''].filter(Boolean).join(' / ')}};
+        note:[cur.note,hiRisk?'⚠️高風險維修':'',hardJob?'困難施工':''].filter(Boolean).join(' / ')},currentUser?.name,`派工：${w?.name}｜${slotTxt}`)};
       const nc=(prev.conversations||[]).map(c=>(uid&&c.id===uid)
         ?{...c,msgs:[...(c.msgs||[]),pushMsg],lastMsg:'師傅通知已送出',lastTime:now()}:c);
       return {...prev,repairs:nr,conversations:nc};
@@ -1233,7 +1250,7 @@ function RepairPage(){
   };
 
   const markDone=rid=>{
-    updateDB(prev=>({...prev,repairs:{...prev.repairs,[rid]:{...prev.repairs[rid],status:'done'}}}));
+    updateDB(prev=>({...prev,repairs:{...prev.repairs,[rid]:pushHist({...prev.repairs[rid],status:'done'},currentUser?.name,'結案')}}));
     toast('✅ 結案','案件已完成結案','ok');
   };
 
@@ -1365,12 +1382,12 @@ function RepairPage(){
             const ccu=(db.customers||[]).find(c=>c.wfId===closing.wfId);
             const cuid=ccu?.lineUid;
             updateDB(prev=>({...prev,
-              repairs:{...prev.repairs,[closing.id]:{...prev.repairs[closing.id],
+              repairs:{...prev.repairs,[closing.id]:pushHist({...prev.repairs[closing.id],
                 status:'done',photos:d.photos,signature:d.signature,
                 charges:d.charges,chargeTotal:d.total,workNote:d.note,
                 warrantyJudgment:d.warrantyJudgment,excludeReason:d.excludeReason,
                 auditNote:d.auditNote||'',receiptNo:d.receiptNo,
-                completedDate:today()}},
+                completedDate:today()},currentUser?.name,`完工結案｜簽收單號 ${d.receiptNo}`)},
               // 以對話 id === 客戶 lineUid 寫入結案通知
               conversations:(prev.conversations||[]).map(c=>(cuid&&c.id===cuid)
                 ?{...c,msgs:[...(c.msgs||[]),closeMsg],lastMsg:'維修完成結案',lastTime:now()}:c)
@@ -1387,7 +1404,7 @@ function RepairPage(){
 
 // ─── 安裝工單 Page ───
 function InstallPage(){
-  const {db,updateDB,toast}=useContext(Ctx);
+  const {db,updateDB,toast,currentUser}=useContext(Ctx);
   const [creating,setCreating]=useState(false);
   const [verifying,setVerifying]=useState(null);
   const [f,setF]=useState({name:'',phone:'',address:'',channel:'lock_shop',productId:'L376',serialNo:'',locksmithId:'S1'});
@@ -1419,14 +1436,18 @@ function InstallPage(){
           installDate:null,warrantyMonths:null,warrantyEnd:null,tags:['待安裝'],repairIds:[],complaintIds:[]}];
       }
       return {...prev,customers,
-        installs:{...prev.installs,[id]:{id,...f,wfId,status:'pending',createdDate:today(),createdTs:Date.now(),arrivalPushed:false}}};
+        installs:{...prev.installs,[id]:pushHist({id,...f,wfId,status:'pending',createdDate:today(),createdTs:Date.now(),arrivalPushed:false},currentUser?.name,'建立安裝工單')}};
     });
     toast('📋 安裝工單已建立',newWf?`${f.name}｜已建立客編 ${newWf}`:`${f.name}｜歸入既有客編`,'ok');
     setCreating(false);
     setF({name:'',phone:'',address:'',channel:'lock_shop',productId:'L376',serialNo:'',locksmithId:'S1'});
   };
-  const setStatus=(id,patch,msg)=>{
-    updateDB(prev=>({...prev,installs:{...prev.installs,[id]:{...prev.installs[id],...patch}}}));
+  const setStatus=(id,patch,msg,action)=>{
+    updateDB(prev=>{
+      let next={...prev.installs[id],...patch};
+      if(action) next=pushHist(next,currentUser?.name,action);
+      return {...prev,installs:{...prev.installs,[id]:next}};
+    });
     if(msg)toast(msg.t,msg.b,msg.type||'ok');
   };
   const lineUidByPhone=(phone)=>(db.customers||[]).find(x=>x.phone===phone && x.lineUid)?.lineUid;
@@ -1434,11 +1455,11 @@ function InstallPage(){
     const uid=lineUidByPhone(o.phone);
     setStatus(o.id,{status:'arrived',arrivalPushed:!!uid},
       uid?{t:'📱 已推播',b:'「師傅已抵達」通知已送達住戶 LINE'}
-         :{t:'📍 已標記到場',b:'客戶尚未綁定 LINE，未發送推播',type:'warn'});
+         :{t:'📍 已標記到場',b:'客戶尚未綁定 LINE，未發送推播',type:'warn'},'標記到場');
     if(uid) pushLineTo(uid, `🚪 安裝通知\n\n您預約的安裝師傅已抵達現場，即將開始安裝。`);
   };
-  const installed=o=>setStatus(o.id,{status:'installed'},{t:'🔧 施工完成',b:'請進行完工驗收'});
-  const fail=o=>setStatus(o.id,{status:'failed'},{t:'❌ 無法安裝',b:'已回報客服（退款 / 換型號）',type:'err'});
+  const installed=o=>setStatus(o.id,{status:'installed'},{t:'🔧 施工完成',b:'請進行完工驗收'},'施工完成（待驗收）');
+  const fail=o=>setStatus(o.id,{status:'failed'},{t:'❌ 無法安裝',b:'已回報客服（退款 / 換型號）',type:'err'},'標記無法安裝');
 
   const openSchedule=(o)=>{ setSched(o); setRegion('central'); setSw(''); setSd(todayISO()); setStart(null); };
   const doSchedule=async()=>{
@@ -1449,7 +1470,7 @@ function InstallPage(){
     const ok=await bookSlots(sw,sd,start,2,'install',sched.id);
     if(!ok){ toast('時段衝突','該師傅此 2 小時已被佔用，請改時段','err'); return; }
     const slotTxt=`${sd} ${String(start).padStart(2,'0')}:00-${String(start+2).padStart(2,'0')}:00`;
-    setStatus(sched.id,{workerId:sw,schedDate:sd,schedStart:start,schedSpan:2},{t:'📅 已排程',b:`${w?.name}｜${slotTxt}`});
+    setStatus(sched.id,{workerId:sw,schedDate:sd,schedStart:start,schedSpan:2},{t:'📅 已排程',b:`${w?.name}｜${slotTxt}`},`排程：${w?.name}｜${slotTxt}`);
     const uid=lineUidByPhone(sched.phone);
     if(uid) pushLineTo(uid, `📅 安裝預約已排定\n\n師傅：${w?.name}\n時間：${slotTxt}\n當日出發前將再通知您 📱`);
     setSched(null);
@@ -1474,7 +1495,7 @@ function InstallPage(){
         customers=[...customers,{wfId,name:o.name,phone:o.phone,address:o.address,channel:o.channel,productId:o.productId,serialNo:o.serialNo,regType:'auto',regDate:today(),installDate:today(),warrantyMonths:months,warrantyEnd,tags:['保固中','新客'],repairIds:[],complaintIds:[]}];
       }
       return {...prev,
-        installs:{...prev.installs,[o.id]:{...prev.installs[o.id],status:'done',photos:d.photos,signature:d.signature,verify:d.verify,taught:d.taught,workNote:d.note,completedDate:today(),wfId,warrantyEnd}},
+        installs:{...prev.installs,[o.id]:pushHist({...prev.installs[o.id],status:'done',photos:d.photos,signature:d.signature,verify:d.verify,taught:d.taught,workNote:d.note,completedDate:today(),wfId,warrantyEnd},currentUser?.name,`完工驗收｜保固至 ${warrantyEnd}`)},
         customers};
     });
     const uid=lineUidByPhone(o.phone);
@@ -1568,7 +1589,7 @@ function InstallPage(){
 
 // ─── 客訴單列表 Page ───
 function ComplaintPage(){
-  const {db,updateDB,toast,currentRole} = useContext(Ctx);
+  const {db,updateDB,toast,currentRole,currentUser} = useContext(Ctx);
   const [tab,setTab] = useState('all');
   const [expandedId,setExpandedId] = useState(null);
   const [followText,setFollowText] = useState('');
@@ -1590,7 +1611,7 @@ function ComplaintPage(){
       if(!ct) return prev;
       const updated={...ct,
         status: ct.status==='pending'?'following':ct.status,
-        timeline:[...(ct.timeline||[]),{ts,note:note.trim()}],
+        timeline:[...(ct.timeline||[]),{ts,by:currentUser?.name,note:note.trim()}],
       };
       return {...prev,complaints:{...(prev.complaints||{}),[ctId]:updated}};
     });
@@ -1605,7 +1626,7 @@ function ComplaintPage(){
       if(!ct) return prev;
       return {...prev,complaints:{...(prev.complaints||{}),[ctId]:{
         ...ct,status:'closed',closedDate:today(),
-        timeline:[...(ct.timeline||[]),{ts,note:'結案'}],
+        timeline:[...(ct.timeline||[]),{ts,by:currentUser?.name,note:'結案'}],
       }}};
     });
     toast('✅ 客訴已結案','','ok');
@@ -2088,6 +2109,43 @@ function HomePage(){
   );
 }
 
+// ─── 登入畫面 ───
+function LoginScreen({onLogin}){
+  const [acc,setAcc]=useState('');
+  const [pin,setPin]=useState('');
+  const [err,setErr]=useState('');
+  const [busy,setBusy]=useState(false);
+  const go=async()=>{
+    if(!acc.trim()||!pin.trim()){setErr('請輸入帳號與密碼');return;}
+    setBusy(true);setErr('');
+    const {data}=await sb.from('crm_users').select('*').eq('account',acc.trim()).eq('pin',pin.trim()).eq('active',true).maybeSingle();
+    setBusy(false);
+    if(!data){setErr('帳號或密碼錯誤');return;}
+    onLogin({id:data.id,name:data.name,role:data.role});
+  };
+  return(
+    <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'#0F2744'}}>
+      <div style={{background:'#fff',borderRadius:14,padding:'34px 30px',width:330,boxShadow:'0 12px 40px rgba(0,0,0,.3)'}}>
+        <div style={{textAlign:'center',marginBottom:22}}>
+          <div style={{fontSize:22,fontWeight:800,color:'#0F2744'}}>🔒 WAFERLOCK CRM</div>
+          <div style={{fontSize:12.5,color:'#64748B',marginTop:4}}>請輸入帳號與密碼登入</div>
+        </div>
+        <label style={{fontSize:11.5,fontWeight:700,color:'#475569'}}>帳號</label>
+        <input value={acc} onChange={e=>setAcc(e.target.value)} onKeyDown={e=>e.key==='Enter'&&go()} placeholder="例：admin"
+          style={{width:'100%',border:'1px solid #E2E8F0',borderRadius:8,padding:'9px 12px',fontSize:13,outline:'none',margin:'4px 0 12px',boxSizing:'border-box'}}/>
+        <label style={{fontSize:11.5,fontWeight:700,color:'#475569'}}>密碼</label>
+        <input type="password" value={pin} onChange={e=>setPin(e.target.value)} onKeyDown={e=>e.key==='Enter'&&go()} placeholder="••••"
+          style={{width:'100%',border:'1px solid #E2E8F0',borderRadius:8,padding:'9px 12px',fontSize:13,outline:'none',margin:'4px 0 6px',boxSizing:'border-box'}}/>
+        {err&&<div style={{color:'#EF4444',fontSize:12,margin:'6px 0'}}>{err}</div>}
+        <button onClick={go} disabled={busy}
+          style={{width:'100%',marginTop:14,background:'#38BDF8',color:'#0F2744',border:'none',borderRadius:8,padding:'11px',fontSize:14,fontWeight:800,cursor:'pointer',opacity:busy?.6:1}}>
+          {busy?'登入中…':'登入'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── 派工處理中心（合併 安裝/報修/客訴）───
 function DispatchCenter(){
   const {db,currentRole}=useContext(Ctx);
@@ -2122,7 +2180,12 @@ function DispatchCenter(){
 function App(){
   const [page,setPage] = useState('home');
   const [crmTarget,setCrmTarget] = useState(null); // 首頁搜尋→跳 CRM 指定客戶 wfId
-  const [currentRole,setCurrentRole] = useState('管理員(全知)');
+  const [currentUser,setCurrentUser] = useState(()=>{try{return JSON.parse(localStorage.getItem('wl_crm_user'))||null;}catch(e){return null;}});
+  const [adminView,setAdminView] = useState('管理員(全知)'); // admin 切換視角
+  const isAdmin = currentUser?.role==='admin';
+  const currentRole = isAdmin ? adminView : (currentUser?.role||'管理員(全知)');
+  const doLogin=(u)=>{ setCurrentUser(u); localStorage.setItem('wl_crm_user',JSON.stringify(u)); };
+  const doLogout=()=>{ localStorage.removeItem('wl_crm_user'); setCurrentUser(null); };
   const [db,setDB] = useState(EMPTY_DB);
   const [loading,setLoading] = useState(true);
   const [toasts,setToasts] = useState([]);
@@ -2198,6 +2261,8 @@ function App(){
     </div>
   );
 
+  if(!currentUser) return <LoginScreen onLogin={doLogin}/>;
+
   const all = Object.values(db.repairs||{});
   const pendingCnt = all.filter(r=>r.status==='pending').length;
   const urgentCnt = all.filter(r=>r.urgency==='urgent'&&r.status!=='done').length;
@@ -2209,7 +2274,7 @@ function App(){
   }).length;
 
   return(
-    <Ctx.Provider value={{db,updateDB,toast,newIds,currentRole,setPage,crmTarget,setCrmTarget}}>
+    <Ctx.Provider value={{db,updateDB,toast,newIds,currentRole,currentUser,setPage,crmTarget,setCrmTarget}}>
       <nav className="nav">
         <div className="nav-logo">🔒 WAFERLOCK <span>CRM</span></div>
         <button className={`nbtn ${page==='home'||page==='crm'?'on':''}`} onClick={()=>setPage('home')}>🏠 首頁 / 客戶查詢</button>
@@ -2219,10 +2284,14 @@ function App(){
         </button>
         <button className={`nbtn ${page==='schedule'?'on':''}`} onClick={()=>setPage('schedule')}>📅 工務時刻表</button>
         <div className="sync-area">
-          <select value={currentRole} onChange={e=>setCurrentRole(e.target.value)} style={{fontSize:11,padding:'2px 4px',borderRadius:4,marginRight:10}}>
-            <option value="管理員(全知)">👑 管理員(全知)</option>
-            {COMPLAINT_DEPARTMENTS.map(d=><option key={d} value={d}>🏢 {d}</option>)}
-          </select>
+          {isAdmin
+            ? <select value={adminView} onChange={e=>setAdminView(e.target.value)} style={{fontSize:11,padding:'2px 4px',borderRadius:4,marginRight:10}}>
+                <option value="管理員(全知)">👑 管理員(全知)</option>
+                {COMPLAINT_DEPARTMENTS.map(d=><option key={d} value={d}>🏢 {d}</option>)}
+              </select>
+            : <span style={{fontSize:11,marginRight:10}}>🏢 {currentRole}</span>}
+          <span style={{fontSize:11,fontWeight:700,marginRight:8}}>👤 {currentUser.name}</span>
+          <button onClick={doLogout} style={{padding:'3px 8px',background:'rgba(255,255,255,.12)',border:'1px solid rgba(255,255,255,.25)',borderRadius:4,color:'#fff',fontSize:10,cursor:'pointer',marginRight:10}}>登出</button>
           <div className={`sdot ${synced?'live':'off'}`}/>
           <span>{synced?'即時同步中':'離線模式'}</span>
           <span style={{fontSize:9,marginLeft:2}}>v{db.version||0}</span>
