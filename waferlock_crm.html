@@ -2088,6 +2088,37 @@ function HomePage(){
   );
 }
 
+// ─── 派工處理中心（合併 安裝/報修/客訴）───
+function DispatchCenter(){
+  const {db,currentRole}=useContext(Ctx);
+  const [sub,setSub]=useState('repair');
+  const installPending=Object.values(db.installs||{}).filter(o=>o.status!=='done'&&o.status!=='failed').length;
+  const repairPending=Object.values(db.repairs||{}).filter(r=>r.status==='pending').length;
+  const complaintPending=Object.values(db.complaints||{}).filter(c=>{
+    if(c.status==='closed')return false;
+    if(currentRole!=='管理員(全知)'&&c.department!==currentRole)return false;
+    return true;
+  }).length;
+  const tabs=[['repair','🔧 報修處理',repairPending,'var(--warn)'],['install','🛠️ 安裝工單',installPending,'var(--accent)'],['complaint','📞 客訴處理',complaintPending,'var(--purple)']];
+  return(
+    <div>
+      <div style={{display:'flex',gap:6,padding:'10px 18px',background:'#fff',borderBottom:'1px solid var(--g200)',position:'sticky',top:0,zIndex:5}}>
+        {tabs.map(([k,l,n,col])=>(
+          <button key={k} onClick={()=>setSub(k)}
+            style={{padding:'7px 16px',borderRadius:7,border:'none',fontSize:13,fontWeight:700,cursor:'pointer',display:'flex',alignItems:'center',gap:6,
+              background:sub===k?'var(--brand)':'var(--g100)',color:sub===k?'#fff':'var(--g600)',transition:'all .12s'}}>
+            {l}
+            {n>0&&<span style={{background:col,color:'#fff',fontSize:10,fontWeight:800,padding:'1px 7px',borderRadius:9}}>{n}</span>}
+          </button>
+        ))}
+      </div>
+      {sub==='repair'&&<RepairPage/>}
+      {sub==='install'&&<InstallPage/>}
+      {sub==='complaint'&&<ComplaintPage/>}
+    </div>
+  );
+}
+
 function App(){
   const [page,setPage] = useState('home');
   const [crmTarget,setCrmTarget] = useState(null); // 首頁搜尋→跳 CRM 指定客戶 wfId
@@ -2182,19 +2213,11 @@ function App(){
       <nav className="nav">
         <div className="nav-logo">🔒 WAFERLOCK <span>CRM</span></div>
         <button className={`nbtn ${page==='home'||page==='crm'?'on':''}`} onClick={()=>setPage('home')}>🏠 首頁 / 客戶查詢</button>
-        <button className={`nbtn ${page==='install'?'on':''}`} onClick={()=>setPage('install')}>
-          🛠️ 安裝工單
-          {installPending>0&&<span className="nbadge" style={{background:'var(--accent)',color:'var(--brand)'}}>{installPending}</span>}
-        </button>
-        <button className={`nbtn ${page==='repair'?'on':''}`} onClick={()=>setPage('repair')}>
-          🔧 報修後台
-          {pendingCnt>0&&<span className="nbadge" style={{background:urgentCnt>0?'var(--err)':'var(--warn)'}}>{pendingCnt}</span>}
+        <button className={`nbtn ${page==='dispatch'?'on':''}`} onClick={()=>setPage('dispatch')}>
+          🛠️ 派工處理
+          {(installPending+pendingCnt+complaintPending)>0&&<span className="nbadge" style={{background:urgentCnt>0?'var(--err)':'var(--accent)',color:urgentCnt>0?'#fff':'var(--brand)'}}>{installPending+pendingCnt+complaintPending}</span>}
         </button>
         <button className={`nbtn ${page==='schedule'?'on':''}`} onClick={()=>setPage('schedule')}>📅 工務時刻表</button>
-        <button className={`nbtn ${page==='complaint'?'on':''}`} onClick={()=>setPage('complaint')}>
-          📞 案件收件匣
-          {complaintPending>0&&<span className="nbadge" style={{background:'var(--purple)',color:'#fff'}}>{complaintPending}</span>}
-        </button>
         <div className="sync-area">
           <select value={currentRole} onChange={e=>setCurrentRole(e.target.value)} style={{fontSize:11,padding:'2px 4px',borderRadius:4,marginRight:10}}>
             <option value="管理員(全知)">👑 管理員(全知)</option>
@@ -2227,10 +2250,8 @@ function App(){
       <div className="page">
         {page==='home'&&<HomePage/>}
         {page==='crm'&&<CRMPage/>}
-        {page==='install'&&<InstallPage/>}
-        {page==='repair'&&<RepairPage/>}
+        {page==='dispatch'&&<DispatchCenter/>}
         {page==='schedule'&&<SchedulePage/>}
-        {page==='complaint'&&<ComplaintPage/>}
       </div>
       <Toasts items={toasts}/>
     </Ctx.Provider>
