@@ -1747,8 +1747,249 @@ function SchedulePage(){
   );
 }
 
+const CASE_STATUS={
+  pending:  {label:'待處理',bg:'#FEF3C7',fg:'#B45309'},
+  dispatched:{label:'已派工',bg:'#DBEAFE',fg:'#1D4ED8'},
+  arrived:  {label:'已到場',bg:'#EDE9FE',fg:'#6D28D9'},
+  installed:{label:'待驗收',bg:'#CFFAFE',fg:'#0E7490'},
+  done:     {label:'已完成',bg:'#D1FAE5',fg:'#065F46'},
+  failed:   {label:'失敗',  bg:'#FEE2E2',fg:'#991B1B'},
+  following:{label:'追蹤中',bg:'#DBEAFE',fg:'#1D4ED8'},
+  closed:   {label:'已結案',bg:'#D1FAE5',fg:'#065F46'},
+};
+const maskName=name=>{
+  if(!name)return'—';
+  if(name.length<=2)return name[0]+'*';
+  return name[0]+'*'.repeat(name.length-2)+name[name.length-1];
+};
+const maskPhone=phone=>{
+  if(!phone)return'—';
+  if(phone.length<7)return phone;
+  return phone.slice(0,4)+'***'+phone.slice(-3);
+};
+
+function CaseDetailPanel({c,onClose}){
+  const {db}=useContext(Ctx);
+  const customers=db.customers||[];
+  const repairs=db.repairs||{};
+  const installs=db.installs||{};
+  const complaints=db.complaints||{};
+  const cust=customers.find(x=>x.wfId===c.wfId)||(c.phone?customers.find(x=>x.phone===c.phone):null);
+  const custRepairs=cust?Object.values(repairs).filter(r=>r.wfId===cust.wfId||r.phone===cust.phone):(c._type==='repair'?[c]:[]);
+  const custInstalls=cust?Object.values(installs).filter(o=>o.wfId===cust.wfId||o.phone===cust.phone):(c._type==='install'?[c]:[]);
+  const custComplaints=cust?Object.values(complaints).filter(ct=>ct.wfId===cust.wfId||ct.phone===cust.phone):[];
+  const p=cust?pctW(cust.installDate,cust.warrantyMonths||36):0;
+  const prod=cust?PRODUCTS[cust.productId]:null;
+  const timeline=[
+    ...custInstalls.map(o=>({...o,_k:'i',_date:o.createdDate||'',_label:'安裝件'})),
+    ...custRepairs.map(r=>({...r,_k:'r',_date:r.date||'',_label:'維修件'})),
+    ...custComplaints.map(ct=>({...ct,_k:'c',_date:ct.date||'',_label:'客訴件'})),
+  ].sort((a,b)=>b._date.localeCompare(a._date));
+  const ST=CASE_STATUS;
+  return(
+    <div style={{width:360,background:'#fff',borderLeft:'1px solid #E2E8F0',overflowY:'auto',flexShrink:0,display:'flex',flexDirection:'column'}}>
+      <div style={{padding:'12px 16px',borderBottom:'1px solid #E2E8F0',display:'flex',alignItems:'center',justifyContent:'space-between',background:'#0F2744'}}>
+        <div><div style={{fontSize:10.5,color:'rgba(255,255,255,.45)',marginBottom:2}}>案件詳情</div><div style={{fontSize:13,fontWeight:700,color:'#fff'}}>{c.id}</div></div>
+        <button onClick={onClose} style={{background:'rgba(255,255,255,.12)',border:'none',borderRadius:6,padding:'5px 11px',cursor:'pointer',fontSize:14,color:'#fff'}}>✕</button>
+      </div>
+      <div style={{padding:'13px 16px',background:'#F8FAFC',borderBottom:'1px solid #E2E8F0'}}>
+        <div style={{display:'flex',gap:6,marginBottom:8,flexWrap:'wrap'}}>
+          <span style={{background:c._type==='install'?'#EDE9FE':c._type==='complaint'?'#FEF3C7':'#E0F2FE',color:c._type==='install'?'#5B21B6':c._type==='complaint'?'#B45309':'#0369A1',fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:9}}>
+            {c._type==='install'?'安裝件':c._type==='complaint'?'客訴件':'維修件'}
+          </span>
+          {ST[c.status]&&<span style={{background:ST[c.status].bg,color:ST[c.status].fg,fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:9}}>{ST[c.status].label}</span>}
+          {c.urgency==='urgent'&&<span style={{background:'#FEE2E2',color:'#991B1B',fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:9}}>🚨 緊急</span>}
+        </div>
+        {c._type==='repair'&&<div style={{fontSize:12,color:'#334155'}}><b>{c.type}</b> — {c.issue}</div>}
+        {c._type==='install'&&<div style={{fontSize:12,color:'#334155'}}>安裝 {PRODUCTS[c.productId]?.name||c.productId||'門鎖'}</div>}
+        {c._type==='complaint'&&<div style={{fontSize:12,color:'#334155'}}>{c.cat1}{c.cat2?` / ${c.cat2}`:''}</div>}
+        <div style={{fontSize:11,color:'#94A3B8',marginTop:4}}>📍 {c.address||c.building||c.district||'—'}</div>
+        <div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>
+          📅 {c.date||c.createdDate||'—'}
+          {c.schedDate&&<span style={{marginLeft:8}}>🗓️ 約工 {c.schedDate}{c.schedStart!=null?` ${String(c.schedStart).padStart(2,'0')}:00`:''}</span>}
+        </div>
+      </div>
+      {cust?(
+        <div style={{padding:'13px 16px',borderBottom:'1px solid #E2E8F0'}}>
+          <div style={{fontSize:10,color:'#64748B',fontWeight:700,marginBottom:8,letterSpacing:.5}}>客戶資料</div>
+          <div style={{fontSize:12.5,lineHeight:1.9,color:'#334155'}}>
+            <div>👤 <b>{cust.name}</b>　{cust.phone}</div>
+            <div>🏠 {cust.address||cust.district||'—'}</div>
+            {prod&&<div>📦 {prod.name}</div>}
+            {cust.serialNo&&<div style={{fontFamily:'monospace',fontSize:11,color:'#64748B'}}>SN: {cust.serialNo}</div>}
+            {cust.installDate&&<div>📅 安裝 {cust.installDate}</div>}
+          </div>
+          {cust.installDate&&(
+            <div style={{marginTop:10}}>
+              <div style={{display:'flex',justifyContent:'space-between',fontSize:11,marginBottom:3}}>
+                <span style={{color:'#64748B'}}>保固進度</span>
+                <span style={{fontWeight:700,color:p>50?'#10B981':p>20?'#F59E0B':'#EF4444'}}>{p}% 剩餘</span>
+              </div>
+              <div style={{background:'#E2E8F0',borderRadius:9,height:6}}>
+                <div style={{background:p>50?'#10B981':p>20?'#F59E0B':'#EF4444',width:p+'%',height:'100%',borderRadius:9}}/>
+              </div>
+              <div style={{fontSize:10,color:'#94A3B8',marginTop:3}}>保固至 {cust.warrantyEnd||'—'}</div>
+            </div>
+          )}
+        </div>
+      ):(
+        <div style={{padding:'13px 16px',borderBottom:'1px solid #E2E8F0'}}>
+          <div style={{fontSize:10,color:'#94A3B8',marginBottom:4}}>尚無保固登錄資料</div>
+          <div style={{fontSize:12.5,color:'#334155'}}><b>{c.name}</b>　{c.phone}</div>
+        </div>
+      )}
+      <div style={{padding:'13px 16px',flex:1}}>
+        <div style={{fontSize:10,color:'#64748B',fontWeight:700,marginBottom:12,letterSpacing:.5}}>所有歷程（{timeline.length} 件）</div>
+        {timeline.length===0?<div style={{color:'#94A3B8',fontSize:12}}>無歷程紀錄</div>:timeline.map((item,i)=>{
+          const col=item._k==='i'?'#7C3AED':item._k==='c'?'#F59E0B':'#0EA5E9';
+          const st=ST[item.status]||{};
+          return(
+            <div key={item.id+'-'+i} style={{borderLeft:`3px solid ${col}`,paddingLeft:12,marginBottom:14,position:'relative'}}>
+              <div style={{position:'absolute',left:-6,top:3,width:9,height:9,borderRadius:'50%',background:col}}/>
+              <div style={{fontSize:11,fontWeight:700,color:col,marginBottom:2}}>{item._label} {item.id}</div>
+              <div style={{fontSize:11,color:'#475569'}}>
+                {item._date}
+                {item._k==='r'&&item.type&&<span style={{marginLeft:6}}>{item.type}</span>}
+                {item._k==='r'&&item.issue&&<span style={{marginLeft:4,color:'#64748B'}}>— {item.issue.slice(0,20)}{item.issue.length>20?'…':''}</span>}
+                {item._k==='c'&&item.cat1&&<span style={{marginLeft:6,color:'#64748B'}}>{item.cat1}</span>}
+              </div>
+              {st.label&&<span style={{background:st.bg,color:st.fg,fontSize:9.5,fontWeight:700,padding:'1px 6px',borderRadius:8,marginTop:2,display:'inline-block'}}>{st.label}</span>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function HomePage(){
+  const {db}=useContext(Ctx);
+  const [search,setSearch]=useState('');
+  const [typeFilter,setTypeFilter]=useState('all');
+  const [dept,setDept]=useState('all');
+  const [selected,setSelected]=useState(null);
+  const installs=Object.values(db.installs||{});
+  const repairs=Object.values(db.repairs||{});
+  const complaints=Object.values(db.complaints||{});
+  const DONE_STATUS=['done','closed','failed'];
+  const isOpen=c=>!DONE_STATUS.includes(c.status);
+  const allCases=[
+    ...installs.filter(isOpen).map(o=>({...o,_type:'install',_date:o.createdTs||0})),
+    ...repairs.filter(isOpen).map(r=>({...r,_type:'repair',_date:new Date(r.date||0).getTime()||0})),
+    ...complaints.filter(isOpen).map(ct=>({...ct,_type:'complaint',_date:new Date(ct.date||0).getTime()||0})),
+  ].sort((a,b)=>b._date-a._date);
+  const filtered=allCases.filter(c=>{
+    if(typeFilter!=='all'&&c._type!==typeFilter)return false;
+    if(dept!=='all'&&c._type==='complaint'&&c.department!==dept)return false;
+    if(search){
+      const s=search.toLowerCase();
+      return(c.name||'').includes(s)||(c.phone||'').includes(s)||
+        (c.address||'').includes(s)||(c.building||'').includes(s)||
+        (c.district||'').includes(s)||(c.id||'').toLowerCase().includes(s)||
+        (c.issue||'').includes(s)||(c.type||'').includes(s);
+    }
+    return true;
+  });
+  const typeLabelMap={install:'安裝件',repair:'維修件',complaint:'客訴件'};
+  const typeBg={install:'#EDE9FE',repair:'#E0F2FE',complaint:'#FEF3C7'};
+  const typeFg={install:'#5B21B6',repair:'#0369A1',complaint:'#B45309'};
+  const typeBar={install:'#7C3AED',repair:'#0EA5E9',complaint:'#F59E0B'};
+  const ST=CASE_STATUS;
+  const pend=allCases.filter(c=>c.status==='pending').length;
+  const urg=repairs.filter(r=>r.urgency==='urgent'&&r.status!=='done').length;
+  return(
+    <div style={{display:'flex',height:'calc(100vh - 48px)',overflow:'hidden'}}>
+      <div style={{width:'20%',minWidth:190,maxWidth:260,background:'#1E293B',display:'flex',flexDirection:'column',flexShrink:0}}>
+        <div style={{padding:'14px 12px',borderBottom:'1px solid #334155'}}>
+          <div style={{fontSize:9.5,color:'rgba(255,255,255,.35)',fontWeight:700,letterSpacing:.5,marginBottom:7}}>🔍 全域搜尋</div>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="姓名、電話、地址、案號"
+            style={{width:'100%',background:'#334155',border:'1px solid #475569',borderRadius:7,padding:'7px 10px',color:'#F1F5F9',fontSize:12,outline:'none',boxSizing:'border-box'}}/>
+        </div>
+        <div style={{padding:'8px 0',borderBottom:'1px solid #334155'}}>
+          <div style={{padding:'4px 12px',fontSize:9.5,color:'#475569',fontWeight:700,letterSpacing:1,marginBottom:2}}>案件類型</div>
+          {[['all','🗂️ 全部案件',allCases.length],['install','🛠️ 安裝件',installs.filter(isOpen).length],['repair','🔧 維修件',repairs.filter(isOpen).length],['complaint','📞 客訴件',complaints.filter(isOpen).length]].map(([v,l,cnt])=>(
+            <div key={v} onClick={()=>setTypeFilter(v)}
+              style={{padding:'9px 12px',cursor:'pointer',fontSize:12.5,display:'flex',alignItems:'center',justifyContent:'space-between',
+                fontWeight:typeFilter===v?700:400,background:typeFilter===v?'#334155':'transparent',
+                color:typeFilter===v?'#38BDF8':'#94A3B8',borderLeft:typeFilter===v?'3px solid #38BDF8':'3px solid transparent',transition:'all .12s'}}>
+              <span>{l}</span>
+              {cnt>0&&<span style={{background:typeFilter===v?'rgba(56,189,248,.2)':'rgba(255,255,255,.05)',color:typeFilter===v?'#38BDF8':'#64748B',fontSize:9.5,padding:'1px 6px',borderRadius:9,fontWeight:700}}>{cnt}</span>}
+            </div>
+          ))}
+        </div>
+        <div style={{padding:'8px 0',flex:1,overflowY:'auto'}}>
+          <div style={{padding:'4px 12px',fontSize:9.5,color:'#475569',fontWeight:700,letterSpacing:1,marginBottom:2}}>處理部門</div>
+          {['all',...COMPLAINT_DEPARTMENTS].map(d=>(
+            <div key={d} onClick={()=>setDept(d)}
+              style={{padding:'9px 12px',cursor:'pointer',fontSize:12.5,
+                background:dept===d?'#334155':'transparent',color:dept===d?'#38BDF8':'#94A3B8',
+                borderLeft:dept===d?'3px solid #38BDF8':'3px solid transparent',transition:'all .12s'}}>
+              {d==='all'?'全部部門':d}
+            </div>
+          ))}
+        </div>
+        <div style={{padding:'12px',borderTop:'1px solid #334155',fontSize:11,color:'#64748B',lineHeight:1.8}}>
+          {urg>0&&<div style={{color:'#EF4444',fontWeight:700,marginBottom:2}}>🚨 緊急 {urg} 件</div>}
+          <div>待處理 <b style={{color:'#F59E0B'}}>{pend}</b> 件</div>
+          <div>篩選結果 <b style={{color:'#38BDF8'}}>{filtered.length}</b> 件</div>
+        </div>
+      </div>
+      <div style={{flex:1,overflowY:'auto',background:'#F0F4F8',display:'flex',flexDirection:'column'}}>
+        <div style={{padding:'13px 20px',background:'#fff',borderBottom:'1px solid #E2E8F0',display:'flex',alignItems:'center',gap:12,flexShrink:0}}>
+          <h2 style={{fontSize:16,fontWeight:700,color:'#0F2744',margin:0}}>📋 客訴單列表</h2>
+          <span style={{fontSize:11.5,color:'#64748B',background:'#F1F5F9',padding:'2px 10px',borderRadius:9}}>{filtered.length} 筆</span>
+          {search&&<span style={{fontSize:11,color:'#3B82F6'}}>搜尋：「{search}」</span>}
+        </div>
+        <div style={{padding:'12px 20px',flex:1}}>
+          {filtered.length===0&&(
+            <div style={{textAlign:'center',color:'#94A3B8',padding:'80px 0',fontSize:14}}>
+              <div style={{fontSize:32,marginBottom:12}}>📭</div>
+              <div>無符合條件的案件</div>
+            </div>
+          )}
+          {filtered.map(c=>{
+            const addr=c.address||c.building||c.district||'—';
+            const s=ST[c.status]||{label:c.status||'—',bg:'#F1F5F9',fg:'#64748B'};
+            return(
+              <div key={c.id} onClick={()=>setSelected(selected?.id===c.id?null:c)}
+                style={{background:'#fff',borderRadius:10,padding:'11px 16px',cursor:'pointer',
+                  boxShadow:selected?.id===c.id?'0 0 0 2px #38BDF8':'0 1px 3px rgba(0,0,0,.06)',
+                  borderLeft:`4px solid ${typeBar[c._type]}`,
+                  display:'flex',alignItems:'center',gap:14,marginBottom:7,transition:'box-shadow .12s'}}
+                onMouseEnter={e=>{if(selected?.id!==c.id)e.currentTarget.style.boxShadow='0 3px 10px rgba(0,0,0,.1)'}}
+                onMouseLeave={e=>{if(selected?.id!==c.id)e.currentTarget.style.boxShadow='0 1px 3px rgba(0,0,0,.06)'}}>
+                <span style={{background:typeBg[c._type],color:typeFg[c._type],fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:9,whiteSpace:'nowrap',flexShrink:0}}>
+                  {typeLabelMap[c._type]}
+                </span>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:13,fontWeight:600,color:'#1E293B',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginBottom:2}}>{addr}</div>
+                  <div style={{fontSize:11.5,color:'#64748B',display:'flex',gap:12}}>
+                    <span>{maskName(c.name)}</span>
+                    <span>{maskPhone(c.phone)}</span>
+                    {c._type==='repair'&&c.type&&<span style={{color:'#94A3B8'}}>{c.type}</span>}
+                    {c._type==='complaint'&&c.cat1&&<span style={{color:'#94A3B8'}}>{c.cat1}</span>}
+                  </div>
+                </div>
+                <div style={{fontSize:10.5,color:'#94A3B8',textAlign:'right',flexShrink:0}}>
+                  <div style={{fontFamily:'monospace',fontSize:10,marginBottom:2}}>{c.id}</div>
+                  <div>{c.date||c.createdDate||'—'}</div>
+                  {c.urgency==='urgent'&&<div style={{color:'#EF4444',fontWeight:700}}>🚨</div>}
+                </div>
+                <span style={{background:s.bg,color:s.fg,fontSize:10,fontWeight:700,padding:'3px 9px',borderRadius:9,whiteSpace:'nowrap',flexShrink:0,textAlign:'center',minWidth:52}}>
+                  {s.label}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      {selected&&<CaseDetailPanel c={selected} onClose={()=>setSelected(null)}/>}
+    </div>
+  );
+}
+
 function App(){
-  const [page,setPage] = useState('crm');
+  const [page,setPage] = useState('home');
   const [currentRole,setCurrentRole] = useState('管理員(全知)');
   const [db,setDB] = useState(EMPTY_DB);
   const [loading,setLoading] = useState(true);
@@ -1839,6 +2080,7 @@ function App(){
     <Ctx.Provider value={{db,updateDB,toast,newIds,currentRole}}>
       <nav className="nav">
         <div className="nav-logo">🔒 WAFERLOCK <span>CRM</span></div>
+        <button className={`nbtn ${page==='home'?'on':''}`} onClick={()=>setPage('home')}>🏠 首頁</button>
         <button className={`nbtn ${page==='crm'?'on':''}`} onClick={()=>setPage('crm')}>👤 CRM 客戶與場域</button>
         <button className={`nbtn ${page==='install'?'on':''}`} onClick={()=>setPage('install')}>
           🛠️ 安裝工單
@@ -1883,6 +2125,7 @@ function App(){
         </button>
       </nav>
       <div className="page">
+        {page==='home'&&<HomePage/>}
         {page==='crm'&&<CRMPage/>}
         {page==='install'&&<InstallPage/>}
         {page==='repair'&&<RepairPage/>}
