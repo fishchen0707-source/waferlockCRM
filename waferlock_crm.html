@@ -1929,7 +1929,7 @@ function CaseDetailPanel({c,onClose,onOpenFull}){
 }
 
 function HomePage(){
-  const {db,setPage,setCrmTarget}=useContext(Ctx);
+  const {db,updateDB,toast,currentRole,setPage,setCrmTarget}=useContext(Ctx);
   const [search,setSearch]=useState('');
   const [typeFilter,setTypeFilter]=useState('all');
   const [dept,setDept]=useState('all');
@@ -1993,6 +1993,35 @@ function HomePage(){
   const ST=CASE_STATUS;
   const pend=allCases.filter(c=>c.status==='pending').length;
   const urg=repairs.filter(r=>r.urgency==='urgent'&&r.status!=='done').length;
+  // 未歸戶案件數（無有效客編）
+  const custWfSet=new Set((db.customers||[]).map(c=>c.wfId));
+  const isOrphan=x=>!x.wfId||!custWfSet.has(x.wfId);
+  const orphanCnt=installs.filter(isOrphan).length+repairs.filter(isOrphan).length+complaints.filter(isOrphan).length;
+  // 整理未歸戶案件：依電話歸到既有客編，無則新建客編（待整理）
+  const runBackfill=()=>{
+    let customers=[...(db.customers||[])];
+    const byPhone={}; customers.forEach(c=>{if(c.phone)byPhone[c.phone]=c.wfId;});
+    let seq=0,created=0,linked=0;
+    const ensure=(name,phone,address)=>{
+      if(!phone)return null;
+      if(byPhone[phone])return byPhone[phone];
+      const wfId='WF'+String(Date.now()).slice(-6)+String(seq++).padStart(2,'0');
+      customers.push({wfId,name:name||'(未具名)',phone,address:address||'',regType:'backfill',regDate:today(),
+        installDate:null,warrantyMonths:null,warrantyEnd:null,tags:['待整理'],repairIds:[],complaintIds:[]});
+      byPhone[phone]=wfId; created++; return wfId;
+    };
+    const fix=coll=>{const out={...coll};Object.values(out).forEach(x=>{
+      if(!x.wfId||!customers.find(c=>c.wfId===x.wfId)){
+        const wf=ensure(x.name||x.contactName,x.phone||x.contactPhone,x.building||x.address||x.district);
+        if(wf){out[x.id]={...x,wfId:wf};linked++;}
+      }});return out;};
+    const repairsN=fix(db.repairs||{});
+    const installsN=fix(db.installs||{});
+    const complaintsN=fix(db.complaints||{});
+    if(created===0&&linked===0){toast('✅ 已全部歸戶','沒有未歸戶的案件','ok');return;}
+    updateDB({...db,customers,repairs:repairsN,installs:installsN,complaints:complaintsN});
+    toast('🔗 歸戶完成',`新建 ${created} 個客編、歸戶 ${linked} 筆案件`,'ok');
+  };
   return(
     <div style={{display:'flex',height:'calc(100vh - 48px)',overflow:'hidden'}}>
       <div style={{width:'20%',minWidth:190,maxWidth:260,background:'#1E293B',display:'flex',flexDirection:'column',flexShrink:0}}>
@@ -2028,6 +2057,15 @@ function HomePage(){
             </div>
           ))}
         </div>
+        {currentRole==='管理員(全知)'&&orphanCnt>0&&(
+          <div style={{padding:'10px 12px',borderTop:'1px solid #334155'}}>
+            <button onClick={runBackfill}
+              style={{width:'100%',background:'#F59E0B',color:'#0F2744',border:'none',borderRadius:7,padding:'8px',fontSize:11.5,fontWeight:700,cursor:'pointer'}}
+              title="把沒有客編的案件依電話歸到客戶，無對應客戶則新建客編">
+              🔗 整理未歸戶案件（{orphanCnt}）
+            </button>
+          </div>
+        )}
         <div style={{padding:'12px',borderTop:'1px solid #334155',fontSize:11,color:'#64748B',lineHeight:1.8}}>
           {urg>0&&<div style={{color:'#EF4444',fontWeight:700,marginBottom:2}}>🚨 緊急 {urg} 件</div>}
           <div>待處理 <b style={{color:'#F59E0B'}}>{pend}</b> 件</div>
