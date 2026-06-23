@@ -272,6 +272,16 @@ const dbToBooking = b => ({id:b.id,workerId:b.worker_id,date:b.date,hour:b.hour,
 // ── 案件異動紀錄：附加一筆 {ts,by,action} 到物件的 history 陣列 ──
 const pushHist = (obj,by,action) => ({...obj, history:[...(obj.history||[]), {ts:Date.now(), by:by||'未知', action}]});
 
+// ── 客編唯一識別：正規化地址 + 姓名（電話非唯一，同號可能多住所）──
+const normAddr = s => String(s||'')
+  .replace(/[！-～]/g, ch => String.fromCharCode(ch.charCodeAt(0)-0xFEE0)) // 全形→半形
+  .replace(/臺/g,'台').replace(/\s+/g,'').toLowerCase();
+// 同地址且同姓名 → 同一客編；任一缺值則回傳 null（無法當唯一鍵）
+const custKey = (name,address) => {
+  const a=normAddr(address), n=String(name||'').trim();
+  return (a&&n) ? a+'|'+n : null;
+};
+
 // ── 操作者姓名背景浮水印（責任歸屬 / 防截圖）──
 function Watermark({text}){
   if(!text) return null;
@@ -1420,25 +1430,22 @@ function InstallPage(){
   const stepIdx={pending:0,arrived:1,installed:2,done:3};
 
   const createOrder=()=>{
-    if(!f.name.trim()||!f.phone.trim()){alert('請填寫客戶姓名與電話');return;}
+    if(!f.name.trim()||!f.address.trim()){alert('請填寫客戶姓名與安裝地址（地址為客編識別依據）');return;}
     const id='IW'+Date.now();
-    let newWf=null;
+    // 案件發生即發客編：以「地址+姓名」查既有客戶（電話非唯一），無則建立新客編
+    const key=custKey(f.name,f.address);
+    const exist=(db.customers||[]).find(c=>custKey(c.name,c.address)===key);
+    const wfId=exist?exist.wfId:'WF'+String(Date.now()).slice(-8);
+    const isNew=!exist;
     updateDB(prev=>{
-      // 案件發生即發客編：電話查既有客戶，無則建立新客編（保固欄位待安裝完工後補）
       let customers=prev.customers||[];
-      const exist=customers.find(c=>c.phone===f.phone.trim());
-      let wfId;
-      if(exist){ wfId=exist.wfId; }
-      else{
-        wfId='WF'+String(Date.now()).slice(-8); newWf=wfId;
-        customers=[...customers,{wfId,name:f.name.trim(),phone:f.phone.trim(),address:f.address,channel:f.channel,
-          productId:f.productId,serialNo:f.serialNo,regType:'auto',regDate:today(),
-          installDate:null,warrantyMonths:null,warrantyEnd:null,tags:['待安裝'],repairIds:[],complaintIds:[]}];
-      }
+      if(isNew) customers=[...customers,{wfId,name:f.name.trim(),phone:f.phone.trim(),address:f.address,channel:f.channel,
+        productId:f.productId,serialNo:f.serialNo,regType:'auto',regDate:today(),
+        installDate:null,warrantyMonths:null,warrantyEnd:null,tags:['待安裝'],repairIds:[],complaintIds:[]}];
       return {...prev,customers,
         installs:{...prev.installs,[id]:pushHist({id,...f,wfId,status:'pending',createdDate:today(),createdTs:Date.now(),arrivalPushed:false},currentUser?.name,'建立安裝工單')}};
     });
-    toast('📋 安裝工單已建立',newWf?`${f.name}｜已建立客編 ${newWf}`:`${f.name}｜歸入既有客編`,'ok');
+    toast('📋 安裝工單已建立',isNew?`${f.name}｜已建立客編 ${wfId}`:`${f.name}｜歸入既有客編 ${wfId}`,'ok');
     setCreating(false);
     setF({name:'',phone:'',address:'',channel:'lock_shop',productId:'L376',serialNo:'',locksmithId:'S1'});
   };
@@ -1819,7 +1826,8 @@ function CaseDetailPanel({c,onClose,onOpenFull}){
   const cust=customers.find(x=>x.wfId===c.wfId)||(c.phone?customers.find(x=>x.phone===c.phone):null);
   const keyWf=cust?cust.wfId:c.wfId;
   const keyPhone=cust?cust.phone:c.phone;
-  const match=r=>(keyWf&&r.wfId===keyWf)||(keyPhone&&r.phone===keyPhone);
+  // 聚合以客編為主（電話非唯一，避免同號不同住所混在一起）；無客編時才退回電話
+  const match = keyWf ? (r=>r.wfId===keyWf) : (r=>keyPhone&&r.phone===keyPhone);
   const custRepairs=Object.values(repairs).filter(match);
   const custInstalls=Object.values(installs).filter(match);
   const custComplaints=Object.values(complaints).filter(match);
@@ -1993,34 +2001,49 @@ function HomePage(){
   const ST=CASE_STATUS;
   const pend=allCases.filter(c=>c.status==='pending').length;
   const urg=repairs.filter(r=>r.urgency==='urgent'&&r.status!=='done').length;
-  // 未歸戶案件數（無有效客編）
-  const custWfSet=new Set((db.customers||[]).map(c=>c.wfId));
-  const isOrphan=x=>!x.wfId||!custWfSet.has(x.wfId);
-  const orphanCnt=installs.filter(isOrphan).length+repairs.filter(isOrphan).length+complaints.filter(isOrphan).length;
-  // 整理未歸戶案件：依電話歸到既有客編，無則新建客編（待整理）
+  // 需整理案件：無客編、客編不存在、或「案件地址+姓名」與其所綁客編對不上（含先前用電話誤併）
+  const custList=db.customers||[];
+  const isTempCust=c=>(c.tags||[]).includes('待整理');
+  const caseAddr=x=>x.building||x.address||x.district;
+  const custByWf={}; custList.forEach(c=>{custByWf[c.wfId]=c;});
+  const needFix=x=>{
+    if(!x.wfId||!custByWf[x.wfId])return true;
+    const ck=custKey(x.name||x.contactName,caseAddr(x));
+    const ok=custKey(custByWf[x.wfId].name,custByWf[x.wfId].address);
+    return !!(ck&&ok&&ck!==ok);
+  };
+  const orphanCnt=installs.filter(needFix).length+repairs.filter(needFix).length+complaints.filter(needFix).length;
+  // 依「地址+姓名」重新歸戶（冪等）：歸到既有同 key 客編，無則新建；最後清掉無案件引用的待整理孤兒客編
   const runBackfill=()=>{
-    let customers=[...(db.customers||[])];
-    const byPhone={}; customers.forEach(c=>{if(c.phone)byPhone[c.phone]=c.wfId;});
-    let seq=0,created=0,linked=0;
-    const ensure=(name,phone,address)=>{
-      if(!phone)return null;
-      if(byPhone[phone])return byPhone[phone];
+    let customers=[...custList];
+    const keyMap={}; customers.forEach(c=>{const k=custKey(c.name,c.address); if(k&&!keyMap[k])keyMap[k]=c.wfId;});
+    let seq=0,created=0,fixed=0;
+    const resolve=(name,address,phone)=>{
+      const k=custKey(name,address);
+      if(k&&keyMap[k])return keyMap[k];
       const wfId='WF'+String(Date.now()).slice(-6)+String(seq++).padStart(2,'0');
-      customers.push({wfId,name:name||'(未具名)',phone,address:address||'',regType:'backfill',regDate:today(),
+      customers.push({wfId,name:name||'(未具名)',phone:phone||'',address:address||'',regType:'backfill',regDate:today(),
         installDate:null,warrantyMonths:null,warrantyEnd:null,tags:['待整理'],repairIds:[],complaintIds:[]});
-      byPhone[phone]=wfId; created++; return wfId;
+      if(k)keyMap[k]=wfId; created++; return wfId;
     };
     const fix=coll=>{const out={...coll};Object.values(out).forEach(x=>{
-      if(!x.wfId||!customers.find(c=>c.wfId===x.wfId)){
-        const wf=ensure(x.name||x.contactName,x.phone||x.contactPhone,x.building||x.address||x.district);
-        if(wf){out[x.id]={...x,wfId:wf};linked++;}
+      if(needFix(x)){
+        const wf=resolve(x.name||x.contactName,caseAddr(x),x.phone||x.contactPhone);
+        if(wf!==x.wfId)fixed++;
+        out[x.id]={...x,wfId:wf};
       }});return out;};
     const repairsN=fix(db.repairs||{});
     const installsN=fix(db.installs||{});
     const complaintsN=fix(db.complaints||{});
-    if(created===0&&linked===0){toast('✅ 已全部歸戶','沒有未歸戶的案件','ok');return;}
+    if(created===0&&fixed===0){toast('✅ 已全部歸戶','沒有需要整理的案件','ok');return;}
+    // 清理無任何案件引用的待整理孤兒客編（正式客戶即使無案件也保留）
+    const used=new Set();
+    [repairsN,installsN,complaintsN].forEach(coll=>Object.values(coll).forEach(x=>x.wfId&&used.add(x.wfId)));
+    const orphanWf=customers.filter(c=>!used.has(c.wfId)&&isTempCust(c)).map(c=>c.wfId);
+    customers=customers.filter(c=>used.has(c.wfId)||!isTempCust(c));
     updateDB({...db,customers,repairs:repairsN,installs:installsN,complaints:complaintsN});
-    toast('🔗 歸戶完成',`新建 ${created} 個客編、歸戶 ${linked} 筆案件`,'ok');
+    if(orphanWf.length) sb.from('customers').delete().in('wf_id',orphanWf).then(()=>{}).catch(e=>console.error('清除孤兒客編失敗:',e));
+    toast('🔗 依地址重新歸戶完成',`新建 ${created} 個客編、調整 ${fixed} 筆案件`,'ok');
   };
   return(
     <div style={{display:'flex',height:'calc(100vh - 48px)',overflow:'hidden'}}>
@@ -2061,8 +2084,8 @@ function HomePage(){
           <div style={{padding:'10px 12px',borderTop:'1px solid #334155'}}>
             <button onClick={runBackfill}
               style={{width:'100%',background:'#F59E0B',color:'#0F2744',border:'none',borderRadius:7,padding:'8px',fontSize:11.5,fontWeight:700,cursor:'pointer'}}
-              title="把沒有客編的案件依電話歸到客戶，無對應客戶則新建客編">
-              🔗 整理未歸戶案件（{orphanCnt}）
+              title="依「地址+姓名」把案件歸到客戶，無對應則新建客編；並修正先前用電話誤併的客編">
+              🔗 依地址整理客編（{orphanCnt}）
             </button>
           </div>
         )}
