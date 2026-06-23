@@ -255,8 +255,8 @@ const pushLineTo = (to, text, sender={name:'維夫拉克客服'}) => {
 };
 
 // ── DB 欄位轉換（camelCase <-> snake_case） ──
-const custToDb = c => ({wf_id:c.wfId,name:c.name,phone:c.phone,email:c.email,address:c.address,district:c.district,area:c.area,channel:c.channel,product_id:c.productId,serial_no:c.serialNo,install_date:c.installDate,warranty_months:c.warrantyMonths,warranty_end:c.warrantyEnd,tags:c.tags||[],reg_type:c.regType,reg_date:c.regDate,line_uid:c.lineUid,fb_id:c.fbId,ig_id:c.igId,repair_ids:c.repairIds||[],complaint_ids:c.complaintIds||[],site:c.site,unit:c.unit,order_no:c.orderNo});
-const dbToCust = r => ({wfId:r.wf_id,name:r.name,phone:r.phone,email:r.email,address:r.address,district:r.district,area:r.area,channel:r.channel,productId:r.product_id,serialNo:r.serial_no,installDate:r.install_date,warrantyMonths:r.warranty_months,warrantyEnd:r.warranty_end,tags:r.tags||[],regType:r.reg_type,regDate:r.reg_date,lineUid:r.line_uid,fbId:r.fb_id,igId:r.ig_id,repairIds:r.repair_ids||[],complaintIds:r.complaint_ids||[],site:r.site,unit:r.unit,orderNo:r.order_no});
+const custToDb = c => ({wf_id:c.wfId,name:c.name,phone:c.phone,email:c.email,address:c.address,district:c.district,area:c.area,channel:c.channel,product_id:c.productId,serial_no:c.serialNo,install_date:c.installDate,warranty_months:c.warrantyMonths,warranty_end:c.warrantyEnd,tags:c.tags||[],reg_type:c.regType,reg_date:c.regDate,line_uid:c.lineUid,fb_id:c.fbId,ig_id:c.igId,repair_ids:c.repairIds||[],complaint_ids:c.complaintIds||[],site:c.site,unit:c.unit,order_no:c.orderNo,group_id:c.groupId,project_id:c.projectId});
+const dbToCust = r => ({wfId:r.wf_id,name:r.name,phone:r.phone,email:r.email,address:r.address,district:r.district,area:r.area,channel:r.channel,productId:r.product_id,serialNo:r.serial_no,installDate:r.install_date,warrantyMonths:r.warranty_months,warrantyEnd:r.warranty_end,tags:r.tags||[],regType:r.reg_type,regDate:r.reg_date,lineUid:r.line_uid,fbId:r.fb_id,igId:r.ig_id,repairIds:r.repair_ids||[],complaintIds:r.complaint_ids||[],site:r.site,unit:r.unit,orderNo:r.order_no,groupId:r.group_id,projectId:r.project_id});
 const repairToDb = r => ({id:r.id,wf_id:r.wfId,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,worker_id:r.workerId,scheduled_date:r.scheduledDate,desc:r.desc,contact_name:r.contactName,contact_phone:r.contactPhone,site:r.site,unit:r.unit,handling_unit:r.handlingUnit,note:r.note,warranty_in:r.warrantyIn,created_by:r.createdBy,created_at:r.createdAt,unread:r.unread,arrival_pushed:r.arrivalPushed,rating:r.rating,receipt_no:r.receiptNo,audit_note:r.auditNote,completed_date:r.completedDate,sched_date:r.schedDate,sched_start:r.schedStart,sched_span:r.schedSpan,charges:r.charges||[],charge_total:r.chargeTotal,payment_method:r.paymentMethod,paid:r.paid,work_note:r.workNote,warranty_judgment:r.warrantyJudgment,exclude_reason:r.excludeReason,photos:r.photos||[],signature:r.signature,sla_level:r.slaLevel,history:r.history||[]});
 const dbToRepair = r => ({id:r.id,wfId:r.wf_id,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,workerId:r.worker_id,scheduledDate:r.scheduled_date,desc:r.desc,contactName:r.contact_name,contactPhone:r.contact_phone,site:r.site,unit:r.unit,handlingUnit:r.handling_unit,note:r.note,warrantyIn:r.warranty_in,createdBy:r.created_by,createdAt:r.created_at,unread:r.unread,arrivalPushed:r.arrival_pushed,rating:r.rating,receiptNo:r.receipt_no,auditNote:r.audit_note,completedDate:r.completed_date,schedDate:r.sched_date,schedStart:r.sched_start,schedSpan:r.sched_span,charges:r.charges||[],chargeTotal:r.charge_total,paymentMethod:r.payment_method,paid:r.paid,workNote:r.work_note,warrantyJudgment:r.warranty_judgment,excludeReason:r.exclude_reason,photos:r.photos||[],signature:r.signature,slaLevel:r.sla_level,history:r.history||[]});
 const ctToDb = c => ({id:c.id,wf_id:c.wfId,name:c.name,phone:c.phone,date:c.date,created_at:c.createdAt,created_by:c.createdBy,call_channel:c.callChannel,department:c.department,cat1:c.cat1,cat2:c.cat2,cat3:c.cat3,process:c.process,status:c.status,closed_date:c.closedDate,timeline:c.timeline||[]});
@@ -268,6 +268,9 @@ const dbToConv = r => ({id:r.id,wfId:r.wf_id,name:r.name,platform:r.platform,av:
 
 const dbToWorker = w => ({id:w.id,name:w.name,type:w.type,region:w.region,district:w.district,rating:w.rating,jobs:w.jobs,active:w.active});
 const dbToBooking = b => ({id:b.id,workerId:b.worker_id,date:b.date,hour:b.hour,refType:b.ref_type,refId:b.ref_id});
+// ── MD 5：集團 → 建案 階層（唯讀參考資料，只在 UI 歸屬時引用，不在前端編輯）──
+const dbToGroup = g => ({id:g.id,name:g.name,note:g.note});
+const dbToProject = p => ({id:p.id,groupId:p.group_id,name:p.name,code:p.code,type:p.type,address:p.address,totalQty:p.total_qty,installedQty:p.installed_qty,pendingQty:p.pending_qty,packagePrice:p.package_price,slaLevel:p.sla_level});
 
 // ── 案件異動紀錄：附加一筆 {ts,by,action} 到物件的 history 陣列 ──
 const pushHist = (obj,by,action) => ({...obj, history:[...(obj.history||[]), {ts:Date.now(), by:by||'未知', action}]});
@@ -295,11 +298,11 @@ function Watermark({text}){
   );
 }
 
-const EMPTY_DB = {customers:[],repairs:{},complaints:{},installs:{},conversations:[],workers:[],bookings:[],wfCounter:0,version:0};
+const EMPTY_DB = {customers:[],repairs:{},complaints:{},installs:{},conversations:[],workers:[],bookings:[],groups:[],projects:[],wfCounter:0,version:0};
 
 async function loadFromSupabase(){
   try{
-    const [custsRes,repairsRes,ctRes,installRes,convRes,cfgRes,wkRes,bkRes] = await Promise.all([
+    const [custsRes,repairsRes,ctRes,installRes,convRes,cfgRes,wkRes,bkRes,grpRes,prjRes] = await Promise.all([
       sb.from('customers').select('*'),
       sb.from('repairs').select('*'),
       sb.from('complaints').select('*'),
@@ -308,6 +311,8 @@ async function loadFromSupabase(){
       sb.from('config').select('*'),
       sb.from('workers').select('*'),
       sb.from('bookings').select('*'),
+      sb.from('groups').select('*'),
+      sb.from('projects').select('*'),
     ]);
     const customers = (custsRes.data||[]).map(dbToCust);
     const repairs = Object.fromEntries((repairsRes.data||[]).map(r=>[r.id,dbToRepair(r)]));
@@ -316,8 +321,10 @@ async function loadFromSupabase(){
     const conversations = (convRes.data||[]).map(dbToConv);
     const workers = (wkRes.data||[]).filter(w=>w.active!==false).map(dbToWorker);
     const bookings = (bkRes.data||[]).map(dbToBooking);
+    const groups = (grpRes.data||[]).map(dbToGroup);
+    const projects = (prjRes.data||[]).map(dbToProject);
     const wfCounter = parseInt((cfgRes.data||[]).find(c=>c.key==='wf_counter')?.value||'0');
-    return {customers,repairs,complaints,installs,conversations,workers,bookings,wfCounter,version:0};
+    return {customers,repairs,complaints,installs,conversations,workers,bookings,groups,projects,wfCounter,version:0};
   }catch(e){ console.error('loadFromSupabase error:',e); return EMPTY_DB; }
 }
 
@@ -652,6 +659,8 @@ function CRMPage(){
   const [expandedCt,setExpandedCt] = useState(null); // 客訴展開
   const [followText,setFollowText] = useState('');
   const [followingCtId,setFollowingCtId] = useState(null);
+  const [projModal,setProjModal] = useState(false);
+  const [projForm,setProjForm] = useState({groupId:'',projectId:''}); // 歸屬建案
 
   const customers = db.customers||[];
   // 只有搜尋後才顯示結果清單
@@ -821,6 +830,22 @@ function CRMPage(){
     setEditModal(false);
   };
 
+  // ── MD 5：把客戶歸屬到 集團/建案（寫 groupId/projectId）──
+  const openProj=(c)=>{ setProjForm({groupId:c.groupId||'',projectId:c.projectId||''}); setProjModal(true); };
+  const saveProj=()=>{
+    const wf=sel?.wfId; if(!wf) return;
+    const g=projForm.groupId||null, pj=projForm.projectId||null;
+    updateDB(prev=>({...prev,customers:(prev.customers||[]).map(c=>{
+      if(c.wfId!==wf) return c;
+      let tags=(c.tags||[]);
+      if(pj && !tags.includes('建案客戶')) tags=[...tags,'建案客戶'];
+      return {...c, groupId:g, projectId:pj, tags};
+    })}));
+    const pjName=(db.projects||[]).find(p=>p.id===pj)?.name;
+    toast('🏢 已歸屬',pj?`已歸屬至建案「${pjName}」`:'已清除建案歸屬','ok');
+    setProjModal(false);
+  };
+
   if (!sel) {
     if(crmTarget) return null; // 跳轉中，等 effect 選定客戶
     return (
@@ -855,6 +880,7 @@ function CRMPage(){
                   </div>
                   <div style={{display:'flex',gap:5,flexShrink:0,flexWrap:'wrap'}}>
                     <button style={{padding:'5px 11px',background:'#EFF6FF',color:'var(--accent)',border:'none',borderRadius:5,fontSize:11,fontWeight:700,cursor:'pointer'}} onClick={()=>openEdit(cur)}>編輯資料</button>
+                    <button style={{padding:'5px 11px',background:'#EDE9FE',color:'#5B21B6',border:'none',borderRadius:5,fontSize:11,fontWeight:700,cursor:'pointer'}} onClick={()=>openProj(cur)}>🏢 歸屬建案</button>
                     <button style={{padding:'5px 11px',background:'#FEF3C7',color:'#92400E',border:'none',borderRadius:5,fontSize:11,fontWeight:700,cursor:'pointer'}} onClick={()=>openComplaint(cur)}>📞 新增立案</button>
                     <button style={{padding:'5px 11px',background:'#D1FAE5',color:'#065F46',border:'none',borderRadius:5,fontSize:11,fontWeight:700,cursor:'pointer'}} onClick={()=>openCase(cur)}>🔧 新增派工</button>
                   </div>
@@ -863,6 +889,12 @@ function CRMPage(){
                   <div className="iitem"><label>聯絡電話</label><span>{cur.phone}</span></div>
                   <div className="iitem"><label>電子信箱</label><span style={{fontSize:11.5}}>{cur.email||'—'}</span></div>
                   <div className="iitem" style={{gridColumn:'1/-1'}}><label>地址</label><span>{cur.address||'待填寫'}</span></div>
+                  <div className="iitem" style={{gridColumn:'1/-1'}}>
+                    <label>歸屬集團 / 建案</label>
+                    {cur.projectId
+                      ? <span>🏢 {(db.groups||[]).find(g=>g.id===cur.groupId)?.name||'—'} › {(db.projects||[]).find(p=>p.id===cur.projectId)?.name||cur.projectId}</span>
+                      : <span style={{color:'var(--g400)'}}>尚未歸屬（散客）</span>}
+                  </div>
                   <div className="iitem">
                     <label>購買通路</label>
                     {ch ? <span className={`ch-badge ${ch.type}`}>{ch.icon} {ch.label}</span> : <span>—</span>}
@@ -1194,6 +1226,41 @@ function CRMPage(){
           </div>
         </div>
       )}
+
+      {/* ── MD 5：歸屬集團 / 建案 ── */}
+      {projModal&&sel&&(()=>{
+        const groups=db.groups||[];
+        const projects=(db.projects||[]).filter(p=>!projForm.groupId||p.groupId===projForm.groupId);
+        return(
+        <div className="mo" onClick={e=>e.target===e.currentTarget&&setProjModal(false)}>
+          <div className="mob" style={{maxWidth:460}}>
+            <h3>🏢 歸屬集團 / 建案</h3>
+            <div style={{background:'var(--g50)',borderRadius:8,padding:'10px 12px',marginBottom:12,fontSize:12}}>
+              <div style={{fontWeight:700,fontSize:13}}>{sel.name}</div>
+              <div style={{color:'var(--g500)',marginTop:1}}>{sel.address||'—'}　<span style={{fontFamily:'JetBrains Mono',fontSize:10}}>{sel.wfId}</span></div>
+            </div>
+            <div className="mf"><label>集團（建商）</label>
+              <select value={projForm.groupId} onChange={e=>setProjForm({groupId:e.target.value,projectId:''})}>
+                <option value="">— 未歸屬（散客）—</option>
+                {groups.map(g=><option key={g.id} value={g.id}>{g.name}</option>)}
+              </select>
+            </div>
+            {projForm.groupId&&(
+              <div className="mf"><label>建案</label>
+                <select value={projForm.projectId} onChange={e=>setProjForm(p=>({...p,projectId:e.target.value}))}>
+                  <option value="">— 請選擇建案 —</option>
+                  {projects.map(p=><option key={p.id} value={p.id}>{p.name}（{p.address}）</option>)}
+                </select>
+              </div>
+            )}
+            <div className="mact">
+              <button className="cancel" onClick={()=>setProjModal(false)}>取消</button>
+              <button className="confirm" onClick={saveProj}>儲存歸屬</button>
+            </div>
+          </div>
+        </div>
+        );
+      })()}
     </div>
   );
 }
@@ -2273,6 +2340,122 @@ function DispatchCenter(){
   );
 }
 
+// ─── MD 5：集團 → 建案 階層瀏覽（瀏覽階層、依建案檢視客戶與案件）───
+function GroupProjectPage(){
+  const {db,setPage,setCrmTarget}=useContext(Ctx);
+  const [selGroup,setSelGroup]=useState(null);
+  const [selProject,setSelProject]=useState(null);
+  const groups=db.groups||[];
+  const projects=db.projects||[];
+  const customers=db.customers||[];
+  const TYPE_LABEL={b2b_build:'建案',b2b_op:'營運單位',b2c:'散客'};
+
+  const projOfGroup=gid=>projects.filter(p=>p.groupId===gid);
+  const custOfProject=pid=>customers.filter(c=>c.projectId===pid);
+  const custOfGroup=gid=>customers.filter(c=>c.groupId===gid);
+  const casesOfCust=c=>{
+    const reps=(c.repairIds||[]).map(id=>(db.repairs||{})[id]).filter(Boolean);
+    const cts=(c.complaintIds||[]).map(id=>(db.complaints||{})[id]).filter(Boolean);
+    return {reps,cts};
+  };
+
+  // Layer 3：建案詳情（客戶 + 案件）
+  if(selProject){
+    const pj=selProject;
+    const grp=groups.find(g=>g.id===pj.groupId);
+    const custs=custOfProject(pj.id);
+    return(
+      <div style={{padding:18}}>
+        <button className="crm-back" onClick={()=>setSelProject(null)}>← 返回 {grp?.name||'集團'} 的建案列表</button>
+        <div className="card" style={{marginTop:10}}>
+          <div style={{fontSize:18,fontWeight:800}}>🏗️ {pj.name}</div>
+          <div style={{color:'var(--g500)',fontSize:12,marginTop:3}}>{grp?.name||'—'} · {TYPE_LABEL[pj.type]||pj.type} · {pj.address}</div>
+          <div style={{display:'flex',gap:18,marginTop:10,fontSize:12}}>
+            <div><span style={{color:'var(--g400)'}}>規劃數量</span><br/><strong>{pj.totalQty||0}</strong></div>
+            <div><span style={{color:'var(--g400)'}}>已歸屬客戶</span><br/><strong>{custs.length}</strong></div>
+            <div><span style={{color:'var(--g400)'}}>SLA</span><br/><strong>{pj.slaLevel||'normal'}</strong></div>
+          </div>
+        </div>
+        <div className="sec-t" style={{marginTop:16}}>👥 已歸屬客戶與案件（{custs.length} 戶）</div>
+        {custs.length===0
+          ? <div className="empty" style={{height:120}}><div style={{fontSize:26,opacity:.3}}>🏠</div><div style={{fontSize:12,marginTop:8}}>此建案尚無歸屬客戶（至客戶詳情頁點「🏢 歸屬建案」）</div></div>
+          : custs.map(c=>{
+            const {reps,cts}=casesOfCust(c);
+            return(
+              <div key={c.wfId} className="card" style={{marginBottom:8}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                  <div>
+                    <div style={{fontWeight:700,fontSize:13}}>{c.name} <span style={{fontFamily:'JetBrains Mono',fontSize:10,color:'var(--g400)'}}>{c.wfId}</span></div>
+                    <div style={{fontSize:11,color:'var(--g500)',marginTop:1}}>{c.address||'—'}{c.unit?` · ${c.unit}`:''}</div>
+                  </div>
+                  <button onClick={()=>{setCrmTarget(c.wfId);setPage('crm');}}
+                    style={{padding:'5px 11px',background:'#EFF6FF',color:'var(--accent)',border:'none',borderRadius:5,fontSize:11,fontWeight:700,cursor:'pointer'}}>查看完整 CRM →</button>
+                </div>
+                <div style={{display:'flex',gap:6,marginTop:7,flexWrap:'wrap'}}>
+                  {reps.length===0&&cts.length===0&&<span style={{fontSize:11,color:'var(--g400)'}}>尚無案件</span>}
+                  {reps.map(r=><span key={r.id} style={{fontSize:10.5,padding:'2px 8px',borderRadius:9,background:'#D1FAE5',color:'#065F46',fontWeight:600}}>🔧 {r.id} {r.type}</span>)}
+                  {cts.map(ct=><span key={ct.id} style={{fontSize:10.5,padding:'2px 8px',borderRadius:9,background:'#FEF3C7',color:'#92400E',fontWeight:600}}>📞 {ct.id} {ct.cat1}</span>)}
+                </div>
+              </div>
+            );
+          })}
+      </div>
+    );
+  }
+
+  // Layer 2：某集團的建案列表
+  if(selGroup){
+    const prjs=projOfGroup(selGroup.id);
+    return(
+      <div style={{padding:18}}>
+        <button className="crm-back" onClick={()=>setSelGroup(null)}>← 返回集團列表</button>
+        <div style={{fontSize:18,fontWeight:800,marginTop:10}}>🏢 {selGroup.name}</div>
+        <div style={{color:'var(--g500)',fontSize:12,marginTop:2}}>{selGroup.note||''}　共 {prjs.length} 個建案 · 已歸屬 {custOfGroup(selGroup.id).length} 戶</div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))',gap:10,marginTop:14}}>
+          {prjs.map(p=>{
+            const n=custOfProject(p.id).length;
+            return(
+              <div key={p.id} className="card" style={{cursor:'pointer'}} onClick={()=>setSelProject(p)}>
+                <div style={{fontWeight:700,fontSize:14}}>🏗️ {p.name}</div>
+                <div style={{fontSize:11,color:'var(--g500)',marginTop:3}}>{TYPE_LABEL[p.type]||p.type} · {p.address}</div>
+                <div style={{fontSize:11,marginTop:6,display:'flex',gap:12}}>
+                  <span style={{color:'var(--g400)'}}>規劃 <strong style={{color:'var(--g700)'}}>{p.totalQty||0}</strong></span>
+                  <span style={{color:'var(--g400)'}}>歸屬 <strong style={{color:n>0?'var(--accent)':'var(--g700)'}}>{n}</strong> 戶</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // Layer 1：集團列表
+  return(
+    <div style={{padding:18}}>
+      <div style={{fontSize:18,fontWeight:800}}>🏢 集團 / 建案</div>
+      <div style={{color:'var(--g500)',fontSize:12,marginTop:2}}>B2B 集團 → 建案階層。點集團查看旗下建案，再點建案檢視已歸屬客戶與案件。</div>
+      {groups.length===0
+        ? <div className="empty" style={{height:160,marginTop:14}}><div style={{fontSize:26,opacity:.3}}>🏢</div><div style={{fontSize:12,marginTop:8}}>尚無集團資料（請先於 Supabase 執行 supabase_md5_seed.sql）</div></div>
+        : <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))',gap:10,marginTop:14}}>
+            {groups.map(g=>{
+              const pc=projOfGroup(g.id).length, cc=custOfGroup(g.id).length;
+              return(
+                <div key={g.id} className="card" style={{cursor:'pointer'}} onClick={()=>setSelGroup(g)}>
+                  <div style={{fontWeight:700,fontSize:15}}>🏢 {g.name}</div>
+                  <div style={{fontSize:11,color:'var(--g500)',marginTop:3}}>{g.note||''}</div>
+                  <div style={{fontSize:11,marginTop:7,display:'flex',gap:12}}>
+                    <span style={{color:'var(--g400)'}}>建案 <strong style={{color:'var(--g700)'}}>{pc}</strong></span>
+                    <span style={{color:'var(--g400)'}}>歸屬 <strong style={{color:cc>0?'var(--accent)':'var(--g700)'}}>{cc}</strong> 戶</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>}
+    </div>
+  );
+}
+
 function App(){
   const [page,setPage] = useState('home');
   const [crmTarget,setCrmTarget] = useState(null); // 首頁搜尋→跳 CRM 指定客戶 wfId
@@ -2379,6 +2562,7 @@ function App(){
           {(installPending+pendingCnt+complaintPending)>0&&<span className="nbadge" style={{background:urgentCnt>0?'var(--err)':'var(--accent)',color:urgentCnt>0?'#fff':'var(--brand)'}}>{installPending+pendingCnt+complaintPending}</span>}
         </button>
         <button className={`nbtn ${page==='schedule'?'on':''}`} onClick={()=>setPage('schedule')}>📅 工務時刻表</button>
+        <button className={`nbtn ${page==='groups'?'on':''}`} onClick={()=>setPage('groups')}>🏢 集團/建案</button>
         <div className="sync-area">
           {isAdmin
             ? <select value={adminView} onChange={e=>setAdminView(e.target.value)} style={{fontSize:11,padding:'2px 4px',borderRadius:4,marginRight:10}}>
@@ -2417,6 +2601,7 @@ function App(){
         {page==='crm'&&<CRMPage/>}
         {page==='dispatch'&&<DispatchCenter/>}
         {page==='schedule'&&<SchedulePage/>}
+        {page==='groups'&&<GroupProjectPage/>}
       </div>
       <Toasts items={toasts}/>
     </Ctx.Provider>
