@@ -1018,13 +1018,6 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
           <div className="mf"><label>預估工時（小時）</label><input type="number" step="0.5" min="0.5" value={f.workHours} onChange={e=>set('workHours',e.target.value)}/></div>
         </div>
 
-        {/* 預約 / 排程 */}
-        <div className="mf2">
-          <div className="mf"><label>時間範圍</label>
-            <select value={f.timeRange} onChange={e=>set('timeRange',e.target.value)}>{TIME_RANGES.map(([k,l])=><option key={k} value={k}>{l}</option>)}</select>
-          </div>
-          <div className="mf"><label>預約時間（選填）</label><input type="datetime-local" value={f.scheduledDate} onChange={e=>set('scheduledDate',e.target.value)}/></div>
-        </div>
         <button type="button" onClick={()=>setSchedOpen(o=>!o)}
           style={{margin:'2px 0 8px',padding:'6px 12px',background:schedOpen?'var(--brand)':'#EDE9FE',color:schedOpen?'#fff':'#5B21B6',border:'none',borderRadius:6,fontSize:12,fontWeight:700,cursor:'pointer'}}>
           📅 {schedOpen?'收合排程畫面':'開啟排程畫面（直接派師傅/時段）'}
