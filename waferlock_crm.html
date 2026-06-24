@@ -792,6 +792,7 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
     site:lc?.site||'', unit:lc?.unit||'', qty:1, workHours:initialCategory==='install'?2:1,
     timeRange:'', scheduledDate:'', hiRisk:false, hardJob:false, bomber:false, note:'',
     channel:lc?.channel||'lock_shop', productId:lc?.productId||'L376', serialNo:'', locksmithId:'S1',
+    groupId:lc?.groupId||'', projectId:lc?.projectId||'',
     type:'電子鎖', issue:'', space:'大門', urgency:'normal',
     handlingUnit:(lc&&isInWar(lc))?'原廠工務':'配合鎖店', desc:'',
   }));
@@ -848,8 +849,10 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
     updateDB(prev=>{
       let customers=prev.customers||[];
       if(isNew) customers=[...customers,{wfId,name:f.name.trim(),phone:f.phone.trim(),address:f.address,zip:f.zip,channel:f.channel,
+        groupId:f.groupId||null,projectId:f.projectId||null,
         productId:f.productId,serialNo:f.serialNo,regType:'auto',regDate:today(),
         installDate:null,warrantyMonths:null,warrantyEnd:null,tags:['待安裝'],repairIds:[],complaintIds:[]}];
+      else if(f.groupId) customers=customers.map(c=>c.wfId===wfId?{...c,groupId:f.groupId,projectId:f.projectId||c.projectId}:c);
       const order=pushHist({id,name:f.name.trim(),phone:f.phone.trim(),address:f.address,channel:f.channel,
         productId:f.productId,serialNo:f.serialNo,locksmithId:f.locksmithId,wfId,scheduledDate:f.scheduledDate,
         status:'pending',createdDate:today(),createdTs:Date.now(),arrivalPushed:false,...common,...bk.fields},
@@ -964,7 +967,23 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
 
         {/* 安裝專屬 */}
         {cat==='install'&&<>
-          <div className="mf"><label>購買通路</label><select value={f.channel} onChange={e=>set('channel',e.target.value)}>{Object.entries(CHANNELS).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}</select></div>
+          <div className="mf"><label>購買通路</label><select value={f.channel} onChange={e=>{set('channel',e.target.value);if(e.target.value!=='builder'){set('groupId','');set('projectId','');}}}>{Object.entries(CHANNELS).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}</select></div>
+          {f.channel==='builder'&&(
+            <div className="mf2">
+              <div className="mf"><label>所屬集團</label>
+                <select value={f.groupId||''} onChange={e=>{set('groupId',e.target.value);set('projectId','');}}>
+                  <option value="">— 選集團 —</option>
+                  {(db.groups||[]).map(g=><option key={g.id} value={g.id}>{g.name}</option>)}
+                </select>
+              </div>
+              <div className="mf"><label>所屬建案</label>
+                <select value={f.projectId||''} onChange={e=>set('projectId',e.target.value)} disabled={!f.groupId}>
+                  <option value="">— 選建案 —</option>
+                  {(db.projects||[]).filter(p=>p.groupId===f.groupId).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+            </div>
+          )}
           <div className="mf2">
             <div className="mf"><label>產品序號</label><input value={f.serialNo} onChange={e=>set('serialNo',e.target.value)}/></div>
             <div className="mf"><label>指派鎖店師傅</label><select value={f.locksmithId} onChange={e=>set('locksmithId',e.target.value)}>{LOCKSMITHS.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
@@ -2249,6 +2268,85 @@ function CaseDetailPanel({c,onClose,onOpenFull}){
   );
 }
 
+// ─── 新增客戶主檔（不依附工單，讓客戶成為旅程起點）───
+function CreateCustomerModal({onClose}){
+  const {db,updateDB,toast,setPage,setCrmTarget}=useContext(Ctx);
+  const [name,setName]=useState('');
+  const [phone,setPhone]=useState('');
+  const [channel,setChannel]=useState('lock_shop');
+  const [groupId,setGroupId]=useState('');
+  const [projectId,setProjectId]=useState('');
+  const [address,setAddress]=useState('');
+  const [zip,setZip]=useState('');
+  const [addrOpen,setAddrOpen]=useState(false);
+  const doCreate=async()=>{
+    if(!name.trim()){toast('缺少姓名','請填寫客戶姓名','warn');return;}
+    if(!address){toast('缺少地址','地址為客編識別唯一鍵，必填','warn');return;}
+    const key=custKey(name,address);
+    const exist=(db.customers||[]).find(c=>custKey(c.name,c.address)===key);
+    if(exist){
+      toast('客戶已存在',`${exist.name}（${exist.wfId}）已在系統中，將為您開啟詳情`,'warn');
+      setCrmTarget(exist); setPage('crm'); onClose(); return;
+    }
+    const wfId='WF'+String(Date.now()).slice(-8);
+    const newCust={wfId,name:name.trim(),phone:phone.trim(),address,zip,channel,
+      groupId:groupId||null,projectId:projectId||null,
+      regType:'manual',regDate:today(),
+      installDate:null,warrantyMonths:null,warrantyEnd:null,
+      tags:['已登錄'],repairIds:[],complaintIds:[]};
+    updateDB(prev=>({...prev,customers:[...(prev.customers||[]),newCust]}));
+    toast('✅ 客戶主檔已建立',`${name.trim()}｜${wfId}`,'ok');
+    setCrmTarget(newCust); setPage('crm'); onClose();
+  };
+  const ov={position:'fixed',inset:0,background:'rgba(0,0,0,.55)',zIndex:1200,display:'flex',alignItems:'center',justifyContent:'center'};
+  const box={background:'#fff',borderRadius:12,padding:24,width:460,maxWidth:'95vw',maxHeight:'90vh',overflowY:'auto'};
+  return(
+    <div style={ov} onClick={e=>e.target===e.currentTarget&&onClose()}>
+      {addrOpen&&<AddressPicker initial={{address,zip}} onConfirm={r=>{setAddress(r.address);setZip(r.zip);setAddrOpen(false);}} onClose={()=>setAddrOpen(false)}/>}
+      <div style={box}>
+        <div style={{fontWeight:700,fontSize:15,marginBottom:16,borderBottom:'1px solid var(--g100)',paddingBottom:10}}>👤 新增客戶主檔</div>
+        <div className="mf2">
+          <div className="mf"><label>姓名 <span style={{color:'var(--err)'}}>*</span></label><input value={name} onChange={e=>setName(e.target.value)} placeholder="客戶姓名"/></div>
+          <div className="mf"><label>電話</label><input value={phone} onChange={e=>setPhone(e.target.value)} placeholder="0912-345-678"/></div>
+        </div>
+        <div className="mf"><label>地址 <span style={{color:'var(--err)'}}>*</span></label>
+          <div style={{display:'flex',gap:6,alignItems:'stretch'}}>
+            <div style={{flex:1,minHeight:34,border:'1px solid var(--g200)',borderRadius:5,padding:'7px 10px',fontSize:12.5,background:'var(--g50)',display:'flex',alignItems:'center',color:address?'var(--g700)':'var(--g400)'}}>
+              {address?`${zip?zip+' ':''}${address}`:'尚未選取地址'}
+            </div>
+            <button type="button" onClick={()=>setAddrOpen(true)} style={{padding:'0 14px',background:'var(--brand)',color:'#fff',border:'none',borderRadius:5,fontSize:12,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap'}}>🔎 選取地址</button>
+          </div>
+        </div>
+        <div className="mf"><label>購買通路</label>
+          <select value={channel} onChange={e=>{setChannel(e.target.value);if(e.target.value!=='builder'){setGroupId('');setProjectId('');}}}>
+            {Object.entries(CHANNELS).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+          </select>
+        </div>
+        {channel==='builder'&&(
+          <div className="mf2">
+            <div className="mf"><label>所屬集團</label>
+              <select value={groupId} onChange={e=>{setGroupId(e.target.value);setProjectId('');}}>
+                <option value="">— 選集團 —</option>
+                {(db.groups||[]).map(g=><option key={g.id} value={g.id}>{g.name}</option>)}
+              </select>
+            </div>
+            <div className="mf"><label>所屬建案</label>
+              <select value={projectId} onChange={e=>setProjectId(e.target.value)} disabled={!groupId}>
+                <option value="">— 選建案 —</option>
+                {(db.projects||[]).filter(p=>p.groupId===groupId).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+          </div>
+        )}
+        <div style={{display:'flex',gap:10,justifyContent:'flex-end',marginTop:18,paddingTop:12,borderTop:'1px solid var(--g100)'}}>
+          <button onClick={onClose} style={{padding:'8px 18px',background:'var(--g100)',border:'none',borderRadius:7,fontSize:13,fontWeight:600,cursor:'pointer'}}>取消</button>
+          <button onClick={doCreate} style={{padding:'8px 22px',background:'var(--brand)',color:'#fff',border:'none',borderRadius:7,fontSize:13,fontWeight:700,cursor:'pointer'}}>建立客戶主檔</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function HomePage(){
   const {db,updateDB,toast,currentRole,setPage,setCrmTarget}=useContext(Ctx);
   const [search,setSearch]=useState('');
@@ -2256,6 +2354,7 @@ function HomePage(){
   const [dept,setDept]=useState('all');
   const [selected,setSelected]=useState(null);
   const [results,setResults]=useState(null); // null=案件池模式, array=客戶搜尋結果
+  const [custModal,setCustModal]=useState(false);
   const installs=Object.values(db.installs||{});
   const repairs=Object.values(db.repairs||{});
   const complaints=Object.values(db.complaints||{});
@@ -2367,6 +2466,8 @@ function HomePage(){
             style={{width:'100%',background:'#334155',border:'1px solid #475569',borderRadius:7,padding:'7px 10px',color:'#F1F5F9',fontSize:12,outline:'none',boxSizing:'border-box',marginBottom:7}}/>
           <button onClick={doSearch}
             style={{width:'100%',background:'#38BDF8',color:'#0F2744',border:'none',borderRadius:7,padding:'7px',fontSize:12,fontWeight:700,cursor:'pointer'}}>🔍 搜尋客戶</button>
+          <button onClick={()=>setCustModal(true)}
+            style={{width:'100%',background:'#10B981',color:'#fff',border:'none',borderRadius:7,padding:'7px',fontSize:12,fontWeight:700,cursor:'pointer',marginTop:6}}>＋ 新增客戶主檔</button>
           {results!==null&&<button onClick={()=>{setSearch('');setResults(null);}}
             style={{width:'100%',background:'transparent',color:'#94A3B8',border:'1px solid #475569',borderRadius:7,padding:'5px',fontSize:11,fontWeight:600,cursor:'pointer',marginTop:6}}>← 返回案件列表</button>}
         </div>
@@ -2514,6 +2615,7 @@ function HomePage(){
         )}
       </div>
       {selected&&<CaseDetailPanel c={selected} onClose={()=>setSelected(null)} onOpenFull={openCustomer}/>}
+      {custModal&&<CreateCustomerModal onClose={()=>setCustModal(false)}/>}
     </div>
   );
 }
