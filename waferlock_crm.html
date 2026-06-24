@@ -255,14 +255,14 @@ const pushLineTo = (to, text, sender={name:'維夫拉克客服'}) => {
 };
 
 // ── DB 欄位轉換（camelCase <-> snake_case） ──
-const custToDb = c => ({wf_id:c.wfId,name:c.name,phone:c.phone,email:c.email,address:c.address,district:c.district,area:c.area,channel:c.channel,product_id:c.productId,serial_no:c.serialNo,install_date:c.installDate,warranty_months:c.warrantyMonths,warranty_end:c.warrantyEnd,tags:c.tags||[],reg_type:c.regType,reg_date:c.regDate,line_uid:c.lineUid,fb_id:c.fbId,ig_id:c.igId,repair_ids:c.repairIds||[],complaint_ids:c.complaintIds||[],site:c.site,unit:c.unit,order_no:c.orderNo,group_id:c.groupId,project_id:c.projectId});
-const dbToCust = r => ({wfId:r.wf_id,name:r.name,phone:r.phone,email:r.email,address:r.address,district:r.district,area:r.area,channel:r.channel,productId:r.product_id,serialNo:r.serial_no,installDate:r.install_date,warrantyMonths:r.warranty_months,warrantyEnd:r.warranty_end,tags:r.tags||[],regType:r.reg_type,regDate:r.reg_date,lineUid:r.line_uid,fbId:r.fb_id,igId:r.ig_id,repairIds:r.repair_ids||[],complaintIds:r.complaint_ids||[],site:r.site,unit:r.unit,orderNo:r.order_no,groupId:r.group_id,projectId:r.project_id});
+const custToDb = c => ({wf_id:c.wfId,name:c.name,phone:c.phone,email:c.email,address:c.address,district:c.district,area:c.area,channel:c.channel,product_id:c.productId,serial_no:c.serialNo,install_date:c.installDate,warranty_months:c.warrantyMonths,warranty_end:c.warrantyEnd,tags:c.tags||[],reg_type:c.regType,reg_date:c.regDate,line_uid:c.lineUid,fb_id:c.fbId,ig_id:c.igId,repair_ids:c.repairIds||[],complaint_ids:c.complaintIds||[],site:c.site,unit:c.unit,order_no:c.orderNo,group_id:c.groupId,project_id:c.projectId,zip:c.zip});
+const dbToCust = r => ({wfId:r.wf_id,name:r.name,phone:r.phone,email:r.email,address:r.address,district:r.district,area:r.area,channel:r.channel,productId:r.product_id,serialNo:r.serial_no,installDate:r.install_date,warrantyMonths:r.warranty_months,warrantyEnd:r.warranty_end,tags:r.tags||[],regType:r.reg_type,regDate:r.reg_date,lineUid:r.line_uid,fbId:r.fb_id,igId:r.ig_id,repairIds:r.repair_ids||[],complaintIds:r.complaint_ids||[],site:r.site,unit:r.unit,orderNo:r.order_no,groupId:r.group_id,projectId:r.project_id,zip:r.zip});
 const repairToDb = r => ({id:r.id,wf_id:r.wfId,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,worker_id:r.workerId,scheduled_date:r.scheduledDate,desc:r.desc,contact_name:r.contactName,contact_phone:r.contactPhone,site:r.site,unit:r.unit,handling_unit:r.handlingUnit,note:r.note,warranty_in:r.warrantyIn,created_by:r.createdBy,created_at:r.createdAt,unread:r.unread,arrival_pushed:r.arrivalPushed,rating:r.rating,receipt_no:r.receiptNo,audit_note:r.auditNote,completed_date:r.completedDate,sched_date:r.schedDate,sched_start:r.schedStart,sched_span:r.schedSpan,charges:r.charges||[],charge_total:r.chargeTotal,payment_method:r.paymentMethod,paid:r.paid,work_note:r.workNote,warranty_judgment:r.warrantyJudgment,exclude_reason:r.excludeReason,photos:r.photos||[],signature:r.signature,sla_level:r.slaLevel,tenant_type:r.tenantType,landlord_confirmed:r.landlordConfirmed,source_channel:r.sourceChannel,community_note:r.communityNote,zip:r.zip,category2:r.category2,time_range:r.timeRange,qty:r.qty,work_hours:r.workHours,flag_bomber:r.flagBomber,history:r.history||[]});
 const dbToRepair = r => ({id:r.id,wfId:r.wf_id,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,workerId:r.worker_id,scheduledDate:r.scheduled_date,desc:r.desc,contactName:r.contact_name,contactPhone:r.contact_phone,site:r.site,unit:r.unit,handlingUnit:r.handling_unit,note:r.note,warrantyIn:r.warranty_in,createdBy:r.created_by,createdAt:r.created_at,unread:r.unread,arrivalPushed:r.arrival_pushed,rating:r.rating,receiptNo:r.receipt_no,auditNote:r.audit_note,completedDate:r.completed_date,schedDate:r.sched_date,schedStart:r.sched_start,schedSpan:r.sched_span,charges:r.charges||[],chargeTotal:r.charge_total,paymentMethod:r.payment_method,paid:r.paid,workNote:r.work_note,warrantyJudgment:r.warranty_judgment,excludeReason:r.exclude_reason,photos:r.photos||[],signature:r.signature,slaLevel:r.sla_level,tenantType:r.tenant_type,landlordConfirmed:r.landlord_confirmed,sourceChannel:r.source_channel,communityNote:r.community_note,zip:r.zip,category2:r.category2,timeRange:r.time_range,qty:r.qty,workHours:r.work_hours,flagBomber:r.flag_bomber,history:r.history||[]});
 const ctToDb = c => ({id:c.id,wf_id:c.wfId,name:c.name,phone:c.phone,date:c.date,created_at:c.createdAt,created_by:c.createdBy,call_channel:c.callChannel,department:c.department,cat1:c.cat1,cat2:c.cat2,cat3:c.cat3,process:c.process,status:c.status,closed_date:c.closedDate,timeline:c.timeline||[]});
 const dbToCt = r => ({id:r.id,wfId:r.wf_id,name:r.name,phone:r.phone,date:r.date,createdAt:r.created_at,createdBy:r.created_by,callChannel:r.call_channel,department:r.department,cat1:r.cat1,cat2:r.cat2,cat3:r.cat3,process:r.process,status:r.status,closedDate:r.closed_date,timeline:r.timeline||[]});
-const installToDb = o => ({id:o.id,name:o.name,phone:o.phone,address:o.address,channel:o.channel,note:o.note,product_id:o.productId,serial_no:o.serialNo,locksmith_id:o.locksmithId,status:o.status,created_date:o.createdDate,created_ts:o.createdTs,arrival_pushed:o.arrivalPushed,photos:o.photos||[],signature:o.signature,verify:o.verify||{},taught:o.taught||{},work_note:o.workNote,completed_date:o.completedDate,wf_id:o.wfId,warranty_end:o.warrantyEnd,worker_id:o.workerId,sched_date:o.schedDate,sched_start:o.schedStart,sched_span:o.schedSpan,tenant_type:o.tenantType,landlord_confirmed:o.landlordConfirmed,source_channel:o.sourceChannel,community_note:o.communityNote,zip:o.zip,category2:o.category2,time_range:o.timeRange,qty:o.qty,work_hours:o.workHours,flag_bomber:o.flagBomber,history:o.history||[]});
-const dbToInstall = r => ({id:r.id,name:r.name,phone:r.phone,address:r.address,channel:r.channel,note:r.note,productId:r.product_id,serialNo:r.serial_no,locksmithId:r.locksmith_id,status:r.status,createdDate:r.created_date,createdTs:r.created_ts?parseInt(r.created_ts):null,arrivalPushed:r.arrival_pushed,photos:r.photos||[],signature:r.signature,verify:r.verify||{},taught:r.taught||{},workNote:r.work_note,completedDate:r.completed_date,wfId:r.wf_id,warrantyEnd:r.warranty_end,workerId:r.worker_id,schedDate:r.sched_date,schedStart:r.sched_start,schedSpan:r.sched_span,tenantType:r.tenant_type,landlordConfirmed:r.landlord_confirmed,sourceChannel:r.source_channel,communityNote:r.community_note,zip:r.zip,category2:r.category2,timeRange:r.time_range,qty:r.qty,workHours:r.work_hours,flagBomber:r.flag_bomber,history:r.history||[]});
+const installToDb = o => ({id:o.id,name:o.name,phone:o.phone,address:o.address,channel:o.channel,note:o.note,product_id:o.productId,serial_no:o.serialNo,locksmith_id:o.locksmithId,status:o.status,created_date:o.createdDate,created_ts:o.createdTs,arrival_pushed:o.arrivalPushed,photos:o.photos||[],signature:o.signature,verify:o.verify||{},taught:o.taught||{},work_note:o.workNote,completed_date:o.completedDate,wf_id:o.wfId,warranty_end:o.warrantyEnd,worker_id:o.workerId,sched_date:o.schedDate,sched_start:o.schedStart,sched_span:o.schedSpan,charges:o.charges||[],charge_total:o.chargeTotal,tenant_type:o.tenantType,landlord_confirmed:o.landlordConfirmed,source_channel:o.sourceChannel,community_note:o.communityNote,zip:o.zip,category2:o.category2,time_range:o.timeRange,qty:o.qty,work_hours:o.workHours,flag_bomber:o.flagBomber,history:o.history||[]});
+const dbToInstall = r => ({id:r.id,name:r.name,phone:r.phone,address:r.address,channel:r.channel,note:r.note,productId:r.product_id,serialNo:r.serial_no,locksmithId:r.locksmith_id,status:r.status,createdDate:r.created_date,createdTs:r.created_ts?parseInt(r.created_ts):null,arrivalPushed:r.arrival_pushed,photos:r.photos||[],signature:r.signature,verify:r.verify||{},taught:r.taught||{},workNote:r.work_note,completedDate:r.completed_date,wfId:r.wf_id,warrantyEnd:r.warranty_end,workerId:r.worker_id,schedDate:r.sched_date,schedStart:r.sched_start,schedSpan:r.sched_span,charges:r.charges||[],chargeTotal:r.charge_total,tenantType:r.tenant_type,landlordConfirmed:r.landlord_confirmed,sourceChannel:r.source_channel,communityNote:r.community_note,zip:r.zip,category2:r.category2,timeRange:r.time_range,qty:r.qty,workHours:r.work_hours,flagBomber:r.flag_bomber,history:r.history||[]});
 const convToDb = c => ({id:c.id,wf_id:c.wfId,name:c.name,platform:c.platform,av:c.av,unread:c.unread||0,last_msg:c.lastMsg,last_time:c.lastTime,msgs:c.msgs||[],agent_takeover:c.agentTakeover||false,need_case:c.needCase||false,biz_inquiry:c.bizInquiry||false});
 const dbToConv = r => ({id:r.id,wfId:r.wf_id,name:r.name,platform:r.platform,av:r.av,unread:r.unread||0,lastMsg:r.last_msg,lastTime:r.last_time,msgs:r.msgs||[],agentTakeover:r.agent_takeover||false,needCase:r.need_case||false,bizInquiry:r.biz_inquiry||false});
 
@@ -452,6 +452,32 @@ const WORK_CATEGORIES = {
 };
 // 收費品項預設下拉（仍可手打覆寫）
 const CHARGE_PRESETS = ['更換鋰電池','更換面板','更換把手','更換主板','到府檢測費','拆裝工資','遠途交通費','其他'];
+
+// 全台縣市→鄉鎮市區→3碼郵遞區號（中華郵政資料；地址選取畫面用）
+const TW_ZIP3 = {
+  "基隆市":{"仁愛區":"200","信義區":"201","中正區":"202","中山區":"203","安樂區":"204","暖暖區":"205","七堵區":"206"},
+  "台北市":{"中正區":"100","大同區":"103","中山區":"104","松山區":"105","大安區":"106","萬華區":"108","信義區":"110","士林區":"111","北投區":"112","內湖區":"114","南港區":"115","文山區":"116"},
+  "新北市":{"萬里區":"207","金山區":"208","板橋區":"220","汐止區":"221","深坑區":"222","石碇區":"223","瑞芳區":"224","平溪區":"226","雙溪區":"227","貢寮區":"228","新店區":"231","坪林區":"232","烏來區":"233","永和區":"234","中和區":"235","土城區":"236","三峽區":"237","樹林區":"238","鶯歌區":"239","三重區":"241","新莊區":"242","泰山區":"243","林口區":"244","蘆洲區":"247","五股區":"248","八里區":"249","淡水區":"251","三芝區":"252","石門區":"253"},
+  "宜蘭縣":{"宜蘭市":"260","頭城鎮":"261","礁溪鄉":"262","壯圍鄉":"263","員山鄉":"264","羅東鎮":"265","三星鄉":"266","大同鄉":"267","五結鄉":"268","冬山鄉":"269","蘇澳鎮":"270","南澳鄉":"272","釣魚台列嶼":"290"},
+  "新竹市":{"東區":"300","北區":"300","香山區":"300"},
+  "新竹縣":{"竹北市":"302","湖口鄉":"303","新豐鄉":"304","新埔鎮":"305","關西鎮":"306","芎林鄉":"307","寶山鄉":"308","竹東鎮":"310","五峰鄉":"311","橫山鄉":"312","尖石鄉":"313","北埔鄉":"314","峨嵋鄉":"315"},
+  "桃園市":{"中壢區":"320","平鎮區":"324","龍潭區":"325","楊梅區":"326","新屋區":"327","觀音區":"328","桃園區":"330","龜山區":"333","八德區":"334","大溪區":"335","復興區":"336","大園區":"337","蘆竹區":"338"},
+  "苗栗縣":{"竹南鎮":"350","頭份市":"351","三灣鄉":"352","南庄鄉":"353","獅潭鄉":"354","後龍鎮":"356","通霄鎮":"357","苑裡鎮":"358","苗栗市":"360","造橋鄉":"361","頭屋鄉":"362","公館鄉":"363","大湖鄉":"364","泰安鄉":"365","銅鑼鄉":"366","三義鄉":"367","西湖鄉":"368","卓蘭鎮":"369"},
+  "台中市":{"中區":"400","東區":"401","南區":"402","西區":"403","北區":"404","北屯區":"406","西屯區":"407","南屯區":"408","太平區":"411","大里區":"412","霧峰區":"413","烏日區":"414","豐原區":"420","后里區":"421","石岡區":"422","東勢區":"423","和平區":"424","新社區":"426","潭子區":"427","大雅區":"428","神岡區":"429","大肚區":"432","沙鹿區":"433","龍井區":"434","梧棲區":"435","清水區":"436","大甲區":"437","外埔區":"438","大安區":"439"},
+  "彰化縣":{"彰化市":"500","芬園鄉":"502","花壇鄉":"503","秀水鄉":"504","鹿港鎮":"505","福興鄉":"506","線西鄉":"507","和美鎮":"508","伸港鄉":"509","員林市":"510","社頭鄉":"511","永靖鄉":"512","埔心鄉":"513","溪湖鎮":"514","大村鄉":"515","埔鹽鄉":"516","田中鎮":"520","北斗鎮":"521","田尾鄉":"522","埤頭鄉":"523","溪州鄉":"524","竹塘鄉":"525","二林鎮":"526","大城鄉":"527","芳苑鄉":"528","二水鄉":"530"},
+  "南投縣":{"南投市":"540","中寮鄉":"541","草屯鎮":"542","國姓鄉":"544","埔里鎮":"545","仁愛鄉":"546","名間鄉":"551","集集鎮":"552","水里鄉":"553","魚池鄉":"555","信義鄉":"556","竹山鎮":"557","鹿谷鄉":"558"},
+  "嘉義市":{"東區":"600","西區":"600"},
+  "嘉義縣":{"番路鄉":"602","梅山鄉":"603","竹崎鄉":"604","阿里山":"605","中埔鄉":"606","大埔鄉":"607","水上鄉":"608","鹿草鄉":"611","太保市":"612","朴子市":"613","東石鄉":"614","六腳鄉":"615","新港鄉":"616","民雄鄉":"621","大林鎮":"622","溪口鄉":"623","義竹鄉":"624","布袋鎮":"625"},
+  "雲林縣":{"斗南鎮":"630","大埤鄉":"631","虎尾鎮":"632","土庫鎮":"633","褒忠鄉":"634","東勢鄉":"635","臺西鄉":"636","崙背鄉":"637","麥寮鄉":"638","斗六市":"640","林內鄉":"643","古坑鄉":"646","莿桐鄉":"647","西螺鎮":"648","二崙鄉":"649","北港鎮":"651","水林鄉":"652","口湖鄉":"653","四湖鄉":"654","元長鄉":"655"},
+  "台南市":{"中西區":"700","東區":"701","南區":"702","北區":"704","安平區":"708","安南區":"709","永康區":"710","歸仁區":"711","新化區":"712","左鎮區":"713","玉井區":"714","楠西區":"715","南化區":"716","仁德區":"717","關廟區":"718","龍崎區":"719","官田區":"720","麻豆區":"721","佳里區":"722","西港區":"723","七股區":"724","將軍區":"725","學甲區":"726","北門區":"727","新營區":"730","後壁區":"731","白河區":"732","東山區":"733","六甲區":"734","下營區":"735","柳營區":"736","鹽水區":"737","善化區":"741","大內區":"742","山上區":"743","新市區":"744","安定區":"745"},
+  "高雄市":{"新興區":"800","前金區":"801","苓雅區":"802","鹽埕區":"803","鼓山區":"804","旗津區":"805","前鎮區":"806","三民區":"807","楠梓區":"811","小港區":"812","左營區":"813","仁武區":"814","大社區":"815","岡山區":"820","路竹區":"821","阿蓮區":"822","田寮鄉":"823","燕巢區":"824","橋頭區":"825","梓官區":"826","彌陀區":"827","永安區":"828","湖內鄉":"829","鳳山區":"830","大寮區":"831","林園區":"832","鳥松區":"833","大樹區":"840","旗山區":"842","美濃區":"843","六龜區":"844","內門區":"845","杉林區":"846","甲仙區":"847","桃源區":"848","那瑪夏區":"849","茂林區":"851","茄萣區":"852"},
+  "屏東縣":{"屏東市":"900","三地門":"901","霧臺鄉":"902","瑪家鄉":"903","九如鄉":"904","里港鄉":"905","高樹鄉":"906","鹽埔鄉":"907","長治鄉":"908","麟洛鄉":"909","竹田鄉":"911","內埔鄉":"912","萬丹鄉":"913","潮州鎮":"920","泰武鄉":"921","來義鄉":"922","萬巒鄉":"923","崁頂鄉":"924","新埤鄉":"925","南州鄉":"926","林邊鄉":"927","東港鎮":"928","琉球鄉":"929","佳冬鄉":"931","新園鄉":"932","枋寮鄉":"940","枋山鄉":"941","春日鄉":"942","獅子鄉":"943","車城鄉":"944","牡丹鄉":"945","恆春鎮":"946","滿州鄉":"947"},
+  "台東縣":{"臺東市":"950","綠島鄉":"951","蘭嶼鄉":"952","延平鄉":"953","卑南鄉":"954","鹿野鄉":"955","關山鎮":"956","海端鄉":"957","池上鄉":"958","東河鄉":"959","成功鎮":"961","長濱鄉":"962","太麻里鄉":"963","金峰鄉":"964","大武鄉":"965","達仁鄉":"966"},
+  "花蓮縣":{"花蓮市":"970","新城鄉":"971","秀林鄉":"972","吉安鄉":"973","壽豐鄉":"974","鳳林鎮":"975","光復鄉":"976","豐濱鄉":"977","瑞穗鄉":"978","萬榮鄉":"979","玉里鎮":"981","卓溪鄉":"982","富里鄉":"983"},
+  "金門縣":{"金沙鎮":"890","金湖鎮":"891","金寧鄉":"892","金城鎮":"893","烈嶼鄉":"894","烏坵鄉":"896"},
+  "連江縣":{"南竿鄉":"209","北竿鄉":"210","莒光鄉":"211","東引鄉":"212"},
+  "澎湖縣":{"馬公市":"880","西嶼鄉":"881","望安鄉":"882","七美鄉":"883","白沙鄉":"884","湖西鄉":"885"},
+};
 
 
 
@@ -663,6 +689,64 @@ function ChargeTable({rows,setRows}){
 const chargesTotal = rows => rows.reduce((s,r)=>s+(r.gift?0:(Number(r.qty)||0)*(Number(r.price)||0)),0);
 const normCharges = rows => rows.filter(r=>r.item&&r.item.trim()).map(r=>({item:r.item.trim(),qty:Number(r.qty)||0,price:r.gift?0:(Number(r.price)||0),gift:!!r.gift,amount:r.gift?0:(Number(r.qty)||0)*(Number(r.price)||0)}));
 
+// ─── 地址選取畫面（中華郵政風格：縣市→鄉鎮自動帶 3 碼，其餘自行輸入）───
+function AddressPicker({initial, onConfirm, onClose}){
+  const cities=Object.keys(TW_ZIP3);
+  const [city,setCity]=useState(initial?.city||'');
+  const [dist,setDist]=useState(initial?.dist||'');
+  const [road,setRoad]=useState(initial?.road||''); // 路/街/段/巷/弄
+  const [bldg,setBldg]=useState(initial?.bldg||''); // 棟（選填）
+  const [no,setNo]=useState(initial?.no||'');        // 號
+  const [floor,setFloor]=useState(initial?.floor||'');// 樓
+  const [sub,setSub]=useState(initial?.sub||'');      // 之
+  const dists=city?Object.keys(TW_ZIP3[city]):[];
+  const zip=(city&&dist)?TW_ZIP3[city][dist]:'';
+  const tail=[no&&`${no}號`,floor&&`${floor}樓`,sub&&`之${sub}`].filter(Boolean).join('');
+  const fullAddr=`${city}${dist}${road}${bldg?` ${bldg}棟`:''}${tail}`;
+  const confirm=()=>{
+    if(!city||!dist){ alert('請選擇縣市與鄉鎮市區'); return; }
+    onConfirm({zip, address:fullAddr, city, dist, road, bldg, no, floor, sub,
+      site:bldg, unit:tail});
+  };
+  return(
+    <div className="mo" style={{zIndex:60}} onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="mob" style={{maxWidth:480}}>
+        <h3>🔎 選取地址</h3>
+        <div className="mf2">
+          <div className="mf"><label>縣市 <span style={{color:'var(--err)'}}>*</span></label>
+            <select value={city} onChange={e=>{setCity(e.target.value);setDist('');}}>
+              <option value="">— 請選擇 —</option>
+              {cities.map(c=><option key={c}>{c}</option>)}
+            </select>
+          </div>
+          <div className="mf"><label>鄉鎮市區 <span style={{color:'var(--err)'}}>*</span></label>
+            <select value={dist} onChange={e=>setDist(e.target.value)} disabled={!city}>
+              <option value="">— 請選擇 —</option>
+              {dists.map(d=><option key={d}>{d}</option>)}
+            </select>
+          </div>
+        </div>
+        {zip&&<div style={{margin:'2px 0 10px',fontSize:12,color:'var(--accent)',fontWeight:700}}>📮 郵遞區號：{zip}</div>}
+        <div className="mf"><label>路 / 街 / 段 / 巷 / 弄</label>
+          <input value={road} onChange={e=>setRoad(e.target.value)} placeholder="例：安富二街、中山路一段123巷"/>
+        </div>
+        <div className="mf2">
+          <div className="mf"><label>棟（選填）</label><input value={bldg} onChange={e=>setBldg(e.target.value)} placeholder="例：A"/></div>
+          <div className="mf"><label>號</label><input value={no} onChange={e=>setNo(e.target.value)} placeholder="例：90"/></div>
+        </div>
+        <div className="mf2">
+          <div className="mf"><label>樓（選填）</label><input value={floor} onChange={e=>setFloor(e.target.value)} placeholder="透天/一樓可空白"/></div>
+          <div className="mf"><label>之（選填）</label><input value={sub} onChange={e=>setSub(e.target.value)} placeholder="例：2"/></div>
+        </div>
+        <div style={{background:'var(--g50)',borderRadius:6,padding:'8px 10px',fontSize:12.5,marginTop:4}}>
+          <span style={{color:'var(--g400)'}}>完整地址：</span><strong>{fullAddr||'（請先選縣市/鄉鎮）'}</strong>
+        </div>
+        <div className="mact"><button className="cancel" onClick={onClose}>取消</button><button className="confirm" onClick={confirm}>確認地址</button></div>
+      </div>
+    </div>
+  );
+}
+
 // ─── 統一工單建立表單（安裝 + 維修 一個版本）───
 function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}){
   const {db,updateDB,toast,currentUser}=useContext(Ctx);
@@ -680,24 +764,45 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
   }));
   const set=(k,v)=>setF(p=>({...p,[k]:v}));
   const cat=f.category;
+  const workers=db.workers||[];
+  const [chargeRows,setChargeRows]=useState([]);
+  const [addrPicker,setAddrPicker]=useState(false);
+  const [schedOpen,setSchedOpen]=useState(false);
+  const [region,setRegion]=useState('central');
+  const [sw,setSw]=useState('');
+  const [sd,setSd]=useState(todayISO());
+  const [start,setStart]=useState(null);
+  const span=Math.max(1,Math.ceil(Number(f.workHours)||(cat==='install'?2:1)));
   const noteWithFlags=()=>[f.note,f.hiRisk?'⚠️高風險維修':'',f.hardJob?'困難施工':'',f.bomber?'💣轟炸戶':''].filter(Boolean).join(' / ');
 
   const submit=async()=>{
     if(!f.name.trim()){ toast('請填客戶姓名','','warn'); return; }
-    if(!f.address.trim()){ toast('請填地址','地址為客編識別依據','warn'); return; }
+    if(!f.address.trim()){ toast('請填地址','請用「選取地址」選擇縣市/鄉鎮','warn'); return; }
     if(f.tenantType==='tenant'&&!f.landlordConfirmed){ toast('租客需房東確認','請先勾選已取得房東確認','warn'); return; }
+    if(schedOpen&&(!sw||start==null)){ toast('排程未完成','請選師傅與時段，或收合排程','warn'); return; }
     const common={
       tenantType:f.tenantType, landlordConfirmed:f.landlordConfirmed,
       sourceChannel:f.sourceChannel, communityNote:f.communityNote, zip:f.zip,
       category2:f.category2, timeRange:f.timeRange, qty:Number(f.qty)||1,
       workHours:Number(f.workHours)||null, flagBomber:f.bomber,
       site:f.site, unit:f.unit, note:noteWithFlags(),
+      charges:normCharges(chargeRows), chargeTotal:chargesTotal(chargeRows),
     };
     if(cat==='install') await submitInstall(common); else await submitRepair(common);
   };
 
+  // 建單時若有開排程並選好師傅/時段：先佔格（衝突則中止），回傳排程欄位
+  const tryBook=async(refType,id)=>{
+    if(!(schedOpen&&sw&&start!=null)) return {ok:true,fields:{}};
+    const ok=await bookSlots(sw,sd,start,span,refType,id);
+    if(!ok){ toast('時段衝突','該師傅此時段已被佔用，請改時段','err'); return {ok:false}; }
+    return {ok:true,fields:{workerId:sw,schedDate:sd,schedStart:start,schedSpan:span,
+      scheduledDate:`${sd} ${String(start).padStart(2,'0')}:00-${String(start+span).padStart(2,'0')}:00`}};
+  };
+
   const submitInstall=async(common)=>{
     const id='IW'+Date.now();
+    const bk=await tryBook('install',id); if(!bk.ok) return;
     const key=custKey(f.name,f.address);
     const exist=(db.customers||[]).find(c=>custKey(c.name,c.address)===key);
     const wfId=exist?exist.wfId:'WF'+String(Date.now()).slice(-8);
@@ -708,9 +813,9 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
         productId:f.productId,serialNo:f.serialNo,regType:'auto',regDate:today(),
         installDate:null,warrantyMonths:null,warrantyEnd:null,tags:['待安裝'],repairIds:[],complaintIds:[]}];
       const order=pushHist({id,name:f.name.trim(),phone:f.phone.trim(),address:f.address,channel:f.channel,
-        productId:f.productId,serialNo:f.serialNo,locksmithId:f.locksmithId,wfId,
-        status:'pending',createdDate:today(),createdTs:Date.now(),arrivalPushed:false,...common},
-        currentUser?.name,'建立安裝工單');
+        productId:f.productId,serialNo:f.serialNo,locksmithId:f.locksmithId,wfId,scheduledDate:f.scheduledDate,
+        status:'pending',createdDate:today(),createdTs:Date.now(),arrivalPushed:false,...common,...bk.fields},
+        currentUser?.name,'建立安裝工單'+(bk.fields.workerId?'＋排程':''));
       return {...prev,customers,installs:{...prev.installs,[id]:order}};
     });
     toast('📋 安裝工單已建立',isNew?`${f.name}｜已建立客編 ${wfId}`:`${f.name}｜歸入既有客編 ${wfId}`,'ok');
@@ -720,6 +825,7 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
   const submitRepair=async(common)=>{
     if(!f.issue.trim()){ toast('請填問題描述','問題描述不可空白','warn'); return; }
     const rid=(await sb.rpc('next_case_no',{p_prefix:'R'})).data || ('R-'+Date.now());
+    const bk=await tryBook('repair',rid); if(!bk.ok) return;
     const key=custKey(f.name,f.address);
     const exist=lc || (db.customers||[]).find(c=>custKey(c.name,c.address)===key);
     const wfId=exist?exist.wfId:'WF'+String(Date.now()).slice(-8);
@@ -727,11 +833,11 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
     const wIn2=exist?isInWar(exist):false;
     const newRepair=pushHist({id:rid,wfId,name:f.name,phone:f.phone,
       district:exist?.district||'',area:exist?.area||'',building:f.address,date:today(),
-      type:f.type,issue:f.issue.trim(),space:f.space,status:'pending',urgency:f.urgency,workerId:null,
+      type:f.type,issue:f.issue.trim(),space:f.space,status:bk.fields.workerId?'dispatched':'pending',urgency:f.urgency,workerId:null,
       scheduledDate:f.scheduledDate,desc:f.desc,contactName:f.name,contactPhone:f.phone,
       handlingUnit:f.handlingUnit,warrantyIn:wIn2,createdBy:currentUser?.name||'CRM 客服',
       createdAt:today()+' '+now(),unread:false,arrivalPushed:false,rating:null,receiptNo:null,
-      auditNote:'',slaLevel:f.hiRisk?'high':'normal',...common},currentUser?.name,'建立報修工單');
+      auditNote:'',slaLevel:f.hiRisk?'high':'normal',...common,...bk.fields},currentUser?.name,'建立報修工單'+(bk.fields.workerId?'＋排程':''));
     const uid=exist?.lineUid;
     const pushTxt=`📋 已收到您的報修\n\n案件：${rid}\n問題：${f.type} - ${f.issue.trim()||'異常問題'}\n客服將盡快安排師傅 🔧`;
     updateDB(prev=>{
@@ -783,9 +889,13 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
             <div className="mf"><label>客戶姓名 <span style={{color:'var(--err)'}}>*</span></label><input value={f.name} onChange={e=>set('name',e.target.value)}/></div>
             <div className="mf"><label>電話</label><input value={f.phone} onChange={e=>set('phone',e.target.value)}/></div>
           </div>
-          <div className="mf2">
-            <div className="mf"><label>郵遞區號</label><input value={f.zip} onChange={e=>set('zip',e.target.value)} placeholder="例：709002"/></div>
-            <div className="mf"><label>地址 <span style={{color:'var(--err)'}}>*</span></label><input value={f.address} onChange={e=>set('address',e.target.value)}/></div>
+          <div className="mf"><label>地址 <span style={{color:'var(--err)'}}>*</span></label>
+            <div style={{display:'flex',gap:6,alignItems:'stretch'}}>
+              <div style={{flex:1,minHeight:34,border:'1px solid var(--g200)',borderRadius:5,padding:'7px 10px',fontSize:12.5,background:'var(--g50)',display:'flex',alignItems:'center',color:f.address?'var(--g700)':'var(--g400)'}}>
+                {f.address?`${f.zip?f.zip+' ':''}${f.address}`:'尚未選取地址'}
+              </div>
+              <button type="button" onClick={()=>setAddrPicker(true)} style={{padding:'0 14px',background:'var(--brand)',color:'#fff',border:'none',borderRadius:5,fontSize:12,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap'}}>🔎 選取地址</button>
+            </div>
           </div>
         </>}
 
@@ -849,23 +959,32 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
           </div>
         </>}
 
-        {/* 樓棟 / 戶號 / 台數 */}
-        <div className="mf2">
-          <div className="mf"><label>樓棟 <span style={{fontSize:9,color:'var(--g400)'}}>建案選填</span></label><input value={f.site} onChange={e=>set('site',e.target.value)} placeholder="例：A棟"/></div>
-          <div className="mf"><label>戶號 <span style={{fontSize:9,color:'var(--g400)'}}>建案選填</span></label><input value={f.unit} onChange={e=>set('unit',e.target.value)} placeholder="例：12F-5"/></div>
-        </div>
+        {/* 台數 / 工時 */}
         <div className="mf2">
           <div className="mf"><label>台數</label><input type="number" min="1" value={f.qty} onChange={e=>set('qty',e.target.value)}/></div>
           <div className="mf"><label>預估工時（小時）</label><input type="number" step="0.5" min="0.5" value={f.workHours} onChange={e=>set('workHours',e.target.value)}/></div>
         </div>
 
-        {/* 排程偏好 */}
+        {/* 預約 / 排程 */}
         <div className="mf2">
           <div className="mf"><label>時間範圍</label>
             <select value={f.timeRange} onChange={e=>set('timeRange',e.target.value)}>{TIME_RANGES.map(([k,l])=><option key={k} value={k}>{l}</option>)}</select>
           </div>
-          <div className="mf"><label>方便時間（選填）</label><input type="datetime-local" value={f.scheduledDate} onChange={e=>set('scheduledDate',e.target.value)}/></div>
+          <div className="mf"><label>預約時間（選填）</label><input type="datetime-local" value={f.scheduledDate} onChange={e=>set('scheduledDate',e.target.value)}/></div>
         </div>
+        <button type="button" onClick={()=>setSchedOpen(o=>!o)}
+          style={{margin:'2px 0 8px',padding:'6px 12px',background:schedOpen?'var(--brand)':'#EDE9FE',color:schedOpen?'#fff':'#5B21B6',border:'none',borderRadius:6,fontSize:12,fontWeight:700,cursor:'pointer'}}>
+          📅 {schedOpen?'收合排程畫面':'開啟排程畫面（直接派師傅/時段）'}
+        </button>
+        {schedOpen&&(
+          <div style={{border:'1px solid var(--g200)',borderRadius:8,padding:10,marginBottom:10}}>
+            <SlotPicker workers={workers} bookings={db.bookings} region={region} setRegion={setRegion}
+              workerId={sw} setWorkerId={setSw} date={sd} setDate={setSd} start={start} setStart={setStart} span={span}/>
+            <div style={{background:'var(--g50)',borderRadius:6,padding:8,fontSize:11.5,color:'var(--g500)',marginTop:8}}>
+              本單預估工時 {f.workHours||span} 小時 → 佔 {span} 格；建立工單時一併佔用該師傅時段（未選則僅建單、之後再排）。
+            </div>
+          </div>
+        )}
 
         {/* 風險旗標 */}
         <div className="mf"><label>風險旗標</label>
@@ -882,7 +1001,17 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
             placeholder="團購優惠、聯絡資訊、特殊說明..."/>
         </div>
 
+        {/* 購買 / 收費品項（金流依據） */}
+        <div className="mf"><label>🛒 購買 / 收費品項（品名 × 數量 × 金額）</label>
+          <ChargeTable rows={chargeRows} setRows={setChargeRows}/>
+        </div>
+
         <div className="mact"><button className="cancel" onClick={onClose}>取消</button><button className="confirm" onClick={submit}>建立工單</button></div>
+
+        {addrPicker&&<AddressPicker
+          initial={{city:f.addrCity,dist:f.addrDist,road:f.addrRoad,bldg:f.site}}
+          onClose={()=>setAddrPicker(false)}
+          onConfirm={(a)=>{ setF(p=>({...p,zip:a.zip,address:a.address,site:a.site,unit:a.unit,addrCity:a.city,addrDist:a.dist,addrRoad:a.road})); setAddrPicker(false); }}/>}
       </div>
     </div>
   );
@@ -904,6 +1033,7 @@ function CRMPage(){
   const [followingCtId,setFollowingCtId] = useState(null);
   const [projModal,setProjModal] = useState(false);
   const [projForm,setProjForm] = useState({groupId:'',projectId:''}); // 歸屬建案
+  const [editAddrPicker,setEditAddrPicker] = useState(false);
 
   const customers = db.customers||[];
   // 只有搜尋後才顯示結果清單
@@ -1011,7 +1141,7 @@ function CRMPage(){
   const computeEnd=(install,months)=>{ if(!install||!months) return null; const d=new Date(install); if(isNaN(d)) return null; d.setMonth(d.getMonth()+Number(months)); return d.toLocaleDateString('zh-TW'); };
 
   const openEdit=(c)=>{
-    setEditForm({name:c.name||'',phone:c.phone||'',email:c.email||'',
+    setEditForm({name:c.name||'',phone:c.phone||'',email:c.email||'',zip:c.zip||'',
       address:(c.address&&c.address!=='待填寫')?c.address:'',channel:c.channel||'',
       productId:c.productId||'',serialNo:c.serialNo||'',installDate:toInputDate(c.installDate),
       warrantyMonths:c.warrantyMonths||''});
@@ -1029,7 +1159,7 @@ function CRMPage(){
       let tags=(c.tags||[]).filter(t=>!['待安裝','保固中','保固已到期'].includes(t));
       if(months&&warrantyEnd){ tags.push(new Date(warrantyEnd)>new Date()?'保固中':'保固已到期'); }
       else { tags.push('待安裝'); }
-      return {...c, name:editForm.name||c.name, phone:editForm.phone, email:editForm.email,
+      return {...c, name:editForm.name||c.name, phone:editForm.phone, email:editForm.email, zip:editForm.zip||c.zip,
         address:editForm.address||'待填寫', channel:editForm.channel||'',
         productId:editForm.productId||null, serialNo:editForm.serialNo||'',
         installDate:installLocale, warrantyMonths:months, warrantyEnd, tags};
@@ -1232,7 +1362,14 @@ function CRMPage(){
               <div className="mf"><label>電話</label><input value={editForm.phone} onChange={e=>setEditForm(p=>({...p,phone:e.target.value}))}/></div>
             </div>
             <div className="mf"><label>電子信箱</label><input value={editForm.email} onChange={e=>setEditForm(p=>({...p,email:e.target.value}))}/></div>
-            <div className="mf"><label>地址</label><input value={editForm.address} onChange={e=>setEditForm(p=>({...p,address:e.target.value}))}/></div>
+            <div className="mf"><label>地址</label>
+              <div style={{display:'flex',gap:6,alignItems:'stretch'}}>
+                <div style={{flex:1,minHeight:34,border:'1px solid var(--g200)',borderRadius:5,padding:'7px 10px',fontSize:12.5,background:'var(--g50)',display:'flex',alignItems:'center',color:editForm.address?'var(--g700)':'var(--g400)'}}>
+                  {editForm.address?`${editForm.zip?editForm.zip+' ':''}${editForm.address}`:'尚未選取地址'}
+                </div>
+                <button type="button" onClick={()=>setEditAddrPicker(true)} style={{padding:'0 14px',background:'var(--brand)',color:'#fff',border:'none',borderRadius:5,fontSize:12,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap'}}>🔎 選取地址</button>
+              </div>
+            </div>
             <div className="mf2">
               <div className="mf"><label>購買通路</label>
                 <select value={editForm.channel} onChange={e=>setEditForm(p=>({...p,channel:e.target.value}))}>
@@ -1259,6 +1396,9 @@ function CRMPage(){
               <button className="cancel" onClick={()=>setEditModal(false)}>取消</button>
               <button className="confirm" onClick={saveEdit}>儲存</button>
             </div>
+            {editAddrPicker&&<AddressPicker
+              onClose={()=>setEditAddrPicker(false)}
+              onConfirm={(a)=>{ setEditForm(p=>({...p,zip:a.zip,address:a.address})); setEditAddrPicker(false); }}/>}
           </div>
         </div>
       )}
