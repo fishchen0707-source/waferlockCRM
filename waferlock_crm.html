@@ -1121,13 +1121,14 @@ function CRMPage(){
   },[db.version]);
 
   // 首頁搜尋跳轉：自動選定指定客戶並開啟完整詳情頁
+  // 依賴 customers，確保新建客戶同步進來後能找到
   useEffect(()=>{
     if(crmTarget){
       const c=customers.find(x=>x.wfId===crmTarget);
-      if(c){ setSel(c); setQ(''); setRes(null); }
-      setCrmTarget(null);
+      if(c){ setSel(c); setQ(''); setRes(null); setCrmTarget(null); }
+      // 找不到時保留 crmTarget，等 customers 更新後再觸發
     }
-  },[crmTarget]);
+  },[crmTarget,customers]);
 
   const doSearch=()=>{
     const lq=q.trim().toLowerCase();
@@ -2058,7 +2059,7 @@ function CreateCustomerModal({onClose}){
     const exist=(db.customers||[]).find(c=>custKey(c.name,c.address)===key);
     if(exist){
       toast('客戶已存在',`${exist.name}（${exist.wfId}）已在系統中，將為您開啟詳情`,'warn');
-      setCrmTarget(exist); setPage('crm'); onClose(); return;
+      setCrmTarget(exist.wfId); setPage('crm'); onClose(); return;
     }
     const wfId='WF'+String(Date.now()).slice(-8);
     const newCust={wfId,name:name.trim(),phone:phone.trim(),address,zip,channel,
@@ -2068,7 +2069,7 @@ function CreateCustomerModal({onClose}){
       tags:['已登錄'],repairIds:[],complaintIds:[]};
     updateDB(prev=>({...prev,customers:[...(prev.customers||[]),newCust]}));
     toast('✅ 客戶主檔已建立',`${name.trim()}｜${wfId}`,'ok');
-    setCrmTarget(newCust); setPage('crm'); onClose();
+    setCrmTarget(newCust.wfId); setPage('crm'); onClose();
   };
   const ov={position:'fixed',inset:0,background:'rgba(0,0,0,.55)',zIndex:1200,display:'flex',alignItems:'center',justifyContent:'center'};
   const box={background:'#fff',borderRadius:12,padding:24,width:460,maxWidth:'95vw',maxHeight:'90vh',overflowY:'auto'};
