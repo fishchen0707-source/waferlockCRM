@@ -257,12 +257,12 @@ const pushLineTo = (to, text, sender={name:'維夫拉克客服'}) => {
 // ── DB 欄位轉換（camelCase <-> snake_case） ──
 const custToDb = c => ({wf_id:c.wfId,name:c.name,phone:c.phone,email:c.email,address:c.address,district:c.district,area:c.area,channel:c.channel,product_id:c.productId,serial_no:c.serialNo,install_date:c.installDate,warranty_months:c.warrantyMonths,warranty_end:c.warrantyEnd,tags:c.tags||[],reg_type:c.regType,reg_date:c.regDate,line_uid:c.lineUid,fb_id:c.fbId,ig_id:c.igId,repair_ids:c.repairIds||[],complaint_ids:c.complaintIds||[],site:c.site,unit:c.unit,order_no:c.orderNo,group_id:c.groupId,project_id:c.projectId});
 const dbToCust = r => ({wfId:r.wf_id,name:r.name,phone:r.phone,email:r.email,address:r.address,district:r.district,area:r.area,channel:r.channel,productId:r.product_id,serialNo:r.serial_no,installDate:r.install_date,warrantyMonths:r.warranty_months,warrantyEnd:r.warranty_end,tags:r.tags||[],regType:r.reg_type,regDate:r.reg_date,lineUid:r.line_uid,fbId:r.fb_id,igId:r.ig_id,repairIds:r.repair_ids||[],complaintIds:r.complaint_ids||[],site:r.site,unit:r.unit,orderNo:r.order_no,groupId:r.group_id,projectId:r.project_id});
-const repairToDb = r => ({id:r.id,wf_id:r.wfId,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,worker_id:r.workerId,scheduled_date:r.scheduledDate,desc:r.desc,contact_name:r.contactName,contact_phone:r.contactPhone,site:r.site,unit:r.unit,handling_unit:r.handlingUnit,note:r.note,warranty_in:r.warrantyIn,created_by:r.createdBy,created_at:r.createdAt,unread:r.unread,arrival_pushed:r.arrivalPushed,rating:r.rating,receipt_no:r.receiptNo,audit_note:r.auditNote,completed_date:r.completedDate,sched_date:r.schedDate,sched_start:r.schedStart,sched_span:r.schedSpan,charges:r.charges||[],charge_total:r.chargeTotal,payment_method:r.paymentMethod,paid:r.paid,work_note:r.workNote,warranty_judgment:r.warrantyJudgment,exclude_reason:r.excludeReason,photos:r.photos||[],signature:r.signature,sla_level:r.slaLevel,history:r.history||[]});
-const dbToRepair = r => ({id:r.id,wfId:r.wf_id,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,workerId:r.worker_id,scheduledDate:r.scheduled_date,desc:r.desc,contactName:r.contact_name,contactPhone:r.contact_phone,site:r.site,unit:r.unit,handlingUnit:r.handling_unit,note:r.note,warrantyIn:r.warranty_in,createdBy:r.created_by,createdAt:r.created_at,unread:r.unread,arrivalPushed:r.arrival_pushed,rating:r.rating,receiptNo:r.receipt_no,auditNote:r.audit_note,completedDate:r.completed_date,schedDate:r.sched_date,schedStart:r.sched_start,schedSpan:r.sched_span,charges:r.charges||[],chargeTotal:r.charge_total,paymentMethod:r.payment_method,paid:r.paid,workNote:r.work_note,warrantyJudgment:r.warranty_judgment,excludeReason:r.exclude_reason,photos:r.photos||[],signature:r.signature,slaLevel:r.sla_level,history:r.history||[]});
+const repairToDb = r => ({id:r.id,wf_id:r.wfId,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,worker_id:r.workerId,scheduled_date:r.scheduledDate,desc:r.desc,contact_name:r.contactName,contact_phone:r.contactPhone,site:r.site,unit:r.unit,handling_unit:r.handlingUnit,note:r.note,warranty_in:r.warrantyIn,created_by:r.createdBy,created_at:r.createdAt,unread:r.unread,arrival_pushed:r.arrivalPushed,rating:r.rating,receipt_no:r.receiptNo,audit_note:r.auditNote,completed_date:r.completedDate,sched_date:r.schedDate,sched_start:r.schedStart,sched_span:r.schedSpan,charges:r.charges||[],charge_total:r.chargeTotal,payment_method:r.paymentMethod,paid:r.paid,work_note:r.workNote,warranty_judgment:r.warrantyJudgment,exclude_reason:r.excludeReason,photos:r.photos||[],signature:r.signature,sla_level:r.slaLevel,tenant_type:r.tenantType,landlord_confirmed:r.landlordConfirmed,source_channel:r.sourceChannel,community_note:r.communityNote,zip:r.zip,category2:r.category2,time_range:r.timeRange,qty:r.qty,work_hours:r.workHours,flag_bomber:r.flagBomber,history:r.history||[]});
+const dbToRepair = r => ({id:r.id,wfId:r.wf_id,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,workerId:r.worker_id,scheduledDate:r.scheduled_date,desc:r.desc,contactName:r.contact_name,contactPhone:r.contact_phone,site:r.site,unit:r.unit,handlingUnit:r.handling_unit,note:r.note,warrantyIn:r.warranty_in,createdBy:r.created_by,createdAt:r.created_at,unread:r.unread,arrivalPushed:r.arrival_pushed,rating:r.rating,receiptNo:r.receipt_no,auditNote:r.audit_note,completedDate:r.completed_date,schedDate:r.sched_date,schedStart:r.sched_start,schedSpan:r.sched_span,charges:r.charges||[],chargeTotal:r.charge_total,paymentMethod:r.payment_method,paid:r.paid,workNote:r.work_note,warrantyJudgment:r.warranty_judgment,excludeReason:r.exclude_reason,photos:r.photos||[],signature:r.signature,slaLevel:r.sla_level,tenantType:r.tenant_type,landlordConfirmed:r.landlord_confirmed,sourceChannel:r.source_channel,communityNote:r.community_note,zip:r.zip,category2:r.category2,timeRange:r.time_range,qty:r.qty,workHours:r.work_hours,flagBomber:r.flag_bomber,history:r.history||[]});
 const ctToDb = c => ({id:c.id,wf_id:c.wfId,name:c.name,phone:c.phone,date:c.date,created_at:c.createdAt,created_by:c.createdBy,call_channel:c.callChannel,department:c.department,cat1:c.cat1,cat2:c.cat2,cat3:c.cat3,process:c.process,status:c.status,closed_date:c.closedDate,timeline:c.timeline||[]});
 const dbToCt = r => ({id:r.id,wfId:r.wf_id,name:r.name,phone:r.phone,date:r.date,createdAt:r.created_at,createdBy:r.created_by,callChannel:r.call_channel,department:r.department,cat1:r.cat1,cat2:r.cat2,cat3:r.cat3,process:r.process,status:r.status,closedDate:r.closed_date,timeline:r.timeline||[]});
-const installToDb = o => ({id:o.id,name:o.name,phone:o.phone,address:o.address,channel:o.channel,product_id:o.productId,serial_no:o.serialNo,locksmith_id:o.locksmithId,status:o.status,created_date:o.createdDate,created_ts:o.createdTs,arrival_pushed:o.arrivalPushed,photos:o.photos||[],signature:o.signature,verify:o.verify||{},taught:o.taught||{},work_note:o.workNote,completed_date:o.completedDate,wf_id:o.wfId,warranty_end:o.warrantyEnd,worker_id:o.workerId,sched_date:o.schedDate,sched_start:o.schedStart,sched_span:o.schedSpan,history:o.history||[]});
-const dbToInstall = r => ({id:r.id,name:r.name,phone:r.phone,address:r.address,channel:r.channel,productId:r.product_id,serialNo:r.serial_no,locksmithId:r.locksmith_id,status:r.status,createdDate:r.created_date,createdTs:r.created_ts?parseInt(r.created_ts):null,arrivalPushed:r.arrival_pushed,photos:r.photos||[],signature:r.signature,verify:r.verify||{},taught:r.taught||{},workNote:r.work_note,completedDate:r.completed_date,wfId:r.wf_id,warrantyEnd:r.warranty_end,workerId:r.worker_id,schedDate:r.sched_date,schedStart:r.sched_start,schedSpan:r.sched_span,history:r.history||[]});
+const installToDb = o => ({id:o.id,name:o.name,phone:o.phone,address:o.address,channel:o.channel,note:o.note,product_id:o.productId,serial_no:o.serialNo,locksmith_id:o.locksmithId,status:o.status,created_date:o.createdDate,created_ts:o.createdTs,arrival_pushed:o.arrivalPushed,photos:o.photos||[],signature:o.signature,verify:o.verify||{},taught:o.taught||{},work_note:o.workNote,completed_date:o.completedDate,wf_id:o.wfId,warranty_end:o.warrantyEnd,worker_id:o.workerId,sched_date:o.schedDate,sched_start:o.schedStart,sched_span:o.schedSpan,tenant_type:o.tenantType,landlord_confirmed:o.landlordConfirmed,source_channel:o.sourceChannel,community_note:o.communityNote,zip:o.zip,category2:o.category2,time_range:o.timeRange,qty:o.qty,work_hours:o.workHours,flag_bomber:o.flagBomber,history:o.history||[]});
+const dbToInstall = r => ({id:r.id,name:r.name,phone:r.phone,address:r.address,channel:r.channel,note:r.note,productId:r.product_id,serialNo:r.serial_no,locksmithId:r.locksmith_id,status:r.status,createdDate:r.created_date,createdTs:r.created_ts?parseInt(r.created_ts):null,arrivalPushed:r.arrival_pushed,photos:r.photos||[],signature:r.signature,verify:r.verify||{},taught:r.taught||{},workNote:r.work_note,completedDate:r.completed_date,wfId:r.wf_id,warrantyEnd:r.warranty_end,workerId:r.worker_id,schedDate:r.sched_date,schedStart:r.sched_start,schedSpan:r.sched_span,tenantType:r.tenant_type,landlordConfirmed:r.landlord_confirmed,sourceChannel:r.source_channel,communityNote:r.community_note,zip:r.zip,category2:r.category2,timeRange:r.time_range,qty:r.qty,workHours:r.work_hours,flagBomber:r.flag_bomber,history:r.history||[]});
 const convToDb = c => ({id:c.id,wf_id:c.wfId,name:c.name,platform:c.platform,av:c.av,unread:c.unread||0,last_msg:c.lastMsg,last_time:c.lastTime,msgs:c.msgs||[],agent_takeover:c.agentTakeover||false,need_case:c.needCase||false,biz_inquiry:c.bizInquiry||false});
 const dbToConv = r => ({id:r.id,wfId:r.wf_id,name:r.name,platform:r.platform,av:r.av,unread:r.unread||0,lastMsg:r.last_msg,lastTime:r.last_time,msgs:r.msgs||[],agentTakeover:r.agent_takeover||false,needCase:r.need_case||false,bizInquiry:r.biz_inquiry||false});
 
@@ -440,6 +440,18 @@ const COMPLAINT_CAT = {
 const COMPLAINT_STATUS_LABEL = {pending:'⏳ 待追蹤',following:'🔍 追蹤中',closed:'✅ 結案'};
 const CALL_CHANNELS = ['📞 電話來電','💬 LINE 訊息','📧 電子郵件','🏪 門市到訪','🌐 官網表單'];
 const COMPLAINT_DEPARTMENTS = ['客服課', '內銷課', '外銷課', '電商課', '行銷企劃'];
+
+// ── 統一工單（安裝 + 維修）共用選項 ──
+const TENANT_TYPES = [['owner','屋主'],['family','家人'],['tenant','租客']];
+const SOURCE_CHANNELS = ['線下門市','官方網站','LINE@','區域業務','電商平台','社區團購','其他'];
+const TIME_RANGES = [['','不指定'],['morning','早'],['noon','午'],['night','晚']];
+// 工單類別：第一層=安裝/維修，第二層=細類
+const WORK_CATEGORIES = {
+  install:['新案裝機','加裝','換型號','建案配置'],
+  repair:['到府維修','外送維修','到府檢測','保固換機'],
+};
+// 收費品項預設下拉（仍可手打覆寫）
+const CHARGE_PRESETS = ['更換鋰電池','更換面板','更換把手','更換主板','到府檢測費','拆裝工資','遠途交通費','其他'];
 
 
 
@@ -627,7 +639,14 @@ function ChargeTable({rows,setRows}){
   return (<>
     <table className="ctbl"><thead><tr><th>品項</th><th>數量</th><th>單價</th><th>小計</th><th>贈品</th><th></th></tr></thead>
     <tbody>{rows.map((r,i)=><tr key={i}>
-      <td><input value={r.item} onChange={e=>upd(i,'item',e.target.value)} placeholder="如：更換鋰電池"/></td>
+      <td>
+        <select value={CHARGE_PRESETS.includes(r.item)?r.item:''} onChange={e=>e.target.value&&upd(i,'item',e.target.value==='其他'?'':e.target.value)}
+          style={{width:'100%',marginBottom:3,fontSize:11,border:'1px solid var(--g200)',borderRadius:4,padding:'3px 4px'}}>
+          <option value="">— 選預設品項 —</option>
+          {CHARGE_PRESETS.map(p=><option key={p} value={p}>{p}</option>)}
+        </select>
+        <input value={r.item} onChange={e=>upd(i,'item',e.target.value)} placeholder="或手打品項"/>
+      </td>
       <td><input className="num" type="number" value={r.qty} onChange={e=>upd(i,'qty',e.target.value)}/></td>
       <td><input className="num" type="number" value={r.gift?0:r.price} disabled={r.gift} onChange={e=>upd(i,'price',e.target.value)}/></td>
       <td>$ {r.gift?0:(Number(r.qty)||0)*(Number(r.price)||0)}</td>
@@ -644,6 +663,231 @@ function ChargeTable({rows,setRows}){
 const chargesTotal = rows => rows.reduce((s,r)=>s+(r.gift?0:(Number(r.qty)||0)*(Number(r.price)||0)),0);
 const normCharges = rows => rows.filter(r=>r.item&&r.item.trim()).map(r=>({item:r.item.trim(),qty:Number(r.qty)||0,price:r.gift?0:(Number(r.price)||0),gift:!!r.gift,amount:r.gift?0:(Number(r.qty)||0)*(Number(r.price)||0)}));
 
+// ─── 統一工單建立表單（安裝 + 維修 一個版本）───
+function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}){
+  const {db,updateDB,toast,currentUser}=useContext(Ctx);
+  const lc=lockedCustomer;
+  const isInWar=(c)=> !!(c && c.productId && c.installDate && pctW(c.installDate, c.warrantyMonths||36)>0);
+  const [f,setF]=useState(()=>({
+    category:initialCategory, category2:'',
+    name:lc?.name||'', phone:lc?.phone||'', address:lc?.address||'', zip:'',
+    tenantType:'owner', landlordConfirmed:false, sourceChannel:'', communityNote:'',
+    site:lc?.site||'', unit:lc?.unit||'', qty:1, workHours:initialCategory==='install'?2:1,
+    timeRange:'', scheduledDate:'', hiRisk:false, hardJob:false, bomber:false, note:'',
+    channel:lc?.channel||'lock_shop', productId:lc?.productId||'L376', serialNo:'', locksmithId:'S1',
+    type:'電子鎖', issue:'', space:'大門', urgency:'normal',
+    handlingUnit:(lc&&isInWar(lc))?'原廠工務':'配合鎖店', desc:'',
+  }));
+  const set=(k,v)=>setF(p=>({...p,[k]:v}));
+  const cat=f.category;
+  const noteWithFlags=()=>[f.note,f.hiRisk?'⚠️高風險維修':'',f.hardJob?'困難施工':'',f.bomber?'💣轟炸戶':''].filter(Boolean).join(' / ');
+
+  const submit=async()=>{
+    if(!f.name.trim()){ toast('請填客戶姓名','','warn'); return; }
+    if(!f.address.trim()){ toast('請填地址','地址為客編識別依據','warn'); return; }
+    if(f.tenantType==='tenant'&&!f.landlordConfirmed){ toast('租客需房東確認','請先勾選已取得房東確認','warn'); return; }
+    const common={
+      tenantType:f.tenantType, landlordConfirmed:f.landlordConfirmed,
+      sourceChannel:f.sourceChannel, communityNote:f.communityNote, zip:f.zip,
+      category2:f.category2, timeRange:f.timeRange, qty:Number(f.qty)||1,
+      workHours:Number(f.workHours)||null, flagBomber:f.bomber,
+      site:f.site, unit:f.unit, note:noteWithFlags(),
+    };
+    if(cat==='install') await submitInstall(common); else await submitRepair(common);
+  };
+
+  const submitInstall=async(common)=>{
+    const id='IW'+Date.now();
+    const key=custKey(f.name,f.address);
+    const exist=(db.customers||[]).find(c=>custKey(c.name,c.address)===key);
+    const wfId=exist?exist.wfId:'WF'+String(Date.now()).slice(-8);
+    const isNew=!exist;
+    updateDB(prev=>{
+      let customers=prev.customers||[];
+      if(isNew) customers=[...customers,{wfId,name:f.name.trim(),phone:f.phone.trim(),address:f.address,channel:f.channel,
+        productId:f.productId,serialNo:f.serialNo,regType:'auto',regDate:today(),
+        installDate:null,warrantyMonths:null,warrantyEnd:null,tags:['待安裝'],repairIds:[],complaintIds:[]}];
+      const order=pushHist({id,name:f.name.trim(),phone:f.phone.trim(),address:f.address,channel:f.channel,
+        productId:f.productId,serialNo:f.serialNo,locksmithId:f.locksmithId,wfId,
+        status:'pending',createdDate:today(),createdTs:Date.now(),arrivalPushed:false,...common},
+        currentUser?.name,'建立安裝工單');
+      return {...prev,customers,installs:{...prev.installs,[id]:order}};
+    });
+    toast('📋 安裝工單已建立',isNew?`${f.name}｜已建立客編 ${wfId}`:`${f.name}｜歸入既有客編 ${wfId}`,'ok');
+    onClose();
+  };
+
+  const submitRepair=async(common)=>{
+    if(!f.issue.trim()){ toast('請填問題描述','問題描述不可空白','warn'); return; }
+    const rid=(await sb.rpc('next_case_no',{p_prefix:'R'})).data || ('R-'+Date.now());
+    const key=custKey(f.name,f.address);
+    const exist=lc || (db.customers||[]).find(c=>custKey(c.name,c.address)===key);
+    const wfId=exist?exist.wfId:'WF'+String(Date.now()).slice(-8);
+    const isNew=!exist;
+    const wIn2=exist?isInWar(exist):false;
+    const newRepair=pushHist({id:rid,wfId,name:f.name,phone:f.phone,
+      district:exist?.district||'',area:exist?.area||'',building:f.address,date:today(),
+      type:f.type,issue:f.issue.trim(),space:f.space,status:'pending',urgency:f.urgency,workerId:null,
+      scheduledDate:f.scheduledDate,desc:f.desc,contactName:f.name,contactPhone:f.phone,
+      handlingUnit:f.handlingUnit,warrantyIn:wIn2,createdBy:currentUser?.name||'CRM 客服',
+      createdAt:today()+' '+now(),unread:false,arrivalPushed:false,rating:null,receiptNo:null,
+      auditNote:'',slaLevel:f.hiRisk?'high':'normal',...common},currentUser?.name,'建立報修工單');
+    const uid=exist?.lineUid;
+    const pushTxt=`📋 已收到您的報修\n\n案件：${rid}\n問題：${f.type} - ${f.issue.trim()||'異常問題'}\n客服將盡快安排師傅 🔧`;
+    updateDB(prev=>{
+      let customers=prev.customers||[];
+      if(isNew) customers=[...customers,{wfId,name:f.name.trim(),phone:f.phone.trim(),address:f.address,
+        regType:'manual',regDate:today(),tags:['待整理'],repairIds:[rid],complaintIds:[]}];
+      else customers=customers.map(x=>x.wfId===wfId?{...x,repairIds:[...(x.repairIds||[]),rid]}:x);
+      const convs=(prev.conversations||[]).map(cv=>(uid&&cv.id===uid)
+        ?{...cv,msgs:[...(cv.msgs||[]),{id:'p'+Date.now(),from:'bot',text:pushTxt,time:now()}],lastMsg:'已建立報修單',lastTime:now()}:cv);
+      return {...prev,repairs:{...prev.repairs,[rid]:newRepair},customers,conversations:convs};
+    });
+    pushLineTo(uid,pushTxt);
+    toast('📋 已立案',`${f.name} 報修單 ${rid} 已建立${isNew?'（新客編 '+wfId+'）':''}`,'ok');
+    onClose();
+  };
+
+  const subcats=WORK_CATEGORIES[cat]||[];
+  return(
+    <div className="mo" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="mob" style={{maxWidth:560}}>
+        <h3>🧾 新增工單</h3>
+
+        {/* 工單類別（安裝 / 維修） */}
+        <div className="mf"><label>工單類別</label>
+          <div style={{display:'flex',gap:6}}>
+            {[['install','🛠️ 安裝工單'],['repair','🔧 維修工單']].map(([k,l])=>(
+              <button key={k} onClick={()=>setF(p=>({...p,category:k,category2:'',workHours:k==='install'?2:1}))}
+                disabled={!!lc&&lc&&k!==initialCategory}
+                style={{flex:1,padding:'8px',borderRadius:6,border:`1px solid ${cat===k?'var(--brand)':'var(--g200)'}`,
+                  background:cat===k?'var(--brand)':'#fff',color:cat===k?'#fff':'var(--g600)',
+                  fontSize:12.5,fontWeight:700,cursor:'pointer',opacity:(!!lc&&k!==initialCategory)?.4:1}}>{l}</button>
+            ))}
+          </div>
+        </div>
+        <div className="mf"><label>類別細項</label>
+          <select value={f.category2} onChange={e=>set('category2',e.target.value)}>
+            <option value="">— 請選擇 —</option>
+            {subcats.map(s=><option key={s}>{s}</option>)}
+          </select>
+        </div>
+
+        {/* 客戶 + 地址 + 區號 */}
+        {lc&&<div style={{background:'var(--g50)',borderRadius:8,padding:'8px 12px',marginBottom:10,fontSize:12}}>
+          <div style={{fontWeight:700,fontSize:13}}>{lc.name}　<span style={{fontFamily:'JetBrains Mono',fontSize:10,color:'var(--g400)'}}>{lc.wfId}</span></div>
+          <div style={{color:'var(--g500)'}}>{lc.address||'—'}</div>
+        </div>}
+        {!lc&&<>
+          <div className="mf2">
+            <div className="mf"><label>客戶姓名 <span style={{color:'var(--err)'}}>*</span></label><input value={f.name} onChange={e=>set('name',e.target.value)}/></div>
+            <div className="mf"><label>電話</label><input value={f.phone} onChange={e=>set('phone',e.target.value)}/></div>
+          </div>
+          <div className="mf2">
+            <div className="mf"><label>郵遞區號</label><input value={f.zip} onChange={e=>set('zip',e.target.value)} placeholder="例：709002"/></div>
+            <div className="mf"><label>地址 <span style={{color:'var(--err)'}}>*</span></label><input value={f.address} onChange={e=>set('address',e.target.value)}/></div>
+          </div>
+        </>}
+
+        {/* 承租身份 + 來源 */}
+        <div className="mf2">
+          <div className="mf"><label>承租身份</label>
+            <select value={f.tenantType} onChange={e=>set('tenantType',e.target.value)}>
+              {TENANT_TYPES.map(([k,l])=><option key={k} value={k}>{l}</option>)}
+            </select>
+          </div>
+          <div className="mf"><label>來源通路</label>
+            <select value={f.sourceChannel} onChange={e=>set('sourceChannel',e.target.value)}>
+              <option value="">— 未詢問 —</option>
+              {SOURCE_CHANNELS.map(s=><option key={s}>{s}</option>)}
+            </select>
+          </div>
+        </div>
+        {f.tenantType==='tenant'&&(
+          <label style={{display:'flex',alignItems:'center',gap:6,padding:'7px 10px',marginBottom:8,borderRadius:6,
+            background:'#FEF3C7',border:'1px solid #FCD34D',fontSize:11.5,color:'#92400E',cursor:'pointer'}}>
+            <input type="checkbox" checked={f.landlordConfirmed} onChange={e=>set('landlordConfirmed',e.target.checked)}/>
+            ⚠️ 租客屬高風險，已取得房東確認（必勾）
+          </label>
+        )}
+        <div className="mf"><label>社區特殊需求</label>
+          <input value={f.communityNote} onChange={e=>set('communityNote',e.target.value)} placeholder="例：需門禁卡、施工時段限制、社區報備..."/>
+        </div>
+
+        {/* 安裝專屬 */}
+        {cat==='install'&&<>
+          <div className="mf2">
+            <div className="mf"><label>購買通路</label><select value={f.channel} onChange={e=>set('channel',e.target.value)}>{Object.entries(CHANNELS).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}</select></div>
+            <div className="mf"><label>安裝產品</label><select value={f.productId} onChange={e=>set('productId',e.target.value)}>{Object.entries(PRODUCTS).map(([k,v])=><option key={k} value={k}>{v.name}</option>)}</select></div>
+          </div>
+          <div className="mf2">
+            <div className="mf"><label>產品序號</label><input value={f.serialNo} onChange={e=>set('serialNo',e.target.value)}/></div>
+            <div className="mf"><label>指派鎖店師傅</label><select value={f.locksmithId} onChange={e=>set('locksmithId',e.target.value)}>{LOCKSMITHS.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
+          </div>
+        </>}
+
+        {/* 維修專屬 */}
+        {cat==='repair'&&<>
+          <div className="mf2">
+            <div className="mf"><label>問題類別</label>
+              <select value={f.type} onChange={e=>set('type',e.target.value)}>{['電子鎖','水電工程','廚具設備','弱電工程','油漆工程'].map(v=><option key={v}>{v}</option>)}</select>
+            </div>
+            <div className="mf"><label>修繕空間</label>
+              <select value={f.space} onChange={e=>set('space',e.target.value)}>{['大門','客廳','臥室','廚房','前陽台','後陽台','其他'].map(v=><option key={v}>{v}</option>)}</select>
+            </div>
+          </div>
+          <div className="mf"><label>問題描述 <span style={{color:'var(--err)'}}>*</span></label>
+            <input value={f.issue} onChange={e=>set('issue',e.target.value)} placeholder="例：耗電過快、按鍵失靈、無法開鎖"/>
+          </div>
+          <div className="mf2">
+            <div className="mf"><label>緊急度</label>
+              <select value={f.urgency} onChange={e=>set('urgency',e.target.value)}><option value="normal">⬜ 一般</option><option value="urgent">🚨 緊急</option></select>
+            </div>
+            <div className="mf"><label>處理單位</label>
+              <select value={f.handlingUnit} onChange={e=>set('handlingUnit',e.target.value)}><option>原廠工務</option><option>配合鎖店</option></select>
+            </div>
+          </div>
+        </>}
+
+        {/* 樓棟 / 戶號 / 台數 */}
+        <div className="mf2">
+          <div className="mf"><label>樓棟 <span style={{fontSize:9,color:'var(--g400)'}}>建案選填</span></label><input value={f.site} onChange={e=>set('site',e.target.value)} placeholder="例：A棟"/></div>
+          <div className="mf"><label>戶號 <span style={{fontSize:9,color:'var(--g400)'}}>建案選填</span></label><input value={f.unit} onChange={e=>set('unit',e.target.value)} placeholder="例：12F-5"/></div>
+        </div>
+        <div className="mf2">
+          <div className="mf"><label>台數</label><input type="number" min="1" value={f.qty} onChange={e=>set('qty',e.target.value)}/></div>
+          <div className="mf"><label>預估工時（小時）</label><input type="number" step="0.5" min="0.5" value={f.workHours} onChange={e=>set('workHours',e.target.value)}/></div>
+        </div>
+
+        {/* 排程偏好 */}
+        <div className="mf2">
+          <div className="mf"><label>時間範圍</label>
+            <select value={f.timeRange} onChange={e=>set('timeRange',e.target.value)}>{TIME_RANGES.map(([k,l])=><option key={k} value={k}>{l}</option>)}</select>
+          </div>
+          <div className="mf"><label>方便時間（選填）</label><input type="datetime-local" value={f.scheduledDate} onChange={e=>set('scheduledDate',e.target.value)}/></div>
+        </div>
+
+        {/* 風險旗標 */}
+        <div className="mf"><label>風險旗標</label>
+          <div style={{display:'flex',gap:14,flexWrap:'wrap',fontSize:12}}>
+            <label style={{display:'flex',alignItems:'center',gap:5,cursor:'pointer'}}><input type="checkbox" checked={f.hiRisk} onChange={e=>set('hiRisk',e.target.checked)}/>⚠️ 高風險維修</label>
+            <label style={{display:'flex',alignItems:'center',gap:5,cursor:'pointer'}}><input type="checkbox" checked={f.hardJob} onChange={e=>set('hardJob',e.target.checked)}/>🔧 困難施工</label>
+            <label style={{display:'flex',alignItems:'center',gap:5,cursor:'pointer'}}><input type="checkbox" checked={f.bomber} onChange={e=>set('bomber',e.target.checked)}/>💣 轟炸戶</label>
+          </div>
+        </div>
+
+        <div className="mf"><label>備註</label>
+          <textarea value={f.note} onChange={e=>set('note',e.target.value)} rows={2}
+            style={{width:'100%',border:'1px solid var(--g200)',borderRadius:5,padding:'7px 10px',fontSize:12,outline:'none',resize:'vertical',fontFamily:'inherit'}}
+            placeholder="團購優惠、聯絡資訊、特殊說明..."/>
+        </div>
+
+        <div className="mact"><button className="cancel" onClick={onClose}>取消</button><button className="confirm" onClick={submit}>建立工單</button></div>
+      </div>
+    </div>
+  );
+}
+
 // ─── CRM Page ───
 function CRMPage(){
   const {db,updateDB,toast,newIds,crmTarget,setCrmTarget,setPage,currentUser} = useContext(Ctx);
@@ -651,7 +895,6 @@ function CRMPage(){
   const [res,setRes] = useState(null);
   const [sel,setSel] = useState(null);
   const [caseModal,setCaseModal] = useState(false);
-  const [caseForm,setCaseForm] = useState({type:'電子鎖',issue:'',space:'大門',urgency:'normal',scheduledDate:'',desc:'',contactName:'',contactPhone:'',site:'',unit:'',handlingUnit:'原廠工務',note:'',warrantyIn:true});
   const [editModal,setEditModal] = useState(false);
   const [editForm,setEditForm] = useState(null);
   const [ctModal,setCtModal] = useState(false);
@@ -702,42 +945,7 @@ function CRMPage(){
 
   const isInWarranty=(c)=> !!(c && c.productId && c.installDate && pctW(c.installDate, c.warrantyMonths||36)>0);
 
-  const openCase=(c)=>{
-    const wIn=isInWarranty(c);
-    setCaseForm({type:'電子鎖',issue:'',space:'大門',urgency:'normal',scheduledDate:'',desc:'',
-      contactName:c.name||'',contactPhone:c.phone||'',site:c.site||'',unit:c.unit||'',
-      handlingUnit: wIn?'原廠工務':'配合鎖店',note:'',warrantyIn:wIn});
-    setCaseModal(true);
-  };
-
-  const createCase=async()=>{
-    const c=customers.find(x=>x.wfId===sel?.wfId);
-    if(!c){ toast('無法立案','請先選擇客戶','warn'); return; }
-    if(!caseForm.issue.trim()){ toast('請填寫問題描述','問題描述不可空白','warn'); return; }
-    const rid=(await sb.rpc('next_case_no',{p_prefix:'R'})).data || ('R-'+Date.now());
-    const wIn=isInWarranty(c);
-    const newRepair={id:rid,wfId:c.wfId,name:c.name,phone:c.phone,
-      district:c.district,area:c.area,building:c.address,date:today(),
-      type:caseForm.type,issue:caseForm.issue.trim(),space:caseForm.space,
-      status:'pending',urgency:caseForm.urgency,workerId:null,
-      scheduledDate:caseForm.scheduledDate,desc:caseForm.desc,
-      contactName:caseForm.contactName||c.name, contactPhone:caseForm.contactPhone||c.phone,
-      site:caseForm.site||'', unit:caseForm.unit||'', handlingUnit:caseForm.handlingUnit||'',
-      note:caseForm.note||'',
-      warrantyIn:wIn, createdBy:'CRM 客服', createdAt:today()+' '+now(),
-      unread:false,arrivalPushed:false,rating:null,receiptNo:null,auditNote:''};
-    const uid=c.lineUid;
-    const pushTxt=`📋 已收到您的報修\n\n案件：${rid}\n問題：${caseForm.type} - ${caseForm.issue.trim()||'異常問題'}\n客服將盡快安排師傅 🔧`;
-    updateDB(prev=>{
-      const custs=(prev.customers||[]).map(x=>x.wfId===c.wfId?{...x,repairIds:[...(x.repairIds||[]),rid]}:x);
-      const convs=(prev.conversations||[]).map(cv=>(uid&&cv.id===uid)
-        ?{...cv,msgs:[...(cv.msgs||[]),{id:'p'+Date.now(),from:'bot',text:pushTxt,time:now()}],lastMsg:'已建立報修單',lastTime:now()}:cv);
-      return {...prev,repairs:{...prev.repairs,[rid]:newRepair},customers:custs,conversations:convs};
-    });
-    pushLineTo(uid, pushTxt);
-    toast('📋 已立案',`${c.name} 報修單 ${rid} 已建立`,'ok');
-    setCaseModal(false);
-  };
+  const openCase=(c)=>{ setCaseModal(true); };
 
   const openComplaint=(c)=>{
     setCtForm({callChannel:CALL_CHANNELS[0],department:COMPLAINT_DEPARTMENTS[0],cat1:'',cat2:'',cat3:'',process:'',status:'pending'});
@@ -1008,113 +1216,11 @@ function CRMPage(){
                 ))
               }
 
-      {caseModal&&sel&&(()=>{
-        const curCust=customers.find(c=>c.wfId===sel.wfId)||sel;
-        const wIn=caseForm.warrantyIn;
-        return(
-        <div className="mo" onClick={e=>e.target===e.currentTarget&&setCaseModal(false)}>
-          <div className="mob" style={{maxWidth:500}}>
-            <h3>📋 新增報修 — 建立報修單</h3>
-
-            {/* 客戶資訊橫幅 */}
-            <div style={{background:'var(--g50)',borderRadius:8,padding:'10px 12px',marginBottom:10,fontSize:12}}>
-              <div style={{fontWeight:700,fontSize:13}}>{sel.name}</div>
-              <div style={{color:'var(--g500)',marginTop:1}}>{sel.address||'—'}　<span style={{fontFamily:'JetBrains Mono',fontSize:10}}>{sel.wfId}</span></div>
-            </div>
-
-            {/* 🛡️ 保固狀態旗標（自動判定，只讀） */}
-            <div style={{display:'flex',alignItems:'center',gap:8,padding:'8px 12px',borderRadius:7,marginBottom:12,
-              background:wIn?'#D1FAE5':'#FEF3C7',
-              border:`1px solid ${wIn?'#6EE7B7':'#FCD34D'}`}}>
-              <span style={{fontSize:16}}>{wIn?'✅':'⚠️'}</span>
-              <div style={{flex:1}}>
-                <div style={{fontWeight:700,fontSize:12,color:wIn?'#065F46':'#92400E'}}>
-                  {wIn?'保固內 — 本次維修免費':'保固外 — 需向客戶收費'}
-                </div>
-                <div style={{fontSize:10.5,color:wIn?'#047857':'#B45309',marginTop:1}}>
-                  {curCust.warrantyEnd?`保固至 ${curCust.warrantyEnd}`:'尚未登錄安裝日期'}
-                </div>
-              </div>
-              <div style={{fontSize:10,padding:'2px 7px',borderRadius:12,fontWeight:700,
-                background:wIn?'#10B981':'#F59E0B',color:'#fff'}}>
-                {wIn?'免費':'收費'}
-              </div>
-            </div>
-
-            {/* 問題類別 + 描述 */}
-            <div className="mf"><label>問題類別</label>
-              <select value={caseForm.type} onChange={e=>setCaseForm(p=>({...p,type:e.target.value}))}>
-                {['電子鎖','水電工程','廚具設備','弱電工程','油漆工程'].map(v=><option key={v}>{v}</option>)}
-              </select>
-            </div>
-            <div className="mf"><label>問題描述 <span style={{color:'var(--err)'}}>*</span></label>
-              <input value={caseForm.issue} onChange={e=>setCaseForm(p=>({...p,issue:e.target.value}))} placeholder="例：耗電過快、按鍵失靈、無法開鎖"/>
-            </div>
-
-            {/* 空間 + 緊急度 */}
-            <div className="mf2">
-              <div className="mf"><label>修繕空間</label>
-                <select value={caseForm.space} onChange={e=>setCaseForm(p=>({...p,space:e.target.value}))}>
-                  {['大門','客廳','臥室','廚房','前陽台','後陽台','其他'].map(v=><option key={v}>{v}</option>)}
-                </select>
-              </div>
-              <div className="mf"><label>緊急度</label>
-                <select value={caseForm.urgency} onChange={e=>setCaseForm(p=>({...p,urgency:e.target.value}))}>
-                  <option value="normal">⬜ 一般</option>
-                  <option value="urgent">🚨 緊急（優先處理）</option>
-                </select>
-              </div>
-            </div>
-
-            {/* 🏢 處理單位 */}
-            <div className="mf">
-              <label>處理單位</label>
-              <div style={{display:'flex',gap:6}}>
-                {['原廠工務','配合鎖店'].map(u=>(
-                  <label key={u} style={{flex:1,display:'flex',alignItems:'center',gap:6,padding:'7px 10px',borderRadius:6,cursor:'pointer',
-                    border:`1px solid ${caseForm.handlingUnit===u?'var(--accent)':'var(--g200)'}`,
-                    background:caseForm.handlingUnit===u?'#EFF6FF':'#fff',
-                    fontSize:12,fontWeight:caseForm.handlingUnit===u?700:400}}>
-                    <input type="radio" name="handlingUnit" value={u} checked={caseForm.handlingUnit===u}
-                      onChange={()=>setCaseForm(p=>({...p,handlingUnit:u}))} style={{accentColor:'var(--accent)'}}/>
-                    {u==='原廠工務'?'🏭 原廠工務':'🔑 配合鎖店'}
-                    {u==='原廠工務'&&wIn&&<span style={{fontSize:9,background:'var(--ok)',color:'#fff',borderRadius:8,padding:'1px 5px',marginLeft:2}}>推薦</span>}
-                    {u==='配合鎖店'&&!wIn&&<span style={{fontSize:9,background:'var(--warn)',color:'#fff',borderRadius:8,padding:'1px 5px',marginLeft:2}}>推薦</span>}
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {/* 🏗️ 現場/建案資訊（樓棟＋戶號） */}
-            <div className="mf2">
-              <div className="mf"><label>樓棟 <span style={{fontSize:9,color:'var(--g400)'}}>建案選填</span></label>
-                <input value={caseForm.site} onChange={e=>setCaseForm(p=>({...p,site:e.target.value}))} placeholder="例：A棟、3號樓"/>
-              </div>
-              <div className="mf"><label>戶號 <span style={{fontSize:9,color:'var(--g400)'}}>建案選填</span></label>
-                <input value={caseForm.unit} onChange={e=>setCaseForm(p=>({...p,unit:e.target.value}))} placeholder="例：12F-5"/>
-              </div>
-            </div>
-
-            {/* 方便修繕時間 */}
-            <div className="mf"><label>方便修繕時間</label>
-              <input type="datetime-local" value={caseForm.scheduledDate} onChange={e=>setCaseForm(p=>({...p,scheduledDate:e.target.value}))}/>
-            </div>
-
-            {/* 📝 備註（合併聯絡資訊＋特殊備註） */}
-            <div className="mf"><label>備註 <span style={{fontSize:9,color:'var(--g400)'}}>聯絡資訊、特殊說明等</span></label>
-              <textarea value={caseForm.note} onChange={e=>setCaseForm(p=>({...p,note:e.target.value}))} rows={2}
-                style={{width:'100%',border:'1px solid var(--g200)',borderRadius:5,padding:'7px 10px',fontSize:12,outline:'none',resize:'vertical',fontFamily:'inherit'}}
-                placeholder="例：白天只有老人在家，請提前電話確認..."/>
-            </div>
-
-            <div className="mact">
-              <button className="cancel" onClick={()=>setCaseModal(false)}>取消</button>
-              <button className="confirm" onClick={createCase}>建立報修單</button>
-            </div>
-          </div>
-        </div>
-        );
-      })()}
+      {caseModal&&sel&&(
+        <WorkOrderForm initialCategory="repair"
+          lockedCustomer={customers.find(c=>c.wfId===sel.wfId)||sel}
+          onClose={()=>setCaseModal(false)}/>
+      )}
 
       {editModal&&editForm&&sel&&(
         <div className="mo" onClick={e=>e.target===e.currentTarget&&setEditModal(false)}>
@@ -1277,6 +1383,7 @@ function RepairPage(){
   const [chargeRows,setChargeRows] = useState([]);
   const [hiRisk,setHiRisk] = useState(false);
   const [hardJob,setHardJob] = useState(false);
+  const [bomber,setBomber] = useState(false);
   const [tick,setTick] = useState(0);
   const [closing,setClosing] = useState(null);
   const workers = db.workers||[];
@@ -1297,26 +1404,27 @@ function RepairPage(){
     return r.status===tab;
   });
 
-  const openDispatch=(r)=>{ setDisp(r); setSw(''); setStart(null); setChargeRows([]); setRegion('central'); setSd(todayISO()); setHiRisk(false); setHardJob(false); };
+  const openDispatch=(r)=>{ setDisp(r); setSw(''); setStart(null); setChargeRows([]); setRegion('central'); setSd(todayISO()); setHiRisk(false); setHardJob(false); setBomber(!!r.flagBomber); };
   const doDispatch=async()=>{
     if(!disp) return;
     if(!sw){ toast('請選擇師傅','先選區域與師傅','warn'); return; }
     if(start==null){ toast('請選擇時段','點一個未佔用的時段','warn'); return; }
     const w=workers.find(x=>x.id===sw)||WORKERS.find(x=>x.id===sw);
-    const ok=await bookSlots(sw,sd,start,1,'repair',disp.id);
+    const span=Math.max(1,Math.ceil(Number(disp.workHours)||1)); // 可變工時 → 佔整格
+    const ok=await bookSlots(sw,sd,start,span,'repair',disp.id);
     if(!ok){ toast('時段衝突','該師傅此時段已被預約，請改其他時段','err'); return; }
     const cu=(db.customers||[]).find(c=>c.wfId===disp.wfId);
     const uid=cu?.lineUid;
     const charges=normCharges(chargeRows); const ctotal=chargesTotal(chargeRows);
-    const slotTxt=`${sd} ${hourLabel(start)}`;
+    const slotTxt=`${sd} ${String(start).padStart(2,'0')}:00-${String(start+span).padStart(2,'0')}:00`;
     const pushMsg={id:'p'+Date.now(),from:'bot',
       text:`🚗 派工通知\n\n師傅：${w?.name}\n預約：${slotTxt}\n師傅出發前將再次通知 📱`,time:now()};
     updateDB(prev=>{
       const cur=prev.repairs[disp.id];
       const nr={...prev.repairs,[disp.id]:pushHist({...cur,status:'dispatched',workerId:sw,scheduledDate:slotTxt,
-        schedDate:sd,schedStart:start,schedSpan:1,arrivalPushed:true,charges,chargeTotal:ctotal,
-        slaLevel:hiRisk?'high':cur.slaLevel,
-        note:[cur.note,hiRisk?'⚠️高風險維修':'',hardJob?'困難施工':''].filter(Boolean).join(' / ')},currentUser?.name,`派工：${w?.name}｜${slotTxt}`)};
+        schedDate:sd,schedStart:start,schedSpan:span,arrivalPushed:true,charges,chargeTotal:ctotal,
+        slaLevel:hiRisk?'high':cur.slaLevel,flagBomber:bomber,
+        note:[cur.note,hiRisk?'⚠️高風險維修':'',hardJob?'困難施工':'',bomber?'💣轟炸戶':''].filter(Boolean).join(' / ')},currentUser?.name,`派工：${w?.name}｜${slotTxt}`)};
       const nc=(prev.conversations||[]).map(c=>(uid&&c.id===uid)
         ?{...c,msgs:[...(c.msgs||[]),pushMsg],lastMsg:'師傅通知已送出',lastTime:now()}:c);
       return {...prev,repairs:nr,conversations:nc};
@@ -1431,17 +1539,18 @@ function RepairPage(){
               </div>
             </div>
             <SlotPicker workers={workers} bookings={db.bookings} region={region} setRegion={setRegion}
-              workerId={sw} setWorkerId={setSw} date={sd} setDate={setSd} start={start} setStart={setStart} span={1}/>
+              workerId={sw} setWorkerId={setSw} date={sd} setDate={setSd} start={start} setStart={setStart} span={Math.max(1,Math.ceil(Number(disp.workHours)||1))}/>
             <div className="fs-card"><h4>施工註記</h4>
               <div className="chk-row">
                 <label><input type="checkbox" checked={hiRisk} onChange={e=>setHiRisk(e.target.checked)}/>⚠️ 高風險維修</label>
                 <label><input type="checkbox" checked={hardJob} onChange={e=>setHardJob(e.target.checked)}/>困難施工</label>
+                <label><input type="checkbox" checked={bomber} onChange={e=>setBomber(e.target.checked)}/>💣 轟炸戶</label>
               </div>
             </div>
             <div className="fs-card"><h4>收費品項（預估）</h4>
               <ChargeTable rows={chargeRows} setRows={setChargeRows}/>
             </div>
-            <div style={{background:'#EFF6FF',borderRadius:8,padding:10,fontSize:12,color:'var(--accent)'}}>📱 確認後自動推播派工通知給客戶 LINE，並佔用該師傅 1 小時時段。</div>
+            <div style={{background:'#EFF6FF',borderRadius:8,padding:10,fontSize:12,color:'var(--accent)'}}>📱 確認後自動推播派工通知給客戶 LINE，並佔用該師傅 {Math.max(1,Math.ceil(Number(disp.workHours)||1))} 格時段。</div>
           </div>
         </div>
       )}
@@ -1484,7 +1593,6 @@ function InstallPage(){
   const {db,updateDB,toast,currentUser}=useContext(Ctx);
   const [creating,setCreating]=useState(false);
   const [verifying,setVerifying]=useState(null);
-  const [f,setF]=useState({name:'',phone:'',address:'',channel:'lock_shop',productId:'L376',serialNo:'',locksmithId:'S1'});
   const [sched,setSched]=useState(null);
   const [region,setRegion]=useState('central');
   const [sw,setSw]=useState('');
@@ -1496,26 +1604,6 @@ function InstallPage(){
   const STEPLABEL={pending:'待到場',arrived:'已到場',installed:'待驗收',done:'已完成',failed:'無法安裝'};
   const stepIdx={pending:0,arrived:1,installed:2,done:3};
 
-  const createOrder=()=>{
-    if(!f.name.trim()||!f.address.trim()){alert('請填寫客戶姓名與安裝地址（地址為客編識別依據）');return;}
-    const id='IW'+Date.now();
-    // 案件發生即發客編：以「地址+姓名」查既有客戶（電話非唯一），無則建立新客編
-    const key=custKey(f.name,f.address);
-    const exist=(db.customers||[]).find(c=>custKey(c.name,c.address)===key);
-    const wfId=exist?exist.wfId:'WF'+String(Date.now()).slice(-8);
-    const isNew=!exist;
-    updateDB(prev=>{
-      let customers=prev.customers||[];
-      if(isNew) customers=[...customers,{wfId,name:f.name.trim(),phone:f.phone.trim(),address:f.address,channel:f.channel,
-        productId:f.productId,serialNo:f.serialNo,regType:'auto',regDate:today(),
-        installDate:null,warrantyMonths:null,warrantyEnd:null,tags:['待安裝'],repairIds:[],complaintIds:[]}];
-      return {...prev,customers,
-        installs:{...prev.installs,[id]:pushHist({id,...f,wfId,status:'pending',createdDate:today(),createdTs:Date.now(),arrivalPushed:false},currentUser?.name,'建立安裝工單')}};
-    });
-    toast('📋 安裝工單已建立',isNew?`${f.name}｜已建立客編 ${wfId}`:`${f.name}｜歸入既有客編 ${wfId}`,'ok');
-    setCreating(false);
-    setF({name:'',phone:'',address:'',channel:'lock_shop',productId:'L376',serialNo:'',locksmithId:'S1'});
-  };
   const setStatus=(id,patch,msg,action)=>{
     updateDB(prev=>{
       let next={...prev.installs[id],...patch};
@@ -1536,15 +1624,16 @@ function InstallPage(){
   const fail=o=>setStatus(o.id,{status:'failed'},{t:'❌ 無法安裝',b:'已回報客服（退款 / 換型號）',type:'err'},'標記無法安裝');
 
   const openSchedule=(o)=>{ setSched(o); setRegion('central'); setSw(''); setSd(todayISO()); setStart(null); };
+  const schedSpan=sched?Math.max(1,Math.ceil(Number(sched.workHours)||2)):2; // 可變工時 → 無條件進位佔整格
   const doSchedule=async()=>{
     if(!sw){ toast('請選擇師傅','先選區域與師傅','warn'); return; }
-    if(start==null){ toast('請選擇時段','安裝佔 2 小時，選未佔用的起始格','warn'); return; }
+    if(start==null){ toast('請選擇時段',`安裝佔 ${schedSpan} 小時，選未佔用的起始格`,'warn'); return; }
     const w=workers.find(x=>x.id===sw)||WORKERS.find(x=>x.id===sw);
     await releaseSlots(sched.id); // 重排先釋放舊格
-    const ok=await bookSlots(sw,sd,start,2,'install',sched.id);
-    if(!ok){ toast('時段衝突','該師傅此 2 小時已被佔用，請改時段','err'); return; }
-    const slotTxt=`${sd} ${String(start).padStart(2,'0')}:00-${String(start+2).padStart(2,'0')}:00`;
-    setStatus(sched.id,{workerId:sw,schedDate:sd,schedStart:start,schedSpan:2},{t:'📅 已排程',b:`${w?.name}｜${slotTxt}`},`排程：${w?.name}｜${slotTxt}`);
+    const ok=await bookSlots(sw,sd,start,schedSpan,'install',sched.id);
+    if(!ok){ toast('時段衝突',`該師傅此 ${schedSpan} 小時已被佔用，請改時段`,'err'); return; }
+    const slotTxt=`${sd} ${String(start).padStart(2,'0')}:00-${String(start+schedSpan).padStart(2,'0')}:00`;
+    setStatus(sched.id,{workerId:sw,schedDate:sd,schedStart:start,schedSpan},{t:'📅 已排程',b:`${w?.name}｜${slotTxt}`},`排程：${w?.name}｜${slotTxt}`);
     const uid=lineUidByPhone(sched.phone);
     if(uid) pushLineTo(uid, `📅 安裝預約已排定\n\n師傅：${w?.name}\n時間：${slotTxt}\n當日出發前將再通知您 📱`);
     setSched(null);
@@ -1583,7 +1672,7 @@ function InstallPage(){
     <div className="rapage">
       <div className="ra-hdr">
         <h2>🛠️ 安裝工單</h2>
-        <button onClick={()=>setCreating(true)} style={{padding:'7px 14px',background:'var(--accent)',color:'var(--brand)',border:'none',borderRadius:6,fontSize:12.5,fontWeight:700,cursor:'pointer'}}>＋ 新增安裝工單</button>
+        <button onClick={()=>setCreating(true)} style={{padding:'7px 14px',background:'var(--accent)',color:'var(--brand)',border:'none',borderRadius:6,fontSize:12.5,fontWeight:700,cursor:'pointer'}}>＋ 新增工單（安裝／維修）</button>
       </div>
       {installs.length===0&&<div className="empty"><div style={{fontSize:34,opacity:.3}}>🛠️</div><div style={{fontSize:13,marginTop:8}}>尚無安裝工單</div><div style={{fontSize:11,color:'var(--g400)',marginTop:4}}>點右上角「新增安裝工單」開始</div></div>}
       <div className="ical">
@@ -1612,25 +1701,7 @@ function InstallPage(){
         ))}
       </div>
 
-      {creating&&(
-        <div className="mo" onClick={e=>e.target===e.currentTarget&&setCreating(false)}>
-          <div className="mob">
-            <h3>＋ 新增安裝工單</h3>
-            <div className="mf"><label>客戶姓名</label><input value={f.name} onChange={e=>setF({...f,name:e.target.value})}/></div>
-            <div className="mf2">
-              <div className="mf"><label>電話</label><input value={f.phone} onChange={e=>setF({...f,phone:e.target.value})}/></div>
-              <div className="mf"><label>產品序號</label><input value={f.serialNo} onChange={e=>setF({...f,serialNo:e.target.value})}/></div>
-            </div>
-            <div className="mf"><label>安裝地址</label><input value={f.address} onChange={e=>setF({...f,address:e.target.value})}/></div>
-            <div className="mf2">
-              <div className="mf"><label>購買通路</label><select value={f.channel} onChange={e=>setF({...f,channel:e.target.value})}>{Object.entries(CHANNELS).map(([k,val])=><option key={k} value={k}>{val.label}</option>)}</select></div>
-              <div className="mf"><label>安裝產品</label><select value={f.productId} onChange={e=>setF({...f,productId:e.target.value})}>{Object.entries(PRODUCTS).map(([k,val])=><option key={k} value={k}>{val.name}</option>)}</select></div>
-            </div>
-            <div className="mf"><label>指派鎖店師傅</label><select value={f.locksmithId} onChange={e=>setF({...f,locksmithId:e.target.value})}>{LOCKSMITHS.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
-            <div className="mact"><button className="cancel" onClick={()=>setCreating(false)}>取消</button><button className="confirm" onClick={createOrder}>建立工單</button></div>
-          </div>
-        </div>
-      )}
+      {creating&&<WorkOrderForm initialCategory="install" onClose={()=>setCreating(false)}/>}
 
       {sched&&(
         <div className="fullsheet">
@@ -1650,8 +1721,8 @@ function InstallPage(){
               </div>
             </div>
             <SlotPicker workers={workers} bookings={db.bookings} region={region} setRegion={setRegion}
-              workerId={sw} setWorkerId={setSw} date={sd} setDate={setSd} start={start} setStart={setStart} span={2}/>
-            <div style={{background:'#EDE9FE',borderRadius:8,padding:10,fontSize:12,color:'#5B21B6'}}>🛠️ 安裝佔用該師傅 2 小時（連續兩格）；確認後若客戶已綁定 LINE 將推播預約通知。</div>
+              workerId={sw} setWorkerId={setSw} date={sd} setDate={setSd} start={start} setStart={setStart} span={schedSpan}/>
+            <div style={{background:'#EDE9FE',borderRadius:8,padding:10,fontSize:12,color:'#5B21B6'}}>🛠️ 本單預估工時 {sched.workHours||2} 小時 → 佔用該師傅 {schedSpan} 格（連續）；確認後若客戶已綁定 LINE 將推播預約通知。</div>
           </div>
         </div>
       )}
