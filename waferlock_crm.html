@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
@@ -906,10 +906,9 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
           <div style={{display:'flex',gap:6}}>
             {[['install','🛠️ 安裝工單'],['repair','🔧 維修工單']].map(([k,l])=>(
               <button key={k} onClick={()=>setF(p=>({...p,category:k,category2:'',workHours:k==='install'?2:1}))}
-                disabled={!!lc&&lc&&k!==initialCategory}
                 style={{flex:1,padding:'8px',borderRadius:6,border:`1px solid ${cat===k?'var(--brand)':'var(--g200)'}`,
                   background:cat===k?'var(--brand)':'#fff',color:cat===k?'#fff':'var(--g600)',
-                  fontSize:12.5,fontWeight:700,cursor:'pointer',opacity:(!!lc&&k!==initialCategory)?.4:1}}>{l}</button>
+                  fontSize:12.5,fontWeight:700,cursor:'pointer',opacity:1}}>{l}</button>
             ))}
           </div>
         </div>
@@ -1088,6 +1087,21 @@ function CRMPage(){
   const [projModal,setProjModal] = useState(false);
   const [projForm,setProjForm] = useState({groupId:'',projectId:''}); // 歸屬建案
   const [editAddrPicker,setEditAddrPicker] = useState(false);
+  // 維修派工 + 結案
+  const [dispatchRepair,setDispatchRepair] = useState(null);
+  const [closingRepair,setClosingRepair] = useState(null);
+  // 安裝排程 + 驗收
+  const [schedInstall,setSchedInstall] = useState(null);
+  const [verifyInstall,setVerifyInstall] = useState(null);
+  // 共用 SlotPicker 狀態
+  const [dispRegion,setDispRegion] = useState('central');
+  const [dispSw,setDispSw] = useState('');
+  const [dispSd,setDispSd] = useState(todayISO());
+  const [dispStart,setDispStart] = useState(null);
+  const [dispChargeRows,setDispChargeRows] = useState([]);
+  const [dispHiRisk,setDispHiRisk] = useState(false);
+  const [dispHardJob,setDispHardJob] = useState(false);
+  const [dispBomber,setDispBomber] = useState(false);
 
   const customers = db.customers||[];
   // 只有搜尋後才顯示結果清單
@@ -1130,6 +1144,142 @@ function CRMPage(){
   const isInWarranty=(c)=> !!(c && c.productId && c.installDate && pctW(c.installDate, c.warrantyMonths||36)>0);
 
   const openCase=(c)=>{ setCaseModal(true); };
+
+  const lineUidByPhone=phone=>(db.customers||[]).find(x=>x.phone===phone&&x.lineUid)?.lineUid;
+
+  // ── 維修派工 ──
+  const openRepairDispatch=r=>{
+    setDispatchRepair(r);
+    setDispSw(''); setDispStart(null); setDispChargeRows([]);
+    setDispRegion('central'); setDispSd(todayISO());
+    setDispHiRisk(false); setDispHardJob(false); setDispBomber(!!r.flagBomber);
+  };
+  const doRepairDispatch=async()=>{
+    if(!dispatchRepair) return;
+    if(!dispSw){ toast('請選擇師傅','先選區域與師傅','warn'); return; }
+    if(dispStart==null){ toast('請選擇時段','點一個未佔用的時段','warn'); return; }
+    const workers=db.workers||[];
+    const w=workers.find(x=>x.id===dispSw)||WORKERS.find(x=>x.id===dispSw);
+    const span=Math.max(1,Math.ceil(Number(dispatchRepair.workHours)||1));
+    const ok=await bookSlots(dispSw,dispSd,dispStart,span,'repair',dispatchRepair.id);
+    if(!ok){ toast('時段衝突','該師傅此時段已被預約，請改其他時段','err'); return; }
+    const cu=(db.customers||[]).find(c=>c.wfId===dispatchRepair.wfId);
+    const uid=cu?.lineUid;
+    const charges=normCharges(dispChargeRows); const ctotal=chargesTotal(dispChargeRows);
+    const slotTxt=`${dispSd} ${String(dispStart).padStart(2,'0')}:00-${String(dispStart+span).padStart(2,'0')}:00`;
+    const pushMsg={id:'p'+Date.now(),from:'bot',
+      text:`🚗 派工通知\n\n師傅：${w?.name}\n預約：${slotTxt}\n師傅出發前將再次通知 📱`,time:now()};
+    updateDB(prev=>{
+      const cur=prev.repairs[dispatchRepair.id];
+      const nr={...prev.repairs,[dispatchRepair.id]:pushHist({...cur,status:'dispatched',workerId:dispSw,scheduledDate:slotTxt,
+        schedDate:dispSd,schedStart:dispStart,schedSpan:span,arrivalPushed:true,charges,chargeTotal:ctotal,
+        slaLevel:dispHiRisk?'high':cur.slaLevel,flagBomber:dispBomber,
+        note:[cur.note,dispHiRisk?'⚠️高風險維修':'',dispHardJob?'困難施工':'',dispBomber?'💣轟炸戶':''].filter(Boolean).join(' / ')},currentUser?.name,`派工：${w?.name}｜${slotTxt}`)};
+      const nc=(prev.conversations||[]).map(c=>(uid&&c.id===uid)
+        ?{...c,msgs:[...(c.msgs||[]),pushMsg],lastMsg:'師傅通知已送出',lastTime:now()}:c);
+      return {...prev,repairs:nr,conversations:nc};
+    });
+    pushLineTo(uid, pushMsg.text);
+    toast('🚗 派工完成',`${w?.name}｜${slotTxt}${uid?'，已推播住戶':'（客戶未綁定 LINE）'}`,'ok');
+    setDispatchRepair(null);
+  };
+  const finishRepairClose=(r,d)=>{
+    const chargeLine=(d.charges&&d.charges.length)?`\n費用：$${d.total}`:'\n本次維修免費（保固內）';
+    const wkName=(db.workers||[]).find(w=>w.id===r.workerId)?.name||WORKERS.find(w=>w.id===r.workerId)?.name||'—';
+    const closeMsg={id:'p'+Date.now(),from:'bot',time:now(),
+      text:`✅ 維修完成結案\n\n案件：${r.id}\n問題：${r.type} — ${r.issue}${chargeLine}\n師傅：${wkName}\n簽收單號：${d.receiptNo}\n\n感謝您的使用 🙏 期待再為您服務\n⭐ 歡迎為本次服務評分`};
+    const ccu=(db.customers||[]).find(c=>c.wfId===r.wfId);
+    const cuid=ccu?.lineUid;
+    updateDB(prev=>({...prev,
+      repairs:{...prev.repairs,[r.id]:pushHist({...prev.repairs[r.id],
+        status:'done',photos:d.photos,signature:d.signature,
+        charges:d.charges,chargeTotal:d.total,workNote:d.note,
+        warrantyJudgment:d.warrantyJudgment,excludeReason:d.excludeReason,
+        auditNote:d.auditNote||'',receiptNo:d.receiptNo,
+        completedDate:today()},currentUser?.name,`完工結案｜簽收單號 ${d.receiptNo}`)},
+      conversations:(prev.conversations||[]).map(c=>(cuid&&c.id===cuid)
+        ?{...c,msgs:[...(c.msgs||[]),closeMsg],lastMsg:'維修完成結案',lastTime:now()}:c)
+    }));
+    pushLineTo(cuid, closeMsg.text);
+    toast('✅ 已結案',`電子工單已簽收，簽收單號 ${d.receiptNo}`,'ok');
+    setTimeout(()=>toast('📨 CSAT 已推播','滿意度問卷已發送住戶','ok'),1500);
+    setClosingRepair(null);
+  };
+
+  // ── 安裝排程 ──
+  const openInstallSchedule=o=>{
+    setSchedInstall(o); setDispRegion('central'); setDispSw(''); setDispSd(todayISO()); setDispStart(null);
+  };
+  const doInstallSchedule=async()=>{
+    if(!dispSw){ toast('請選擇師傅','先選區域與師傅','warn'); return; }
+    if(dispStart==null){ toast('請選擇時段','安裝佔 2 小時，選未佔用的起始格','warn'); return; }
+    const workers=db.workers||[];
+    const w=workers.find(x=>x.id===dispSw)||WORKERS.find(x=>x.id===dispSw);
+    const span=Math.max(1,Math.ceil(Number(schedInstall.workHours)||2));
+    await releaseSlots(schedInstall.id);
+    const ok=await bookSlots(dispSw,dispSd,dispStart,span,'install',schedInstall.id);
+    if(!ok){ toast('時段衝突',`該師傅此 ${span} 小時已被佔用，請改時段`,'err'); return; }
+    const slotTxt=`${dispSd} ${String(dispStart).padStart(2,'0')}:00-${String(dispStart+span).padStart(2,'0')}:00`;
+    updateDB(prev=>{
+      let next={...prev.installs[schedInstall.id],workerId:dispSw,schedDate:dispSd,schedStart:dispStart,schedSpan:span};
+      next=pushHist(next,currentUser?.name,`排程：${w?.name}｜${slotTxt}`);
+      return {...prev,installs:{...prev.installs,[schedInstall.id]:next}};
+    });
+    const uid=lineUidByPhone(schedInstall.phone);
+    if(uid) pushLineTo(uid,`📅 安裝預約已排定\n\n師傅：${w?.name}\n時間：${slotTxt}\n當日出發前將再通知您 📱`);
+    toast('📅 已排程',`${w?.name}｜${slotTxt}`,'ok');
+    setSchedInstall(null);
+  };
+
+  // ── 安裝狀態推進 ──
+  const arriveInstall=o=>{
+    const uid=lineUidByPhone(o.phone);
+    updateDB(prev=>{
+      let next={...prev.installs[o.id],status:'arrived',arrivalPushed:!!uid};
+      next=pushHist(next,currentUser?.name,'標記到場');
+      return {...prev,installs:{...prev.installs,[o.id]:next}};
+    });
+    if(uid) pushLineTo(uid,`🚪 安裝通知\n\n您預約的安裝師傅已抵達現場，即將開始安裝。`);
+    toast(uid?'📱 已推播':'📍 已標記到場',uid?'「師傅已抵達」通知已送達住戶 LINE':'客戶尚未綁定 LINE，未發送推播',uid?'ok':'warn');
+  };
+  const installedDone=o=>{
+    updateDB(prev=>{
+      let next={...prev.installs[o.id],status:'installed'};
+      next=pushHist(next,currentUser?.name,'施工完成（待驗收）');
+      return {...prev,installs:{...prev.installs,[o.id]:next}};
+    });
+    toast('🔧 施工完成','請進行完工驗收','ok');
+  };
+  const failInstall=o=>{
+    updateDB(prev=>{
+      let next={...prev.installs[o.id],status:'failed'};
+      next=pushHist(next,currentUser?.name,'標記無法安裝');
+      return {...prev,installs:{...prev.installs,[o.id]:next}};
+    });
+    toast('❌ 無法安裝','已回報客服（退款 / 換型號）','err');
+  };
+  const finishInstallVerify=(o,d)=>{
+    const months=PRODUCTS[o.productId]?.warranty||36;
+    const warrantyEnd=addMonthsStr(months);
+    let wfId=o.wfId;
+    updateDB(prev=>{
+      let customers=prev.customers||[];
+      if(wfId&&customers.some(c=>c.wfId===wfId)){
+        customers=customers.map(c=>c.wfId!==wfId?c:{...c,
+          name:o.name,phone:o.phone,address:o.address||c.address,channel:o.channel||c.channel,
+          productId:o.productId,serialNo:o.serialNo,installDate:today(),warrantyMonths:months,warrantyEnd,
+          tags:[...new Set([...(c.tags||[]).filter(t=>t!=='待安裝'),'保固中'])]});
+      }
+      return {...prev,
+        installs:{...prev.installs,[o.id]:pushHist({...prev.installs[o.id],status:'done',photos:d.photos,signature:d.signature,verify:d.verify,taught:d.taught,workNote:d.note,completedDate:today(),wfId,warrantyEnd},currentUser?.name,`完工驗收｜保固至 ${warrantyEnd}`)},
+        customers};
+    });
+    const uid=lineUidByPhone(o.phone);
+    if(uid) pushLineTo(uid,`✅ 安裝完成\n\n您的 ${PRODUCTS[o.productId]?.name||'門鎖'} 已安裝驗收完成，保固自今日起算至 ${warrantyEnd}。感謝您的使用 🙏`);
+    toast('✅ 安裝完成','保固開始計算（安裝日起算）','ok');
+    setTimeout(()=>toast('🎉 客編保固已更新',`${o.name} 保固至 ${warrantyEnd}`,'ok'),1400);
+    setVerifyInstall(null);
+  };
 
   const openComplaint=(c)=>{
     setCtForm({callChannel:CALL_CHANNELS[0],department:COMPLAINT_DEPARTMENTS[0],cat1:'',cat2:'',cat3:'',process:'',status:'pending'});
@@ -1197,6 +1347,7 @@ function CRMPage(){
   const openEdit=(c)=>{
     setEditForm({name:c.name||'',phone:c.phone||'',email:c.email||'',zip:c.zip||'',
       address:(c.address&&c.address!=='待填寫')?c.address:'',channel:c.channel||'',
+      groupId:c.groupId||'',projectId:c.projectId||'',
       productId:c.productId||'',serialNo:c.serialNo||'',installDate:toInputDate(c.installDate),
       warrantyMonths:c.warrantyMonths||''});
     setEditModal(true);
@@ -1215,6 +1366,7 @@ function CRMPage(){
       else { tags.push('待安裝'); }
       return {...c, name:editForm.name||c.name, phone:editForm.phone, email:editForm.email, zip:editForm.zip||c.zip,
         address:editForm.address||'待填寫', channel:editForm.channel||'',
+        groupId:editForm.groupId||null, projectId:editForm.projectId||null,
         productId:editForm.productId||null, serialNo:editForm.serialNo||'',
         installDate:installLocale, warrantyMonths:months, warrantyEnd, tags};
     })}));
@@ -1254,6 +1406,8 @@ function CRMPage(){
   const p = pctW(cur.installDate, cur.warrantyMonths||36);
   const ch = CHANNELS[cur.channel];
   const repairs = getRepairs(cur);
+  const STEPLABEL={pending:'待到場',arrived:'已到場',installed:'待驗收',done:'已完成',failed:'無法安裝'};
+  const curInstalls=Object.values(db.installs||{}).filter(o=>o.wfId===cur.wfId).sort((a,b)=>(b.createdTs||0)-(a.createdTs||0));
 
   return(
     <div className="crm-layer2" style={{position:'relative',zIndex:1}}>
@@ -1396,12 +1550,50 @@ function CRMPage(){
                     {r.receiptNo&&<div style={{marginTop:6,fontSize:10.5,padding:'5px 9px',background:'#EFF6FF',borderRadius:5,color:'var(--accent)',fontWeight:700}}>📋 簽收單號：{r.receiptNo}</div>}
                     {r.arrivalPushed&&<div style={{marginTop:6,fontSize:10.5,color:'var(--accent)',padding:'4px 8px',background:'#EFF6FF',borderRadius:4}}>✅ 師傅抵達通知已推播</div>}
                     {r.rating!=null&&<div style={{marginTop:5,display:'flex',alignItems:'center',gap:4}}><div className="stars">{stars(r.rating)}</div><span style={{fontSize:10.5,color:'var(--g400)'}}>客戶評分 {r.rating}</span></div>}
+                    {r.status!=='done'&&<div style={{marginTop:8,display:'flex',gap:6,flexWrap:'wrap'}}>
+                      {r.status==='pending'&&<button onClick={()=>openRepairDispatch(r)} style={{padding:'5px 12px',background:'#EDE9FE',color:'#5B21B6',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>📅 排程派工</button>}
+                      {r.status==='dispatched'&&<button onClick={()=>setClosingRepair(r)} style={{padding:'5px 12px',background:'var(--ok)',color:'#fff',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>✅ 完工結案</button>}
+                    </div>}
+                  </div>
+                ))
+              }
+
+              {/* ── 安裝工單 ── */}
+              <div className="sec-t">🛠️ 安裝工單（{curInstalls.length} 筆）</div>
+              {curInstalls.length===0
+                ?<div className="empty" style={{height:80}}><div style={{fontSize:22,opacity:.3}}>🛠️</div><div style={{fontSize:12,marginTop:6}}>尚無安裝工單</div></div>
+                :curInstalls.map(o=>(
+                  <div key={o.id} className={`rcard ${o.status==='done'?'done':o.status==='failed'?'urgent':'dispatched'}`}>
+                    <div className="rch">
+                      <div>
+                        <div style={{fontSize:12,fontWeight:700}}>安裝 — {PRODUCTS[o.productId]?.name||o.productId||'—'}</div>
+                        <div className="rid">{o.id}</div>
+                      </div>
+                      <span className={`sb ${o.status==='done'?'done':o.status==='failed'?'urgent':o.status==='pending'?'pending':'dispatched'}`}>{STEPLABEL[o.status]}</span>
+                    </div>
+                    <div className="rb">
+                      <div><span>🔑 負責師傅</span><br/><strong>{LOCKSMITHS.find(s=>s.id===o.locksmithId)?.name||'未指派'}</strong></div>
+                      <div><span>👷 派工師傅</span><br/><strong>{(db.workers||[]).find(w=>w.id===o.workerId)?.name||WORKERS.find(w=>w.id===o.workerId)?.name||'未排程'}</strong></div>
+                      {o.schedDate&&<div><span>⏰ 預約</span><br/><strong>{o.schedDate} {String(o.schedStart||0).padStart(2,'0')}:00</strong></div>}
+                      {o.serialNo&&<div><span>📋 序號</span><br/><strong style={{fontFamily:'JetBrains Mono',fontSize:10}}>{o.serialNo}</strong></div>}
+                    </div>
+                    {o.status==='done'&&<div style={{fontSize:11,color:'var(--ok)',fontWeight:700,marginTop:4}}>✅ 完工 {o.completedDate}　·　保固至 {o.warrantyEnd}</div>}
+                    {o.status==='failed'&&<div style={{fontSize:11,color:'var(--err)',fontWeight:700,marginTop:4}}>❌ 已回報客服處理</div>}
+                    {o.status!=='done'&&o.status!=='failed'&&(
+                      <div style={{marginTop:8,display:'flex',gap:6,flexWrap:'wrap'}}>
+                        {(o.status==='pending'||o.status==='arrived')&&<button onClick={()=>openInstallSchedule(o)} style={{padding:'5px 12px',background:'#EDE9FE',color:'#5B21B6',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>📅 {o.schedDate?'改排程':'排程派工'}</button>}
+                        {o.status==='pending'&&<button onClick={()=>arriveInstall(o)} style={{padding:'5px 12px',background:'var(--accent)',color:'var(--brand)',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>📍 標記到場</button>}
+                        {o.status==='arrived'&&<button onClick={()=>installedDone(o)} style={{padding:'5px 12px',background:'var(--ok)',color:'#fff',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>🔧 施工完成</button>}
+                        {o.status==='installed'&&<button onClick={()=>setVerifyInstall(o)} style={{padding:'5px 12px',background:'var(--ok)',color:'#fff',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>🔬 完工驗收 + 保固登錄</button>}
+                        {(o.status==='pending'||o.status==='arrived')&&<button onClick={()=>failInstall(o)} style={{padding:'5px 12px',background:'#FEE2E2',color:'var(--err)',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>無法安裝</button>}
+                      </div>
+                    )}
                   </div>
                 ))
               }
 
       {caseModal&&sel&&(
-        <WorkOrderForm initialCategory="repair"
+        <WorkOrderForm
           lockedCustomer={customers.find(c=>c.wfId===sel.wfId)||sel}
           onClose={()=>setCaseModal(false)}/>
       )}
@@ -1426,7 +1618,7 @@ function CRMPage(){
             </div>
             <div className="mf2">
               <div className="mf"><label>購買通路</label>
-                <select value={editForm.channel} onChange={e=>setEditForm(p=>({...p,channel:e.target.value}))}>
+                <select value={editForm.channel} onChange={e=>setEditForm(p=>({...p,channel:e.target.value,groupId:'',projectId:''}))}>
                   <option value="">—</option>
                   {Object.entries(CHANNELS).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
                 </select>
@@ -1438,6 +1630,22 @@ function CRMPage(){
                 </select>
               </div>
             </div>
+            {editForm.channel==='builder'&&(
+              <div className="mf2">
+                <div className="mf"><label>所屬集團</label>
+                  <select value={editForm.groupId||''} onChange={e=>setEditForm(p=>({...p,groupId:e.target.value,projectId:''}))}>
+                    <option value="">— 選集團 —</option>
+                    {(db.groups||[]).map(g=><option key={g.id} value={g.id}>{g.name}</option>)}
+                  </select>
+                </div>
+                <div className="mf"><label>所屬建案</label>
+                  <select value={editForm.projectId||''} onChange={e=>setEditForm(p=>({...p,projectId:e.target.value}))} disabled={!editForm.groupId}>
+                    <option value="">— 選建案 —</option>
+                    {(db.projects||[]).filter(p=>p.groupId===editForm.groupId).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+              </div>
+            )}
             <div className="mf"><label>產品序號</label><input value={editForm.serialNo} onChange={e=>setEditForm(p=>({...p,serialNo:e.target.value}))}/></div>
             <div className="mf2">
               <div className="mf"><label>安裝日期</label><input type="date" value={editForm.installDate} onChange={e=>setEditForm(p=>({...p,installDate:e.target.value}))}/></div>
@@ -1561,521 +1769,85 @@ function CRMPage(){
         </div>
         );
       })()}
-    </div>
-  );
-}
 
-// ─── Repair Admin Page ───
-function RepairPage(){
-  const {db,updateDB,toast,currentUser} = useContext(Ctx);
-  const [tab,setTab] = useState('all');
-  const [disp,setDisp] = useState(null);
-  const [region,setRegion] = useState('central');
-  const [sw,setSw] = useState('');
-  const [sd,setSd] = useState(todayISO());
-  const [start,setStart] = useState(null);
-  const [chargeRows,setChargeRows] = useState([]);
-  const [hiRisk,setHiRisk] = useState(false);
-  const [hardJob,setHardJob] = useState(false);
-  const [bomber,setBomber] = useState(false);
-  const [tick,setTick] = useState(0);
-  const [closing,setClosing] = useState(null);
-  const workers = db.workers||[];
-
-  useEffect(()=>{const t=setInterval(()=>setTick(p=>p+1),30000);return()=>clearInterval(t);},[]);
-
-  const all = Object.values(db.repairs||{});
-  const cnt = {
-    all:all.length,
-    pending:all.filter(r=>r.status==='pending').length,
-    dispatched:all.filter(r=>r.status==='dispatched').length,
-    done:all.filter(r=>r.status==='done').length,
-    urgent:all.filter(r=>r.urgency==='urgent'&&r.status!=='done').length,
-  };
-  const list = all.filter(r=>{
-    if(tab==='urgent') return r.urgency==='urgent'&&r.status!=='done';
-    if(tab==='all') return true;
-    return r.status===tab;
-  });
-
-  const openDispatch=(r)=>{ setDisp(r); setSw(''); setStart(null); setChargeRows([]); setRegion('central'); setSd(todayISO()); setHiRisk(false); setHardJob(false); setBomber(!!r.flagBomber); };
-  const doDispatch=async()=>{
-    if(!disp) return;
-    if(!sw){ toast('請選擇師傅','先選區域與師傅','warn'); return; }
-    if(start==null){ toast('請選擇時段','點一個未佔用的時段','warn'); return; }
-    const w=workers.find(x=>x.id===sw)||WORKERS.find(x=>x.id===sw);
-    const span=Math.max(1,Math.ceil(Number(disp.workHours)||1)); // 可變工時 → 佔整格
-    const ok=await bookSlots(sw,sd,start,span,'repair',disp.id);
-    if(!ok){ toast('時段衝突','該師傅此時段已被預約，請改其他時段','err'); return; }
-    const cu=(db.customers||[]).find(c=>c.wfId===disp.wfId);
-    const uid=cu?.lineUid;
-    const charges=normCharges(chargeRows); const ctotal=chargesTotal(chargeRows);
-    const slotTxt=`${sd} ${String(start).padStart(2,'0')}:00-${String(start+span).padStart(2,'0')}:00`;
-    const pushMsg={id:'p'+Date.now(),from:'bot',
-      text:`🚗 派工通知\n\n師傅：${w?.name}\n預約：${slotTxt}\n師傅出發前將再次通知 📱`,time:now()};
-    updateDB(prev=>{
-      const cur=prev.repairs[disp.id];
-      const nr={...prev.repairs,[disp.id]:pushHist({...cur,status:'dispatched',workerId:sw,scheduledDate:slotTxt,
-        schedDate:sd,schedStart:start,schedSpan:span,arrivalPushed:true,charges,chargeTotal:ctotal,
-        slaLevel:hiRisk?'high':cur.slaLevel,flagBomber:bomber,
-        note:[cur.note,hiRisk?'⚠️高風險維修':'',hardJob?'困難施工':'',bomber?'💣轟炸戶':''].filter(Boolean).join(' / ')},currentUser?.name,`派工：${w?.name}｜${slotTxt}`)};
-      const nc=(prev.conversations||[]).map(c=>(uid&&c.id===uid)
-        ?{...c,msgs:[...(c.msgs||[]),pushMsg],lastMsg:'師傅通知已送出',lastTime:now()}:c);
-      return {...prev,repairs:nr,conversations:nc};
-    });
-    pushLineTo(uid, pushMsg.text);
-    toast('🚗 派工完成',`${w?.name}｜${slotTxt}${uid?'，已推播住戶':'（客戶未綁定 LINE）'}`,'ok');
-    setDisp(null);
-  };
-
-  const markDone=rid=>{
-    updateDB(prev=>({...prev,repairs:{...prev.repairs,[rid]:pushHist({...prev.repairs[rid],status:'done'},currentUser?.name,'結案')}}));
-    toast('✅ 結案','案件已完成結案','ok');
-  };
-
-  return(
-    <div className="rapage">
-      <div className="ra-hdr">
-        <h2>🔧 報修後台管理</h2>
-        <div style={{display:'flex',gap:10,alignItems:'center'}}>
-          <div className="pulse-badge"><div className="pdot"/>每30秒自動更新</div>
-          <span style={{fontSize:11,color:'var(--g400)'}}>共 {all.length} 筆</span>
-        </div>
-      </div>
-
-      {cnt.urgent>0&&(
-        <div className="urg-alert">
-          <span style={{fontSize:18}}>🚨</span>
-          <div style={{flex:1}}>
-            <div style={{fontWeight:700,color:'var(--err)',fontSize:13}}>{cnt.urgent} 件緊急案件待處理</div>
-            <div style={{fontSize:11.5,color:'#7F1D1D'}}>請立即點選「緊急案件」分頁</div>
-          </div>
-          <button onClick={()=>setTab('urgent')}
-            style={{padding:'5px 12px',background:'var(--err)',color:'#fff',border:'none',borderRadius:5,fontSize:12,fontWeight:700,cursor:'pointer'}}>
-            立即查看
-          </button>
-        </div>
-      )}
-
-      <div className="rtabs">
-        {[['all','全部'],['pending','等待處理'],['dispatched','已派工'],['done','已完成'],['urgent','🚨 緊急']].map(([v,l])=>(
-          <button key={v} className={`rtab ${tab===v?'on':''}`} onClick={()=>setTab(v)}>
-            {l}
-            {v!=='all'&&cnt[v]>0&&<span className={`tc ${v==='dispatched'?'dis':v==='done'?'done':v==='urgent'?'urg':'pend'}`}>{cnt[v]}</span>}
-          </button>
-        ))}
-      </div>
-
-      <div className="rtable">
-        <div className="rth" style={{gridTemplateColumns:'90px 95px 65px 1fr 60px 55px 100px 90px 50px 105px'}}>
-          <div>客戶</div><div>位置</div><div>日期</div><div>問題</div>
-          <div>空間</div><div>保固</div><div>處理單位</div><div>狀態</div><div>新</div><div>操作</div>
-        </div>
-        {list.length===0&&<div className="empty" style={{height:90}}><div style={{fontSize:24,opacity:.3}}>📋</div><div style={{fontSize:12,marginTop:6}}>此分類無案件</div></div>}
-        {list.map(r=>(
-          <div key={r.id} className={`rtr ${r.urgency==='urgent'&&r.status!=='done'?'urg-row':''}`}
-            style={{gridTemplateColumns:'90px 95px 65px 1fr 60px 55px 100px 90px 50px 105px'}}>
-            <div className="cell" style={{fontWeight:600,fontSize:12}}>{r.name}</div>
-            <div className="cell" style={{fontSize:11,color:'var(--accent)'}}>{r.building||r.area||'—'}</div>
-            <div className="cell" style={{fontSize:11}}>{(r.date||'').slice(5)}</div>
-            <div className="cell" style={{fontSize:11}}>
-              {r.urgency==='urgent'&&r.status!=='done'&&<span style={{color:'var(--err)',fontWeight:700}}>🚨</span>}
-              {r.type}—{r.issue}
-            </div>
-            <div className="cell" style={{fontSize:11}}>{r.space}</div>
-            <div className="cell" style={{fontSize:10.5}}>
-              {r.warrantyIn!=null
-                ?<span style={{fontSize:10,padding:'1px 5px',borderRadius:8,fontWeight:700,
-                    background:r.warrantyIn?'#D1FAE5':'#FEE2E2',color:r.warrantyIn?'#065F46':'#991B1B'}}>
-                    {r.warrantyIn?'✅保內':'⚠️保外'}</span>
-                :<span style={{color:'var(--g400)'}}>—</span>}
-            </div>
-            <div className="cell" style={{fontSize:10.5}}>
-              {r.handlingUnit
-                ?<span style={{padding:'1px 5px',borderRadius:8,fontWeight:600,fontSize:10,
-                    background:r.handlingUnit==='原廠工務'?'#EDE9FE':'#FEF3C7',
-                    color:r.handlingUnit==='原廠工務'?'#5B21B6':'#92400E'}}>{r.handlingUnit}</span>
-                :<span style={{color:'var(--g400)'}}>—</span>}
-            </div>
-            <div><span className={`sb ${r.urgency==='urgent'&&r.status!=='done'?'urgent':r.status}`}>
-              {r.status==='done'?'✅完成':r.status==='dispatched'?'🚗派工中':r.urgency==='urgent'?'🚨緊急':'⏳待處理'}
-            </span></div>
-            <div style={{fontSize:11,color:r.unread?'var(--err)':'var(--g300)',fontWeight:r.unread?700:400}}>{r.unread?'🔔':'—'}</div>
-            <div style={{display:'flex',gap:3}}>
-              {r.status==='pending'&&<button className="dpbtn" onClick={()=>openDispatch(r)}>{r.urgency==='urgent'?'🚨':''}派工</button>}
-              {r.status==='dispatched'&&<button className="donebtn" onClick={()=>setClosing(r)}>結案</button>}
-              {r.status==='done'&&<span style={{fontSize:10,color:'var(--ok)',fontWeight:700}}>✅結案</span>}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {disp&&(
+      {/* ── 維修排程派工 fullsheet ── */}
+      {dispatchRepair&&(
         <div className="fullsheet">
           <div className="fs-top">
-            <h3>{disp.urgency==='urgent'?'🚨 緊急派工工單':'🚗 派工工單'}　<span style={{fontFamily:'monospace',fontWeight:400,fontSize:12}}>{disp.id}</span></h3>
+            <h3>🚗 派工工單　<span style={{fontFamily:'monospace',fontWeight:400,fontSize:12}}>{dispatchRepair.id}</span></h3>
             <div className="sp">
-              <button className="cancel" style={{padding:'7px 14px',borderRadius:6,border:'none',cursor:'pointer'}} onClick={()=>setDisp(null)}>取消</button>
-              <button className="confirm" style={{padding:'7px 16px',borderRadius:6,border:'none',cursor:'pointer'}} onClick={doDispatch}>確認派工 + 推播</button>
+              <button className="cancel" style={{padding:'7px 14px',borderRadius:6,border:'none',cursor:'pointer'}} onClick={()=>setDispatchRepair(null)}>取消</button>
+              <button className="confirm" style={{padding:'7px 16px',borderRadius:6,border:'none',cursor:'pointer'}} onClick={doRepairDispatch}>確認派工 + 推播</button>
             </div>
           </div>
           <div className="fs-body">
-            <div className="fs-card">
-              <h4>案件資訊</h4>
+            <div className="fs-card"><h4>案件資訊</h4>
               <div style={{fontSize:13,lineHeight:1.9}}>
-                <div><b>{disp.name}</b>　{disp.phone}
-                  {disp.warrantyIn!=null&&<span style={{fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:6,
-                    color:disp.warrantyIn?'#065F46':'#991B1B',background:disp.warrantyIn?'#D1FAE5':'#FEE2E2'}}>
-                    {disp.warrantyIn?'保固內 · 免費':'保固外 · 需收費'}</span>}</div>
-                <div>🏠 {disp.building||disp.area||'—'}</div>
-                <div>🔧 {disp.type} — {disp.issue}</div>
-                {disp.desc&&<div>📝 {disp.desc}</div>}
+                <div><b>{dispatchRepair.name}</b>　{dispatchRepair.phone}</div>
+                <div>🏠 {dispatchRepair.building||dispatchRepair.area||cur?.address||'—'}</div>
+                <div>🔧 {dispatchRepair.type} — {dispatchRepair.issue}</div>
               </div>
             </div>
-            <SlotPicker workers={workers} bookings={db.bookings} region={region} setRegion={setRegion}
-              workerId={sw} setWorkerId={setSw} date={sd} setDate={setSd} start={start} setStart={setStart} span={Math.max(1,Math.ceil(Number(disp.workHours)||1))}/>
+            <SlotPicker workers={db.workers||[]} bookings={db.bookings} region={dispRegion} setRegion={setDispRegion}
+              workerId={dispSw} setWorkerId={setDispSw} date={dispSd} setDate={setDispSd} start={dispStart} setStart={setDispStart}
+              span={Math.max(1,Math.ceil(Number(dispatchRepair.workHours)||1))}/>
             <div className="fs-card"><h4>施工註記</h4>
               <div className="chk-row">
-                <label><input type="checkbox" checked={hiRisk} onChange={e=>setHiRisk(e.target.checked)}/>⚠️ 高風險維修</label>
-                <label><input type="checkbox" checked={hardJob} onChange={e=>setHardJob(e.target.checked)}/>困難施工</label>
-                <label><input type="checkbox" checked={bomber} onChange={e=>setBomber(e.target.checked)}/>💣 轟炸戶</label>
+                <label><input type="checkbox" checked={dispHiRisk} onChange={e=>setDispHiRisk(e.target.checked)}/>⚠️ 高風險維修</label>
+                <label><input type="checkbox" checked={dispHardJob} onChange={e=>setDispHardJob(e.target.checked)}/>困難施工</label>
+                <label><input type="checkbox" checked={dispBomber} onChange={e=>setDispBomber(e.target.checked)}/>💣 轟炸戶</label>
               </div>
             </div>
             <div className="fs-card"><h4>收費品項（預估）</h4>
-              <ChargeTable rows={chargeRows} setRows={setChargeRows}/>
+              <ChargeTable rows={dispChargeRows} setRows={setDispChargeRows}/>
             </div>
-            <div style={{background:'#EFF6FF',borderRadius:8,padding:10,fontSize:12,color:'var(--accent)'}}>📱 確認後自動推播派工通知給客戶 LINE，並佔用該師傅 {Math.max(1,Math.ceil(Number(disp.workHours)||1))} 格時段。</div>
           </div>
         </div>
       )}
 
-      {closing&&(()=>{
-        const cust=(db.customers||[]).find(c=>c.wfId===closing.wfId);
-        const wIn=closing.warrantyIn!=null?closing.warrantyIn:(cust?pctW(cust.installDate,cust.warrantyMonths||36)>0:true);
-        return <WorkOrderModal mode="repair" record={closing} warrantyIn={wIn}
-          onClose={()=>setClosing(null)}
-          onSubmit={d=>{
-            const chargeLine=(d.charges&&d.charges.length)?`\n費用：$${d.total}`:'\n本次維修免費（保固內）';
-            const wkName=(db.workers||[]).find(w=>w.id===closing.workerId)?.name||WORKERS.find(w=>w.id===closing.workerId)?.name||'—';
-            const closeMsg={id:'p'+Date.now(),from:'bot',time:now(),
-              text:`✅ 維修完成結案\n\n案件：${closing.id}\n問題：${closing.type} — ${closing.issue}${chargeLine}\n師傅：${wkName}\n簽收單號：${d.receiptNo}\n\n感謝您的使用 🙏 期待再為您服務\n⭐ 歡迎為本次服務評分`};
-            const ccu=(db.customers||[]).find(c=>c.wfId===closing.wfId);
-            const cuid=ccu?.lineUid;
-            updateDB(prev=>({...prev,
-              repairs:{...prev.repairs,[closing.id]:pushHist({...prev.repairs[closing.id],
-                status:'done',photos:d.photos,signature:d.signature,
-                charges:d.charges,chargeTotal:d.total,workNote:d.note,
-                warrantyJudgment:d.warrantyJudgment,excludeReason:d.excludeReason,
-                auditNote:d.auditNote||'',receiptNo:d.receiptNo,
-                completedDate:today()},currentUser?.name,`完工結案｜簽收單號 ${d.receiptNo}`)},
-              // 以對話 id === 客戶 lineUid 寫入結案通知
-              conversations:(prev.conversations||[]).map(c=>(cuid&&c.id===cuid)
-                ?{...c,msgs:[...(c.msgs||[]),closeMsg],lastMsg:'維修完成結案',lastTime:now()}:c)
-            }));
-            pushLineTo(cuid, closeMsg.text);
-            toast('✅ 已結案',`電子工單已簽收，簽收單號 ${d.receiptNo}`,'ok');
-            setTimeout(()=>toast('📨 CSAT 已推播','滿意度問卷已發送住戶','ok'),1500);
-            setClosing(null);
-          }}/>;
-      })()}
-    </div>
-  );
-}
-
-// ─── 安裝工單 Page ───
-function InstallPage(){
-  const {db,updateDB,toast,currentUser}=useContext(Ctx);
-  const [creating,setCreating]=useState(false);
-  const [verifying,setVerifying]=useState(null);
-  const [sched,setSched]=useState(null);
-  const [region,setRegion]=useState('central');
-  const [sw,setSw]=useState('');
-  const [sd,setSd]=useState(todayISO());
-  const [start,setStart]=useState(null);
-  const workers=db.workers||[];
-
-  const installs=Object.values(db.installs||{}).sort((a,b)=>(b.createdTs||0)-(a.createdTs||0));
-  const STEPLABEL={pending:'待到場',arrived:'已到場',installed:'待驗收',done:'已完成',failed:'無法安裝'};
-  const stepIdx={pending:0,arrived:1,installed:2,done:3};
-
-  const setStatus=(id,patch,msg,action)=>{
-    updateDB(prev=>{
-      let next={...prev.installs[id],...patch};
-      if(action) next=pushHist(next,currentUser?.name,action);
-      return {...prev,installs:{...prev.installs,[id]:next}};
-    });
-    if(msg)toast(msg.t,msg.b,msg.type||'ok');
-  };
-  const lineUidByPhone=(phone)=>(db.customers||[]).find(x=>x.phone===phone && x.lineUid)?.lineUid;
-  const arrive=o=>{
-    const uid=lineUidByPhone(o.phone);
-    setStatus(o.id,{status:'arrived',arrivalPushed:!!uid},
-      uid?{t:'📱 已推播',b:'「師傅已抵達」通知已送達住戶 LINE'}
-         :{t:'📍 已標記到場',b:'客戶尚未綁定 LINE，未發送推播',type:'warn'},'標記到場');
-    if(uid) pushLineTo(uid, `🚪 安裝通知\n\n您預約的安裝師傅已抵達現場，即將開始安裝。`);
-  };
-  const installed=o=>setStatus(o.id,{status:'installed'},{t:'🔧 施工完成',b:'請進行完工驗收'},'施工完成（待驗收）');
-  const fail=o=>setStatus(o.id,{status:'failed'},{t:'❌ 無法安裝',b:'已回報客服（退款 / 換型號）',type:'err'},'標記無法安裝');
-
-  const openSchedule=(o)=>{ setSched(o); setRegion('central'); setSw(''); setSd(todayISO()); setStart(null); };
-  const schedSpan=sched?Math.max(1,Math.ceil(Number(sched.workHours)||2)):2; // 可變工時 → 無條件進位佔整格
-  const doSchedule=async()=>{
-    if(!sw){ toast('請選擇師傅','先選區域與師傅','warn'); return; }
-    if(start==null){ toast('請選擇時段',`安裝佔 ${schedSpan} 小時，選未佔用的起始格`,'warn'); return; }
-    const w=workers.find(x=>x.id===sw)||WORKERS.find(x=>x.id===sw);
-    await releaseSlots(sched.id); // 重排先釋放舊格
-    const ok=await bookSlots(sw,sd,start,schedSpan,'install',sched.id);
-    if(!ok){ toast('時段衝突',`該師傅此 ${schedSpan} 小時已被佔用，請改時段`,'err'); return; }
-    const slotTxt=`${sd} ${String(start).padStart(2,'0')}:00-${String(start+schedSpan).padStart(2,'0')}:00`;
-    setStatus(sched.id,{workerId:sw,schedDate:sd,schedStart:start,schedSpan},{t:'📅 已排程',b:`${w?.name}｜${slotTxt}`},`排程：${w?.name}｜${slotTxt}`);
-    const uid=lineUidByPhone(sched.phone);
-    if(uid) pushLineTo(uid, `📅 安裝預約已排定\n\n師傅：${w?.name}\n時間：${slotTxt}\n當日出發前將再通知您 📱`);
-    setSched(null);
-  };
-
-  const finishVerify=(o,d)=>{
-    const months=PRODUCTS[o.productId]?.warranty||36;
-    const warrantyEnd=addMonthsStr(months);
-    let wfId=o.wfId;
-    updateDB(prev=>{
-      let customers=prev.customers||[];
-      const has=wfId && customers.some(c=>c.wfId===wfId);
-      if(has){
-        // 更新既有客編：補上保固登錄欄位、待安裝→保固中
-        customers=customers.map(c=>c.wfId!==wfId?c:{...c,
-          name:o.name,phone:o.phone,address:o.address||c.address,channel:o.channel||c.channel,
-          productId:o.productId,serialNo:o.serialNo,installDate:today(),warrantyMonths:months,warrantyEnd,
-          tags:[...new Set([...(c.tags||[]).filter(t=>t!=='待安裝'),'保固中'])]});
-      }else{
-        // 舊資料 fallback：無客編則新建
-        wfId='WF'+String(Date.now()).slice(-8);
-        customers=[...customers,{wfId,name:o.name,phone:o.phone,address:o.address,channel:o.channel,productId:o.productId,serialNo:o.serialNo,regType:'auto',regDate:today(),installDate:today(),warrantyMonths:months,warrantyEnd,tags:['保固中','新客'],repairIds:[],complaintIds:[]}];
-      }
-      return {...prev,
-        installs:{...prev.installs,[o.id]:pushHist({...prev.installs[o.id],status:'done',photos:d.photos,signature:d.signature,verify:d.verify,taught:d.taught,workNote:d.note,completedDate:today(),wfId,warrantyEnd},currentUser?.name,`完工驗收｜保固至 ${warrantyEnd}`)},
-        customers};
-    });
-    const uid=lineUidByPhone(o.phone);
-    if(uid) pushLineTo(uid, `✅ 安裝完成\n\n您的 ${PRODUCTS[o.productId]?.name||'門鎖'} 已安裝驗收完成，保固自今日起算至 ${warrantyEnd}。感謝您的使用 🙏`);
-    toast('✅ 安裝完成','保固開始計算（安裝日起算）','ok');
-    setTimeout(()=>toast('🎉 客編保固已更新',`${o.name} 保固至 ${warrantyEnd}`,'ok'),1400);
-    setVerifying(null);
-  };
-
-  return(
-    <div className="rapage">
-      <div className="ra-hdr">
-        <h2>🛠️ 安裝工單</h2>
-        <button onClick={()=>setCreating(true)} style={{padding:'7px 14px',background:'var(--accent)',color:'var(--brand)',border:'none',borderRadius:6,fontSize:12.5,fontWeight:700,cursor:'pointer'}}>＋ 新增工單（安裝／維修）</button>
-      </div>
-      {installs.length===0&&<div className="empty"><div style={{fontSize:34,opacity:.3}}>🛠️</div><div style={{fontSize:13,marginTop:8}}>尚無安裝工單</div><div style={{fontSize:11,color:'var(--g400)',marginTop:4}}>點右上角「新增安裝工單」開始</div></div>}
-      <div className="ical">
-        {installs.map(o=>(
-          <div key={o.id} className={`icard ${o.status}`}>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
-              <div><div style={{fontSize:14,fontWeight:700}}>{o.name}</div><div style={{fontSize:11,color:'var(--g500)'}}>{o.phone}</div></div>
-              <span className={`sb ${o.status==='done'?'done':o.status==='failed'?'urgent':o.status==='pending'?'pending':'dispatched'}`}>{STEPLABEL[o.status]}</span>
-            </div>
-            <div style={{fontSize:11,color:'var(--g600)',marginTop:6,lineHeight:1.7}}>
-              🏠 {o.address||'地址待填'}<br/>
-              📦 {PRODUCTS[o.productId]?.name||o.productId}　{o.serialNo&&<span style={{fontFamily:'JetBrains Mono',fontSize:10}}>{o.serialNo}</span>}<br/>
-              🔑 {LOCKSMITHS.find(s=>s.id===o.locksmithId)?.name||'未指派'}
-            </div>
-            <div className="istep">{[0,1,2,3].map(i=><div key={i} className={`dot ${o.status!=='failed'&&stepIdx[o.status]>=i?'on':''}`}/>)}</div>
-            {o.status==='done'&&<div style={{fontSize:11,color:'var(--ok)',fontWeight:700}}>✅ 保固起算 {o.completedDate}　·　保固至 {o.warrantyEnd}</div>}
-            {o.status==='failed'&&<div style={{fontSize:11,color:'var(--err)',fontWeight:700}}>❌ 已回報客服處理</div>}
-            {o.schedDate&&o.status!=='done'&&o.status!=='failed'&&<div style={{fontSize:11,color:'var(--accent)',fontWeight:700,marginTop:4}}>📅 {o.schedDate} {String(o.schedStart).padStart(2,'0')}:00-{String(o.schedStart+2).padStart(2,'0')}:00　{(workers.find(w=>w.id===o.workerId)||{}).name||''}</div>}
-            <div className="iact">
-              {(o.status==='pending'||o.status==='arrived')&&<button className="ghost" style={{background:'#EDE9FE',color:'#5B21B6',border:'none',borderRadius:5,padding:'6px 12px',fontSize:11.5,fontWeight:700,cursor:'pointer'}} onClick={()=>openSchedule(o)}>📅 {o.schedDate?'改排程':'排程派工'}</button>}
-              {o.status==='pending'&&<><button className="primary" onClick={()=>arrive(o)}>📍 標記到場（推播）</button><button className="danger" onClick={()=>fail(o)}>無法安裝</button></>}
-              {o.status==='arrived'&&<><button className="primary" onClick={()=>installed(o)}>🔧 施工完成</button><button className="danger" onClick={()=>fail(o)}>無法安裝</button></>}
-              {o.status==='installed'&&<button className="primary" onClick={()=>setVerifying(o)}>🔬 完工驗收 + 保固登錄</button>}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {creating&&<WorkOrderForm initialCategory="install" onClose={()=>setCreating(false)}/>}
-
-      {sched&&(
+      {/* ── 安裝排程 fullsheet ── */}
+      {schedInstall&&(
         <div className="fullsheet">
           <div className="fs-top">
-            <h3>📅 安裝排程派工　<span style={{fontFamily:'monospace',fontWeight:400,fontSize:12}}>{sched.id}</span></h3>
+            <h3>📅 安裝排程派工　<span style={{fontFamily:'monospace',fontWeight:400,fontSize:12}}>{schedInstall.id}</span></h3>
             <div className="sp">
-              <button className="cancel" style={{padding:'7px 14px',borderRadius:6,border:'none',cursor:'pointer'}} onClick={()=>setSched(null)}>取消</button>
-              <button className="confirm" style={{padding:'7px 16px',borderRadius:6,border:'none',cursor:'pointer'}} onClick={doSchedule}>確認排程</button>
+              <button className="cancel" style={{padding:'7px 14px',borderRadius:6,border:'none',cursor:'pointer'}} onClick={()=>setSchedInstall(null)}>取消</button>
+              <button className="confirm" style={{padding:'7px 16px',borderRadius:6,border:'none',cursor:'pointer'}} onClick={doInstallSchedule}>確認排程</button>
             </div>
           </div>
           <div className="fs-body">
             <div className="fs-card"><h4>安裝資訊</h4>
               <div style={{fontSize:13,lineHeight:1.9}}>
-                <div><b>{sched.name}</b>　{sched.phone}</div>
-                <div>🏠 {sched.address||'—'}</div>
-                <div>📦 {PRODUCTS[sched.productId]?.name||sched.productId}</div>
+                <div><b>{schedInstall.name}</b>　{schedInstall.phone}</div>
+                <div>🏠 {schedInstall.address||cur?.address||'—'}</div>
+                <div>📦 {PRODUCTS[schedInstall.productId]?.name||schedInstall.productId}</div>
               </div>
             </div>
-            <SlotPicker workers={workers} bookings={db.bookings} region={region} setRegion={setRegion}
-              workerId={sw} setWorkerId={setSw} date={sd} setDate={setSd} start={start} setStart={setStart} span={schedSpan}/>
-            <div style={{background:'#EDE9FE',borderRadius:8,padding:10,fontSize:12,color:'#5B21B6'}}>🛠️ 本單預估工時 {sched.workHours||2} 小時 → 佔用該師傅 {schedSpan} 格（連續）；確認後若客戶已綁定 LINE 將推播預約通知。</div>
+            <SlotPicker workers={db.workers||[]} bookings={db.bookings} region={dispRegion} setRegion={setDispRegion}
+              workerId={dispSw} setWorkerId={setDispSw} date={dispSd} setDate={setDispSd} start={dispStart} setStart={setDispStart}
+              span={Math.max(1,Math.ceil(Number(schedInstall.workHours)||2))}/>
           </div>
         </div>
       )}
 
-      {verifying&&<WorkOrderModal mode="install" record={verifying} warrantyIn={true} onClose={()=>setVerifying(null)} onSubmit={d=>finishVerify(verifying,d)}/>}
+      {/* ── 維修完工結案 ── */}
+      {closingRepair&&(()=>{
+        const cust=(db.customers||[]).find(c=>c.wfId===closingRepair.wfId);
+        const wIn=closingRepair.warrantyIn!=null?closingRepair.warrantyIn:(cust?pctW(cust.installDate,cust.warrantyMonths||36)>0:true);
+        return <WorkOrderModal mode="repair" record={closingRepair} warrantyIn={wIn}
+          onClose={()=>setClosingRepair(null)}
+          onSubmit={d=>finishRepairClose(closingRepair,d)}/>;
+      })()}
+
+      {/* ── 安裝完工驗收 ── */}
+      {verifyInstall&&<WorkOrderModal mode="install" record={verifyInstall} warrantyIn={true}
+        onClose={()=>setVerifyInstall(null)}
+        onSubmit={d=>finishInstallVerify(verifyInstall,d)}/>}
+
     </div>
   );
 }
 
-// ─── 客訴單列表 Page ───
-function ComplaintPage(){
-  const {db,updateDB,toast,currentRole,currentUser} = useContext(Ctx);
-  const [tab,setTab] = useState('all');
-  const [expandedId,setExpandedId] = useState(null);
-  const [followText,setFollowText] = useState('');
-  
-  const complaints = Object.values(db.complaints||{}).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
-  const filtered = complaints.filter(c=>{
-    if(currentRole!=='管理員(全知)' && c.department!==currentRole) return false;
-    if(tab==='pending') return c.status==='pending';
-    if(tab==='following') return c.status==='following';
-    if(tab==='closed') return c.status==='closed';
-    return true;
-  });
-
-  const addFollowup=(ctId,note)=>{
-    if(!note.trim()) return;
-    const ts=today()+' '+now();
-    updateDB(prev=>{
-      const ct=prev.complaints?.[ctId];
-      if(!ct) return prev;
-      const updated={...ct,
-        status: ct.status==='pending'?'following':ct.status,
-        timeline:[...(ct.timeline||[]),{ts,by:currentUser?.name,note:note.trim()}],
-      };
-      return {...prev,complaints:{...(prev.complaints||{}),[ctId]:updated}};
-    });
-    toast('🖊️ 追蹤備註已新增','','ok');
-    setFollowText('');
-  };
-
-  const closeComplaint=(ctId)=>{
-    const ts=today()+' '+now();
-    updateDB(prev=>{
-      const ct=prev.complaints?.[ctId];
-      if(!ct) return prev;
-      return {...prev,complaints:{...(prev.complaints||{}),[ctId]:{
-        ...ct,status:'closed',closedDate:today(),
-        timeline:[...(ct.timeline||[]),{ts,by:currentUser?.name,note:'結案'}],
-      }}};
-    });
-    toast('✅ 客訴已結案','','ok');
-  };
-
-  return(
-    <div className="ctpage">
-      <div className="ct-hdr">
-        <h2>📞 客訴單列表</h2>
-        <div style={{fontSize:12,color:'var(--g500)'}}>共 {complaints.length} 筆紀錄</div>
-      </div>
-      
-      <div className="cttabs">
-        <button className={`cttab ${tab==='all'?'on':''}`} onClick={()=>setTab('all')}>全部</button>
-        <button className={`cttab ${tab==='pending'?'on':''}`} onClick={()=>setTab('pending')}>待追蹤</button>
-        <button className={`cttab ${tab==='following'?'on':''}`} onClick={()=>setTab('following')}>追蹤中</button>
-        <button className={`cttab ${tab==='closed'?'on':''}`} onClick={()=>setTab('closed')}>已結案</button>
-      </div>
-
-      {filtered.length===0
-        ? <div className="empty"><div style={{fontSize:30,opacity:.3}}>📞</div><div style={{fontSize:13,marginTop:10}}>尚無符合條件的客訴單</div></div>
-        : <table className="ct-table">
-            <thead>
-              <tr>
-                <th>客戶</th>
-                <th>來電管道</th>
-                <th>歸屬部門</th>
-                <th>判斷原因</th>
-                <th>建立時間</th>
-                <th>狀態</th>
-                <th style={{textAlign:'right'}}>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(ct=>{
-                const isExp = expandedId===ct.id;
-                return(
-                  <React.Fragment key={ct.id}>
-                    <tr style={{cursor:'pointer'}} onClick={()=>setExpandedId(isExp?null:ct.id)}>
-                      <td>
-                        <div style={{fontWeight:700}}>{ct.name}</div>
-                        <div style={{fontSize:10,color:'var(--g400)',fontFamily:'monospace'}}>{ct.wfId}</div>
-                      </td>
-                      <td>{ct.callChannel}</td>
-                      <td>
-                        <div style={{fontSize:11,background:'var(--g100)',padding:'2px 6px',borderRadius:6,display:'inline-block'}}>{ct.department||'—'}</div>
-                      </td>
-                      <td>
-                        <div style={{fontWeight:600}}>{ct.cat1}</div>
-                        <div style={{fontSize:10,color:'var(--g500)'}}>{ct.cat2}{ct.cat3?` › ${ct.cat3}`:''}</div>
-                      </td>
-                      <td>
-                        <div>{ct.date}</div>
-                        <div style={{fontSize:10,color:'var(--g400)'}}>{ct.createdAt.split(' ')[1]}</div>
-                      </td>
-                      <td><span className={`ct-sb ${ct.status}`}>{COMPLAINT_STATUS_LABEL[ct.status]}</span></td>
-                      <td style={{textAlign:'right'}}>
-                        <button style={{padding:'4px 8px',background:'var(--g100)',border:'none',borderRadius:4,fontSize:10.5,fontWeight:600,cursor:'pointer',color:'var(--g600)'}}>
-                          {isExp?'收起':'展開'}
-                        </button>
-                      </td>
-                    </tr>
-                    {isExp&&(
-                      <tr className="ct-expand">
-                        <td colSpan={7}>
-                          <div style={{display:'flex',gap:16}}>
-                            <div style={{flex:1}}>
-                              <div style={{fontSize:11,color:'var(--g500)',fontWeight:700,marginBottom:4}}>處理過程 / 來電摘要</div>
-                              <div className="ct-process-box">
-                                {ct.process||<span style={{color:'var(--g400)',fontStyle:'italic'}}>無詳細說明</span>}
-                              </div>
-                              <div style={{fontSize:11,color:'var(--g500)',fontWeight:700,marginBottom:4}}>聯絡電話</div>
-                              <div style={{fontSize:12,marginBottom:10}}>{ct.phone}</div>
-                            </div>
-                            <div style={{flex:1}}>
-                              <div style={{fontSize:11,color:'var(--g500)',fontWeight:700,marginBottom:4}}>追蹤歷程</div>
-                              <div className="ct-timeline" style={{maxHeight:150,overflowY:'auto',background:'#fff'}}>
-                                {(ct.timeline||[]).length===0?<div style={{fontSize:11,color:'var(--g400)',textAlign:'center',padding:'10px 0'}}>無追蹤紀錄</div>:ct.timeline.map((tl,i)=>(
-                                  <div key={i} className="ct-tl-item">
-                                    <div className={`ct-tl-dot ${i===ct.timeline.length-1?'ok':''}`}/>
-                                    <div className="ct-tl-time">{tl.ts}</div>
-                                    <div style={{flex:1,color:'var(--g700)'}}>{tl.note}</div>
-                                  </div>
-                                ))}
-                              </div>
-                              {ct.status!=='closed'&&(
-                                <div className="ct-add-follow">
-                                  <textarea value={followText} onChange={e=>setFollowText(e.target.value)} placeholder="輸入追蹤備註..."/>
-                                  <div style={{display:'flex',flexDirection:'column',gap:4}}>
-                                    <button className="ct-follow-btn" onClick={()=>{addFollowup(ct.id,followText);}}>新增備註</button>
-                                    <button className="ct-close-btn" onClick={()=>{if(confirm('確定要結案嗎？')) closeComplaint(ct.id);}}>結案</button>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-      }
-    </div>
-  );
-}
-
-// ─── App Root ───
 // ─── 工務時刻表 ───
 function SchedulePage(){
   const {db}=useContext(Ctx);
@@ -2657,37 +2429,6 @@ function LoginScreen({onLogin}){
   );
 }
 
-// ─── 派工處理中心（合併 安裝/報修/客訴）───
-function DispatchCenter(){
-  const {db,currentRole}=useContext(Ctx);
-  const [sub,setSub]=useState('repair');
-  const installPending=Object.values(db.installs||{}).filter(o=>o.status!=='done'&&o.status!=='failed').length;
-  const repairPending=Object.values(db.repairs||{}).filter(r=>r.status==='pending').length;
-  const complaintPending=Object.values(db.complaints||{}).filter(c=>{
-    if(c.status==='closed')return false;
-    if(currentRole!=='管理員(全知)'&&c.department!==currentRole)return false;
-    return true;
-  }).length;
-  const tabs=[['repair','🔧 報修處理',repairPending,'var(--warn)'],['install','🛠️ 安裝工單',installPending,'var(--accent)'],['complaint','📞 客訴處理',complaintPending,'var(--purple)']];
-  return(
-    <div>
-      <div style={{display:'flex',gap:6,padding:'10px 18px',background:'#fff',borderBottom:'1px solid var(--g200)',position:'sticky',top:0,zIndex:5}}>
-        {tabs.map(([k,l,n,col])=>(
-          <button key={k} onClick={()=>setSub(k)}
-            style={{padding:'7px 16px',borderRadius:7,border:'none',fontSize:13,fontWeight:700,cursor:'pointer',display:'flex',alignItems:'center',gap:6,
-              background:sub===k?'var(--brand)':'var(--g100)',color:sub===k?'#fff':'var(--g600)',transition:'all .12s'}}>
-            {l}
-            {n>0&&<span style={{background:col,color:'#fff',fontSize:10,fontWeight:800,padding:'1px 7px',borderRadius:9}}>{n}</span>}
-          </button>
-        ))}
-      </div>
-      {sub==='repair'&&<RepairPage/>}
-      {sub==='install'&&<InstallPage/>}
-      {sub==='complaint'&&<ComplaintPage/>}
-    </div>
-  );
-}
-
 // ─── MD 5：集團 → 建案 階層瀏覽（瀏覽階層、依建案檢視客戶與案件）───
 function GroupProjectPage(){
   const {db,setPage,setCrmTarget}=useContext(Ctx);
@@ -2890,25 +2631,12 @@ function App(){
 
   if(!currentUser) return <LoginScreen onLogin={doLogin}/>;
 
-  const all = Object.values(db.repairs||{});
-  const pendingCnt = all.filter(r=>r.status==='pending').length;
-  const urgentCnt = all.filter(r=>r.urgency==='urgent'&&r.status!=='done').length;
-  const installPending = Object.values(db.installs||{}).filter(o=>o.status!=='done'&&o.status!=='failed').length;
-  const complaintPending = Object.values(db.complaints||{}).filter(c=>{
-    if(c.status==='closed') return false;
-    if(currentRole!=='管理員(全知)' && c.department!==currentRole) return false;
-    return true;
-  }).length;
 
   return(
     <Ctx.Provider value={{db,updateDB,toast,newIds,currentRole,currentUser,setPage,crmTarget,setCrmTarget}}>
       <nav className="nav">
         <div className="nav-logo">🔒 WAFERLOCK <span>CRM</span></div>
         <button className={`nbtn ${page==='home'||page==='crm'?'on':''}`} onClick={()=>setPage('home')}>🏠 首頁 / 客戶查詢</button>
-        <button className={`nbtn ${page==='dispatch'?'on':''}`} onClick={()=>setPage('dispatch')}>
-          🛠️ 派工處理
-          {(installPending+pendingCnt+complaintPending)>0&&<span className="nbadge" style={{background:urgentCnt>0?'var(--err)':'var(--accent)',color:urgentCnt>0?'#fff':'var(--brand)'}}>{installPending+pendingCnt+complaintPending}</span>}
-        </button>
         <button className={`nbtn ${page==='schedule'?'on':''}`} onClick={()=>setPage('schedule')}>📅 工務時刻表</button>
         <button className={`nbtn ${page==='groups'?'on':''}`} onClick={()=>setPage('groups')}>🏢 集團/建案</button>
         <div className="sync-area">
@@ -2947,7 +2675,6 @@ function App(){
       <div className="page">
         {page==='home'&&<HomePage/>}
         {page==='crm'&&<CRMPage/>}
-        {page==='dispatch'&&<DispatchCenter/>}
         {page==='schedule'&&<SchedulePage/>}
         {page==='groups'&&<GroupProjectPage/>}
       </div>
