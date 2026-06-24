@@ -809,7 +809,7 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
     const isNew=!exist;
     updateDB(prev=>{
       let customers=prev.customers||[];
-      if(isNew) customers=[...customers,{wfId,name:f.name.trim(),phone:f.phone.trim(),address:f.address,channel:f.channel,
+      if(isNew) customers=[...customers,{wfId,name:f.name.trim(),phone:f.phone.trim(),address:f.address,zip:f.zip,channel:f.channel,
         productId:f.productId,serialNo:f.serialNo,regType:'auto',regDate:today(),
         installDate:null,warrantyMonths:null,warrantyEnd:null,tags:['待安裝'],repairIds:[],complaintIds:[]}];
       const order=pushHist({id,name:f.name.trim(),phone:f.phone.trim(),address:f.address,channel:f.channel,
@@ -842,7 +842,7 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
     const pushTxt=`📋 已收到您的報修\n\n案件：${rid}\n問題：${f.type} - ${f.issue.trim()||'異常問題'}\n客服將盡快安排師傅 🔧`;
     updateDB(prev=>{
       let customers=prev.customers||[];
-      if(isNew) customers=[...customers,{wfId,name:f.name.trim(),phone:f.phone.trim(),address:f.address,
+      if(isNew) customers=[...customers,{wfId,name:f.name.trim(),phone:f.phone.trim(),address:f.address,zip:f.zip,
         regType:'manual',regDate:today(),tags:['待整理'],repairIds:[rid],complaintIds:[]}];
       else customers=customers.map(x=>x.wfId===wfId?{...x,repairIds:[...(x.repairIds||[]),rid]}:x);
       const convs=(prev.conversations||[]).map(cv=>(uid&&cv.id===uid)
