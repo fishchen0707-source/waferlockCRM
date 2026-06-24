@@ -452,6 +452,15 @@ const WORK_CATEGORIES = {
 };
 // 收費品項預設下拉（仍可手打覆寫）
 const CHARGE_PRESETS = ['更換鋰電池','更換面板','更換把手','更換主板','到府檢測費','拆裝工資','遠途交通費','其他'];
+const INSTALL_MODELS = {
+  'D系列': ['D300','D303','D310','D312'],
+  'C系列': ['C210','C760'],
+  'L3系列': ['L301','L310','L345','L346','L360','L361','L370','L372','L375/L775','L376','L379/L779','L380','L381','L390','L391','L396'],
+  'L6系列': ['L600'],
+  'L7系列': ['L701'],
+  'L9系列': ['L900','L901'],
+  'R400': ['R400'],
+};
 
 // 全台縣市→鄉鎮市區→3碼郵遞區號（中華郵政資料；地址選取畫面用）
 const TW_ZIP3 = {
@@ -658,20 +667,44 @@ function SlotPicker({workers,bookings,region,setRegion,workerId,setWorkerId,date
   </>);
 }
 
-// ─── 收費品項（數量×單價 + 贈品）───
+// ─── 收費品項（數量×單價 + 贈品，二層選單：安裝型號 / 維修品項）───
 function ChargeTable({rows,setRows}){
   const total = rows.reduce((s,r)=>s+(r.gift?0:(Number(r.qty)||0)*(Number(r.price)||0)),0);
   const upd=(i,k,v)=>setRows(p=>p.map((r,j)=>j===i?{...r,[k]:v}:r));
+  const setCat=(i,cat)=>setRows(p=>p.map((r,j)=>j===i?{...r,category:cat,item:''}:r));
+  const sel={width:'100%',fontSize:11,border:'1px solid var(--g200)',borderRadius:4,padding:'3px 4px'};
   return (<>
-    <table className="ctbl"><thead><tr><th>品項</th><th>數量</th><th>單價</th><th>小計</th><th>贈品</th><th></th></tr></thead>
+    <table className="ctbl"><thead><tr><th>類別</th><th>品項</th><th>數量</th><th>單價</th><th>小計</th><th>贈品</th><th></th></tr></thead>
     <tbody>{rows.map((r,i)=><tr key={i}>
-      <td>
-        <select value={CHARGE_PRESETS.includes(r.item)?r.item:''} onChange={e=>e.target.value&&upd(i,'item',e.target.value==='其他'?'':e.target.value)}
-          style={{width:'100%',marginBottom:3,fontSize:11,border:'1px solid var(--g200)',borderRadius:4,padding:'3px 4px'}}>
-          <option value="">— 選預設品項 —</option>
-          {CHARGE_PRESETS.map(p=><option key={p} value={p}>{p}</option>)}
+      <td style={{minWidth:62}}>
+        <select value={r.category||''} onChange={e=>setCat(i,e.target.value)} style={sel}>
+          <option value="">— 類別 —</option>
+          <option value="安裝">安裝</option>
+          <option value="維修">維修</option>
         </select>
-        <input value={r.item} onChange={e=>upd(i,'item',e.target.value)} placeholder="或手打品項"/>
+      </td>
+      <td>
+        {r.category==='安裝'?(
+          <select value={r.item||''} onChange={e=>upd(i,'item',e.target.value)} style={sel}>
+            <option value="">— 選型號 —</option>
+            {Object.entries(INSTALL_MODELS).map(([series,models])=>(
+              <optgroup key={series} label={series}>
+                {models.map(m=><option key={m} value={m}>{m}</option>)}
+              </optgroup>
+            ))}
+          </select>
+        ):r.category==='維修'?(
+          <>
+            <select value={CHARGE_PRESETS.includes(r.item)?r.item:''} onChange={e=>e.target.value&&upd(i,'item',e.target.value==='其他'?'':e.target.value)}
+              style={{...sel,marginBottom:3}}>
+              <option value="">— 選品項 —</option>
+              {CHARGE_PRESETS.map(p=><option key={p} value={p}>{p}</option>)}
+            </select>
+            <input value={r.item} onChange={e=>upd(i,'item',e.target.value)} placeholder="或手打品項"/>
+          </>
+        ):(
+          <input value={r.item||''} onChange={e=>upd(i,'item',e.target.value)} placeholder="請先選類別" disabled/>
+        )}
       </td>
       <td><input className="num" type="number" value={r.qty} onChange={e=>upd(i,'qty',e.target.value)}/></td>
       <td><input className="num" type="number" value={r.gift?0:r.price} disabled={r.gift} onChange={e=>upd(i,'price',e.target.value)}/></td>
@@ -680,7 +713,7 @@ function ChargeTable({rows,setRows}){
       <td className="del" onClick={()=>setRows(p=>p.filter((_,j)=>j!==i))}>×</td>
     </tr>)}</tbody></table>
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:8}}>
-      <button onClick={()=>setRows(p=>[...p,{item:'',qty:1,price:0,gift:false}])}
+      <button onClick={()=>setRows(p=>[...p,{category:'',item:'',qty:1,price:0,gift:false}])}
         style={{padding:'6px 12px',background:'var(--g100)',border:'none',borderRadius:6,fontSize:12,fontWeight:600,cursor:'pointer'}}>＋ 新增品項</button>
       <div style={{fontWeight:700}}>合計 $ {total}</div>
     </div>
@@ -766,6 +799,11 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
   const cat=f.category;
   const workers=db.workers||[];
   const [chargeRows,setChargeRows]=useState([]);
+  // 品項表「安裝」列選型號時自動回填 productId（供保固計算用）
+  React.useEffect(()=>{
+    const row=chargeRows.find(r=>r.category==='安裝'&&r.item);
+    if(row) setF(p=>({...p,productId:row.item.split('/')[0]}));
+  },[chargeRows]);
   const [addrPicker,setAddrPicker]=useState(false);
   const [schedOpen,setSchedOpen]=useState(false);
   const [region,setRegion]=useState('central');
@@ -926,10 +964,7 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
 
         {/* 安裝專屬 */}
         {cat==='install'&&<>
-          <div className="mf2">
-            <div className="mf"><label>購買通路</label><select value={f.channel} onChange={e=>set('channel',e.target.value)}>{Object.entries(CHANNELS).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}</select></div>
-            <div className="mf"><label>安裝產品</label><select value={f.productId} onChange={e=>set('productId',e.target.value)}>{Object.entries(PRODUCTS).map(([k,v])=><option key={k} value={k}>{v.name}</option>)}</select></div>
-          </div>
+          <div className="mf"><label>購買通路</label><select value={f.channel} onChange={e=>set('channel',e.target.value)}>{Object.entries(CHANNELS).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}</select></div>
           <div className="mf2">
             <div className="mf"><label>產品序號</label><input value={f.serialNo} onChange={e=>set('serialNo',e.target.value)}/></div>
             <div className="mf"><label>指派鎖店師傅</label><select value={f.locksmithId} onChange={e=>set('locksmithId',e.target.value)}>{LOCKSMITHS.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
