@@ -1135,6 +1135,15 @@ function CRMPage(){
     return ()=>clearTimeout(t);
   },[highlightedOrderId,sel]);
 
+  // 案件專屬網址：開啟維修/安裝排程畫面時，網址自動反映該案件（可直接從網址列複製分享）；
+  // 關閉排程後還原成客戶網址。分享出去的 #repair/#install 連結由 App 的 hash 解析定位＋高亮。
+  useEffect(()=>{
+    const base=location.pathname+location.search;
+    if(dispatchRepair) window.history.replaceState(null,'',base+'#repair/'+dispatchRepair.id);
+    else if(schedInstall) window.history.replaceState(null,'',base+'#install/'+schedInstall.id);
+    else if(sel) window.history.replaceState(null,'',base+'#crm/'+sel.wfId);
+  },[dispatchRepair,schedInstall,sel]);
+
   const doSearch=()=>{
     const lq=q.trim().toLowerCase();
     if(!lq){ setRes(null); return; }
