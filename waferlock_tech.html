@@ -81,7 +81,14 @@ async function logToConversation(wfId,text){
   return true;
 }
 async function lineApiPush(uid,text,sender){ if(!(uid&&String(uid).startsWith('U'))) return false; try{ await sb.functions.invoke('line-push',{body:{to:uid,text,sender}}); return true; }catch(e){ console.error('line-push',e); return false; } }
-async function pushCustomer(wfId,text,sender={name:'維夫拉克客服'}){ const logged=await logToConversation(wfId,text); const pushed=await lineApiPush(custMap[wfId]?.line_uid,text,sender); return {logged,pushed}; }
+async function pushCustomer(wfId,text,sender={name:'維夫拉克客服'}){
+  const logged=await logToConversation(wfId,text);
+  // 從 conversations 找真實 LINE uid（id 以 U 開頭），比 customers.line_uid 更可靠
+  const {data:convs}=await sb.from('conversations').select('id').eq('wf_id',wfId);
+  const lineUid=(convs||[]).find(c=>String(c.id).startsWith('U'))?.id||custMap[wfId]?.line_uid;
+  const pushed=await lineApiPush(lineUid,text,sender);
+  return {logged,pushed};
+}
 async function pushByPhone(phone,text,sender={name:'維夫拉克客服'}){ if(!phone) return {logged:false,pushed:false}; const {data}=await sb.from('customers').select('wf_id,line_uid').eq('phone',phone); const c=(data||[])[0]; const logged=c?await logToConversation(c.wf_id,text):false; const pushed=await lineApiPush(c?.line_uid,text,sender); return {logged,pushed}; }
 
 // ───── ETA 估算（純函式，確定性邏輯不交給模型） ─────
