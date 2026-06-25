@@ -257,8 +257,8 @@ const pushLineTo = (to, text, sender={name:'維夫拉克客服'}) => {
 // ── DB 欄位轉換（camelCase <-> snake_case） ──
 const custToDb = c => ({wf_id:c.wfId,name:c.name,phone:c.phone,email:c.email,address:c.address,district:c.district,area:c.area,channel:c.channel,product_id:c.productId,serial_no:c.serialNo,install_date:c.installDate,warranty_months:c.warrantyMonths,warranty_end:c.warrantyEnd,tags:c.tags||[],reg_type:c.regType,reg_date:c.regDate,line_uid:c.lineUid,fb_id:c.fbId,ig_id:c.igId,repair_ids:c.repairIds||[],complaint_ids:c.complaintIds||[],site:c.site,unit:c.unit,order_no:c.orderNo,group_id:c.groupId,project_id:c.projectId,zip:c.zip});
 const dbToCust = r => ({wfId:r.wf_id,name:r.name,phone:r.phone,email:r.email,address:r.address,district:r.district,area:r.area,channel:r.channel,productId:r.product_id,serialNo:r.serial_no,installDate:r.install_date,warrantyMonths:r.warranty_months,warrantyEnd:r.warranty_end,tags:r.tags||[],regType:r.reg_type,regDate:r.reg_date,lineUid:r.line_uid,fbId:r.fb_id,igId:r.ig_id,repairIds:r.repair_ids||[],complaintIds:r.complaint_ids||[],site:r.site,unit:r.unit,orderNo:r.order_no,groupId:r.group_id,projectId:r.project_id,zip:r.zip});
-const repairToDb = r => ({id:r.id,wf_id:r.wfId,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,worker_id:r.workerId,scheduled_date:r.scheduledDate,desc:r.desc,contact_name:r.contactName,contact_phone:r.contactPhone,site:r.site,unit:r.unit,handling_unit:r.handlingUnit,note:r.note,warranty_in:r.warrantyIn,created_by:r.createdBy,created_at:r.createdAt,unread:r.unread,arrival_pushed:r.arrivalPushed,rating:r.rating,receipt_no:r.receiptNo,audit_note:r.auditNote,completed_date:r.completedDate,sched_date:r.schedDate,sched_start:r.schedStart,sched_span:r.schedSpan,charges:r.charges||[],charge_total:r.chargeTotal,payment_method:r.paymentMethod,paid:r.paid,work_note:r.workNote,warranty_judgment:r.warrantyJudgment,exclude_reason:r.excludeReason,photos:r.photos||[],signature:r.signature,sla_level:r.slaLevel,tenant_type:r.tenantType,landlord_confirmed:r.landlordConfirmed,source_channel:r.sourceChannel,community_note:r.communityNote,zip:r.zip,category2:r.category2,time_range:r.timeRange,qty:r.qty,work_hours:r.workHours,flag_bomber:r.flagBomber,history:r.history||[]});
-const dbToRepair = r => ({id:r.id,wfId:r.wf_id,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,workerId:r.worker_id,scheduledDate:r.scheduled_date,desc:r.desc,contactName:r.contact_name,contactPhone:r.contact_phone,site:r.site,unit:r.unit,handlingUnit:r.handling_unit,note:r.note,warrantyIn:r.warranty_in,createdBy:r.created_by,createdAt:r.created_at,unread:r.unread,arrivalPushed:r.arrival_pushed,rating:r.rating,receiptNo:r.receipt_no,auditNote:r.audit_note,completedDate:r.completed_date,schedDate:r.sched_date,schedStart:r.sched_start,schedSpan:r.sched_span,charges:r.charges||[],chargeTotal:r.charge_total,paymentMethod:r.payment_method,paid:r.paid,workNote:r.work_note,warrantyJudgment:r.warranty_judgment,excludeReason:r.exclude_reason,photos:r.photos||[],signature:r.signature,slaLevel:r.sla_level,tenantType:r.tenant_type,landlordConfirmed:r.landlord_confirmed,sourceChannel:r.source_channel,communityNote:r.community_note,zip:r.zip,category2:r.category2,timeRange:r.time_range,qty:r.qty,workHours:r.work_hours,flagBomber:r.flag_bomber,history:r.history||[]});
+const repairToDb = r => ({id:r.id,wf_id:r.wfId,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,worker_id:r.workerId,scheduled_date:r.scheduledDate,desc:r.desc,contact_name:r.contactName,contact_phone:r.contactPhone,site:r.site,unit:r.unit,handling_unit:r.handlingUnit,note:r.note,warranty_in:r.warrantyIn,created_by:r.createdBy,created_at:r.createdAt,unread:r.unread,arrival_pushed:r.arrivalPushed,rating:r.rating,receipt_no:r.receiptNo,audit_note:r.auditNote,completed_date:r.completedDate,sched_date:r.schedDate,sched_start:r.schedStart,sched_span:r.schedSpan,charges:r.charges||[],charge_total:r.chargeTotal,payment_method:r.paymentMethod,paid:r.paid,work_note:r.workNote,warranty_judgment:r.warrantyJudgment,exclude_reason:r.excludeReason,photos:r.photos||[],signature:r.signature,sla_level:r.slaLevel,tenant_type:r.tenantType,landlord_confirmed:r.landlordConfirmed,source_channel:r.sourceChannel,community_note:r.communityNote,zip:r.zip,category2:r.category2,time_range:r.timeRange,qty:r.qty,work_hours:r.workHours,flag_bomber:r.flagBomber,eta_at:r.etaAt,eta_text:r.etaText,accepted_at:r.acceptedAt,arrived_at:r.arrivedAt,est_distance_km:r.estDistanceKm,eta_source:r.etaSource,history:r.history||[]});
+const dbToRepair = r => ({id:r.id,wfId:r.wf_id,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,workerId:r.worker_id,scheduledDate:r.scheduled_date,desc:r.desc,contactName:r.contact_name,contactPhone:r.contact_phone,site:r.site,unit:r.unit,handlingUnit:r.handling_unit,note:r.note,warrantyIn:r.warranty_in,createdBy:r.created_by,createdAt:r.created_at,unread:r.unread,arrivalPushed:r.arrival_pushed,rating:r.rating,receiptNo:r.receipt_no,auditNote:r.audit_note,completedDate:r.completed_date,schedDate:r.sched_date,schedStart:r.sched_start,schedSpan:r.sched_span,charges:r.charges||[],chargeTotal:r.charge_total,paymentMethod:r.payment_method,paid:r.paid,workNote:r.work_note,warrantyJudgment:r.warranty_judgment,excludeReason:r.exclude_reason,photos:r.photos||[],signature:r.signature,slaLevel:r.sla_level,tenantType:r.tenant_type,landlordConfirmed:r.landlord_confirmed,sourceChannel:r.source_channel,communityNote:r.community_note,zip:r.zip,category2:r.category2,timeRange:r.time_range,qty:r.qty,workHours:r.work_hours,flagBomber:r.flag_bomber,etaAt:r.eta_at,etaText:r.eta_text,acceptedAt:r.accepted_at,arrivedAt:r.arrived_at,estDistanceKm:r.est_distance_km,etaSource:r.eta_source,history:r.history||[]});
 const ctToDb = c => ({id:c.id,wf_id:c.wfId,name:c.name,phone:c.phone,date:c.date,created_at:c.createdAt,created_by:c.createdBy,call_channel:c.callChannel,department:c.department,cat1:c.cat1,cat2:c.cat2,cat3:c.cat3,process:c.process,status:c.status,closed_date:c.closedDate,timeline:c.timeline||[]});
 const dbToCt = r => ({id:r.id,wfId:r.wf_id,name:r.name,phone:r.phone,date:r.date,createdAt:r.created_at,createdBy:r.created_by,callChannel:r.call_channel,department:r.department,cat1:r.cat1,cat2:r.cat2,cat3:r.cat3,process:r.process,status:r.status,closedDate:r.closed_date,timeline:r.timeline||[]});
 const installToDb = o => ({id:o.id,name:o.name,phone:o.phone,address:o.address,channel:o.channel,note:o.note,product_id:o.productId,serial_no:o.serialNo,locksmith_id:o.locksmithId,status:o.status,created_date:o.createdDate,created_ts:o.createdTs,arrival_pushed:o.arrivalPushed,photos:o.photos||[],signature:o.signature,verify:o.verify||{},taught:o.taught||{},work_note:o.workNote,completed_date:o.completedDate,wf_id:o.wfId,warranty_end:o.warrantyEnd,worker_id:o.workerId,sched_date:o.schedDate,sched_start:o.schedStart,sched_span:o.schedSpan,charges:o.charges||[],charge_total:o.chargeTotal,tenant_type:o.tenantType,landlord_confirmed:o.landlordConfirmed,source_channel:o.sourceChannel,community_note:o.communityNote,zip:o.zip,category2:o.category2,time_range:o.timeRange,qty:o.qty,work_hours:o.workHours,flag_bomber:o.flagBomber,history:o.history||[]});
@@ -898,8 +898,9 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
   const subcats=WORK_CATEGORIES[cat]||[];
   return(
     <div className="mo" onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div className="mob" style={{maxWidth:560}}>
-        <h3>🧾 新增工單</h3>
+      <div className="mob" style={{maxWidth:560,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+        <h3 style={{marginBottom:10,flexShrink:0}}>🧾 新增工單</h3>
+        <div style={{flex:1,overflowY:'auto',minHeight:0}}>
 
         {/* 工單類別（安裝 / 維修） */}
         <div className="mf"><label>工單類別</label>
@@ -1052,7 +1053,9 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
           <ChargeTable rows={chargeRows} setRows={setChargeRows}/>
         </div>
 
-        <div className="mact"><button className="cancel" onClick={onClose}>取消</button><button className="confirm" onClick={submit}>建立工單</button></div>
+        </div>{/* end scrollable area */}
+
+        <div className="mact" style={{flexShrink:0,borderTop:'1px solid var(--g100)',paddingTop:12,marginTop:0}}><button className="cancel" onClick={onClose}>取消</button><button className="confirm" onClick={submit}>建立工單</button></div>
 
         {addrPicker&&<AddressPicker
           initial={{city:f.addrCity,dist:f.addrDist,road:f.addrRoad,bldg:f.site}}
@@ -1065,7 +1068,7 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
 
 // ─── CRM Page ───
 function CRMPage(){
-  const {db,updateDB,toast,newIds,crmTarget,setCrmTarget,setPage,currentUser} = useContext(Ctx);
+  const {db,updateDB,toast,newIds,crmTarget,setCrmTarget,setPage,currentUser,highlightedOrderId,setHighlightedOrderId} = useContext(Ctx);
   const [q,setQ] = useState('');
   const [res,setRes] = useState(null);
   const [sel,setSel] = useState(null);
@@ -1095,6 +1098,7 @@ function CRMPage(){
   const [dispHiRisk,setDispHiRisk] = useState(false);
   const [dispHardJob,setDispHardJob] = useState(false);
   const [dispBomber,setDispBomber] = useState(false);
+  const hlRef = useRef(null);
 
   const customers = db.customers||[];
   // 只有搜尋後才顯示結果清單
@@ -1118,10 +1122,18 @@ function CRMPage(){
   useEffect(()=>{
     if(crmTarget){
       const c=customers.find(x=>x.wfId===crmTarget);
-      if(c){ setSel(c); setQ(''); setRes(null); setCrmTarget(null); }
+      if(c){ setSel(c); setQ(''); setRes(null); setCrmTarget(null); window.history.replaceState(null,'',location.pathname+location.search+'#crm/'+c.wfId); }
       // 找不到時保留 crmTarget，等 customers 更新後再觸發
     }
   },[crmTarget,customers]);
+
+  // 高亮工單卡片：自動捲動，3 秒後取消高亮
+  useEffect(()=>{
+    if(!highlightedOrderId||!hlRef.current) return;
+    hlRef.current.scrollIntoView({behavior:'smooth',block:'center'});
+    const t=setTimeout(()=>setHighlightedOrderId(null),3000);
+    return ()=>clearTimeout(t);
+  },[highlightedOrderId,sel]);
 
   const doSearch=()=>{
     const lq=q.trim().toLowerCase();
@@ -1515,8 +1527,8 @@ function CRMPage(){
               <div className="sec-t">🔧 派工紀錄（{repairs.length} 筆）</div>
               {repairs.length===0
                 ? <div className="empty" style={{height:100}}><div style={{fontSize:26,opacity:.3}}>📋</div><div style={{fontSize:12,marginTop:8}}>尚無派工紀錄</div></div>
-                : repairs.map(r=>(
-                  <div key={r.id} className={`rcard ${r.urgency==='urgent'?'urgent':r.status}`}>
+                : repairs.map(r=>{const isHL=r.id===highlightedOrderId; return(
+                  <div key={r.id} ref={isHL?hlRef:null} className={`rcard ${r.urgency==='urgent'?'urgent':r.status}`} style={isHL?{outline:'2px solid var(--brand)',outlineOffset:2}:{}}>
                     <div className="rch">
                       <div>
                         <div style={{fontSize:12,fontWeight:700}}>{r.type} — {r.issue}</div>
@@ -1538,6 +1550,7 @@ function CRMPage(){
                       <div><span>🏠 空間</span><br/><strong>{r.space}</strong></div>
                       <div><span>👷 師傅</span><br/><strong>{WORKERS.find(w=>w.id===r.workerId)?.name||'未指派'}</strong></div>
                       <div><span>⏰ 預約</span><br/><strong>{r.scheduledDate||'未排定'}</strong></div>
+                      {r.status==='dispatched'&&r.etaText&&<div><span>🚗 預計抵達</span><br/><strong style={{color:'var(--accent)'}}>{r.etaText}{r.etaSource==='manual'?'（手動）':''}</strong></div>}
                       {r.desc&&<div style={{gridColumn:'1/-1'}}><span>💬 描述</span><br/><strong>{r.desc}</strong></div>}
                       {r.note&&<div style={{gridColumn:'1/-1'}}><span>📝 備註</span><br/><strong style={{color:'var(--g700)'}}>{r.note}</strong></div>}
                     </div>
@@ -1549,15 +1562,15 @@ function CRMPage(){
                       {r.status==='dispatched'&&<button onClick={()=>setClosingRepair(r)} style={{padding:'5px 12px',background:'var(--ok)',color:'#fff',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>✅ 完工結案</button>}
                     </div>}
                   </div>
-                ))
+                )})
               }
 
               {/* ── 安裝工單 ── */}
               <div className="sec-t">🛠️ 安裝工單（{curInstalls.length} 筆）</div>
               {curInstalls.length===0
                 ?<div className="empty" style={{height:80}}><div style={{fontSize:22,opacity:.3}}>🛠️</div><div style={{fontSize:12,marginTop:6}}>尚無安裝工單</div></div>
-                :curInstalls.map(o=>(
-                  <div key={o.id} className={`rcard ${o.status==='done'?'done':o.status==='failed'?'urgent':'dispatched'}`}>
+                :curInstalls.map(o=>{const isHLo=o.id===highlightedOrderId; return(
+                  <div key={o.id} ref={isHLo?hlRef:null} className={`rcard ${o.status==='done'?'done':o.status==='failed'?'urgent':'dispatched'}`} style={isHLo?{outline:'2px solid var(--brand)',outlineOffset:2}:{}}>
                     <div className="rch">
                       <div>
                         <div style={{fontSize:12,fontWeight:700}}>安裝 — {PRODUCTS[o.productId]?.name||o.productId||'—'}</div>
@@ -1583,7 +1596,7 @@ function CRMPage(){
                       </div>
                     )}
                   </div>
-                ))
+                )})
               }
 
       {caseModal&&sel&&(
@@ -1795,6 +1808,10 @@ function CRMPage(){
             <div className="fs-card"><h4>收費品項（預估）</h4>
               <ChargeTable rows={dispChargeRows} setRows={setDispChargeRows}/>
             </div>
+            <div style={{display:'flex',gap:8,justifyContent:'flex-end',padding:'16px 0 8px'}}>
+              <button className="cancel" style={{padding:'8px 18px',borderRadius:6,border:'none',cursor:'pointer',background:'var(--g100)',color:'var(--g600)',fontWeight:600}} onClick={()=>setDispatchRepair(null)}>取消</button>
+              <button className="confirm" style={{padding:'8px 20px',borderRadius:6,border:'none',cursor:'pointer',background:'var(--accent)',color:'var(--brand)',fontWeight:700}} onClick={doRepairDispatch}>確認派工 + 推播</button>
+            </div>
           </div>
         </div>
       )}
@@ -1820,6 +1837,10 @@ function CRMPage(){
             <SlotPicker workers={db.workers||[]} bookings={db.bookings} region={dispRegion} setRegion={setDispRegion}
               workerId={dispSw} setWorkerId={setDispSw} date={dispSd} setDate={setDispSd} start={dispStart} setStart={setDispStart}
               span={Math.max(1,Math.ceil(Number(schedInstall.workHours)||2))}/>
+            <div style={{display:'flex',gap:8,justifyContent:'flex-end',padding:'16px 0 8px'}}>
+              <button className="cancel" style={{padding:'8px 18px',borderRadius:6,border:'none',cursor:'pointer',background:'var(--g100)',color:'var(--g600)',fontWeight:600}} onClick={()=>setSchedInstall(null)}>取消</button>
+              <button className="confirm" style={{padding:'8px 20px',borderRadius:6,border:'none',cursor:'pointer',background:'var(--accent)',color:'var(--brand)',fontWeight:700}} onClick={doInstallSchedule}>確認排程</button>
+            </div>
           </div>
         </div>
       )}
@@ -2542,6 +2563,8 @@ function GroupProjectPage(){
 function App(){
   const [page,setPage] = useState('home');
   const [crmTarget,setCrmTarget] = useState(null); // 首頁搜尋→跳 CRM 指定客戶 wfId
+  const [highlightedOrderId,setHighlightedOrderId] = useState(null);
+  const hashApplied = useRef(false);
   const [currentUser,setCurrentUser] = useState(()=>{try{return JSON.parse(localStorage.getItem('wl_crm_user'))||null;}catch(e){return null;}});
   const [adminView,setAdminView] = useState('管理員(全知)'); // admin 切換視角
   const isAdmin = currentUser?.role==='admin';
@@ -2570,6 +2593,25 @@ function App(){
       setSynced(true);
     });
   },[]);
+
+  // Hash deep link：登入後 + db 載入後解析一次，導向對應工單/客戶
+  useEffect(()=>{
+    if(!currentUser||!db.customers||hashApplied.current) return;
+    hashApplied.current=true;
+    const hash=window.location.hash.slice(1);
+    if(!hash) return;
+    const slash=hash.indexOf('/');
+    const type=slash===-1?hash:hash.slice(0,slash);
+    const id=slash===-1?'':hash.slice(slash+1);
+    if(type==='crm'&&id){ setCrmTarget(id); setPage('crm'); }
+    else if(type==='repair'&&id){
+      const r=Object.values(db.repairs||{}).find(x=>x.id===id);
+      if(r?.wfId){ setCrmTarget(r.wfId); setHighlightedOrderId(id); setPage('crm'); }
+    } else if(type==='install'&&id){
+      const o=Object.values(db.installs||{}).find(x=>x.id===id);
+      if(o?.wfId){ setCrmTarget(o.wfId); setHighlightedOrderId(id); setPage('crm'); }
+    }
+  },[currentUser,db.customers]);
 
   const updateDB = useCallback(updater=>{
     setDB(prev=>{
@@ -2627,12 +2669,12 @@ function App(){
 
 
   return(
-    <Ctx.Provider value={{db,updateDB,toast,newIds,currentRole,currentUser,setPage,crmTarget,setCrmTarget}}>
+    <Ctx.Provider value={{db,updateDB,toast,newIds,currentRole,currentUser,setPage,crmTarget,setCrmTarget,highlightedOrderId,setHighlightedOrderId}}>
       <nav className="nav">
         <div className="nav-logo">🔒 WAFERLOCK <span>CRM</span></div>
-        <button className={`nbtn ${page==='home'||page==='crm'?'on':''}`} onClick={()=>setPage('home')}>🏠 首頁 / 客戶查詢</button>
-        <button className={`nbtn ${page==='schedule'?'on':''}`} onClick={()=>setPage('schedule')}>📅 工務時刻表</button>
-        <button className={`nbtn ${page==='groups'?'on':''}`} onClick={()=>setPage('groups')}>🏢 集團/建案</button>
+        <button className={`nbtn ${page==='home'||page==='crm'?'on':''}`} onClick={()=>{setPage('home');window.history.replaceState(null,'',location.pathname+location.search);}}>🏠 首頁 / 客戶查詢</button>
+        <button className={`nbtn ${page==='schedule'?'on':''}`} onClick={()=>{setPage('schedule');window.history.replaceState(null,'',location.pathname+location.search);}}>📅 工務時刻表</button>
+        <button className={`nbtn ${page==='groups'?'on':''}`} onClick={()=>{setPage('groups');window.history.replaceState(null,'',location.pathname+location.search);}}>🏢 集團/建案</button>
         <div className="sync-area">
           {isAdmin
             ? <select value={adminView} onChange={e=>setAdminView(e.target.value)} style={{fontSize:11,padding:'2px 4px',borderRadius:4,marginRight:10}}>
