@@ -378,10 +378,26 @@ function onWj(){
   if(wj==='in') setPay('free'); else if(pay==='free') setPay('cash');
 }
 function closeReport(){ const m=$('#repmo'); if(m)m.remove(); rep=null; }
-function onPhotos(e){
-  const files=[...e.target.files];
-  Promise.all(files.map(f=>new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result);r.readAsDataURL(f);}))).then(imgs=>{photos.push(...imgs);renderThumbs();});
-  e.target.value='';
+// 照片上傳 Supabase Storage（取代 base64 入庫）：回傳 public URL 陣列
+async function uploadPhotos(files, folder){
+  const urls=[];
+  for(const f of files){
+    const ext=(f.name?f.name.split('.').pop():'jpg').toLowerCase();
+    const path=`${folder}/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
+    const {error}=await sb.storage.from('work-photos').upload(path,f,{contentType:f.type||'image/jpeg',upsert:false});
+    if(error){ console.error('uploadPhotos error:',error.message); alert('照片上傳失敗：'+error.message); continue; }
+    urls.push(sb.storage.from('work-photos').getPublicUrl(path).data.publicUrl);
+  }
+  return urls;
+}
+async function onPhotos(e){
+  const files=[...e.target.files]; e.target.value='';
+  if(!files.length) return;
+  const lbl=e.target.closest('label'), txt=lbl&&lbl.firstChild, old=txt&&txt.textContent;
+  if(txt) txt.textContent='⏳ 上傳中…';
+  const urls=await uploadPhotos(files, `repairs/${rep.id}`);
+  photos.push(...urls); renderThumbs();
+  if(txt) txt.textContent=old;
 }
 function renderThumbs(){ $('#thumbs').innerHTML=photos.map((s,i)=>`<div class="thumb" style="background-image:url(${s})"><span onclick="rmPhoto(${i})">×</span></div>`).join(''); }
 function rmPhoto(i){ photos.splice(i,1); renderThumbs(); }
@@ -446,10 +462,14 @@ function openInstallReport(id){
     <div id="ierr" style="color:#EF4444;font-size:13px;margin-top:8px"></div>
   </div>`;
   document.body.appendChild(d);
-  $('#iph').addEventListener('change',e=>{
-    const files=[...e.target.files];
-    Promise.all(files.map(f=>new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result);r.readAsDataURL(f);}))).then(imgs=>{instPhotos.push(...imgs);renderInstThumbs();});
-    e.target.value='';
+  $('#iph').addEventListener('change',async e=>{
+    const files=[...e.target.files]; e.target.value='';
+    if(!files.length) return;
+    const lbl=e.target.closest('label'), txt=lbl&&lbl.firstChild, old=txt&&txt.textContent;
+    if(txt) txt.textContent='⏳ 上傳中…';
+    const urls=await uploadPhotos(files, `installs/${instRep.id}`);
+    instPhotos.push(...urls); renderInstThumbs();
+    if(txt) txt.textContent=old;
   });
   initSig($('#isig'),s=>instSig=s);
 }

@@ -361,6 +361,19 @@ async function syncToSupabase(prev,next){
   }catch(e){ console.error('syncToSupabase error:',e); }
 }
 
+// 照片上傳 Supabase Storage（取代 base64 入庫）：回傳 public URL 陣列
+async function uploadPhotos(files, folder){
+  const urls=[];
+  for(const f of files){
+    const ext=(f.name?.split('.').pop()||'jpg').toLowerCase();
+    const path=`${folder}/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
+    const {error}=await sb.storage.from('work-photos').upload(path,f,{contentType:f.type||'image/jpeg',upsert:false});
+    if(error){ console.error('uploadPhotos error:',error.message); alert('照片上傳失敗：'+error.message); continue; }
+    urls.push(sb.storage.from('work-photos').getPublicUrl(path).data.publicUrl);
+  }
+  return urls;
+}
+
 const CHANNELS = {
   momo:{label:'momo購物',type:'online',icon:'🛒'},
   pchome:{label:'PChome',type:'online',icon:'🛒'},
@@ -534,15 +547,19 @@ function SignaturePad({onChange}){
   </div>);
 }
 
-function PhotoUpload({photos,setPhotos}){
-  const onFiles=e=>{
+function PhotoUpload({photos,setPhotos,folder}){
+  const [busy,setBusy]=useState(false);
+  const onFiles=async e=>{
     const files=[...e.target.files];
-    Promise.all(files.map(f=>new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result);r.readAsDataURL(f);})))
-      .then(imgs=>setPhotos(p=>[...p,...imgs]));
     e.target.value='';
+    if(!files.length) return;
+    setBusy(true);
+    const urls=await uploadPhotos(files,folder||'misc');
+    setPhotos(p=>[...p,...urls]);
+    setBusy(false);
   };
   return(<div>
-    <label className="photo-add">📷 上傳照片<input type="file" accept="image/*" multiple style={{display:'none'}} onChange={onFiles}/></label>
+    <label className="photo-add">{busy?'⏳ 上傳中…':'📷 上傳照片'}<input type="file" accept="image/*" multiple disabled={busy} style={{display:'none'}} onChange={onFiles}/></label>
     <div className="photo-thumbs">
       {photos.map((src,i)=>(
         <div key={i} className="thumb" style={{backgroundImage:`url(${src})`}}>
@@ -623,7 +640,7 @@ function WorkOrderModal({mode,record,warrantyIn,onClose,onSubmit}){
           </div>
         </>)}
 
-        <div className="wo-sec"><label>現場照片</label><PhotoUpload photos={photos} setPhotos={setPhotos}/></div>
+        <div className="wo-sec"><label>現場照片</label><PhotoUpload photos={photos} setPhotos={setPhotos} folder={`${mode==='install'?'installs':'repairs'}/${record?.id||'misc'}`}/></div>
         <div className="wo-sec"><label>處理說明</label><textarea value={note} onChange={e=>setNote(e.target.value)} rows={2} style={{width:'100%',border:'1px solid var(--g200)',borderRadius:5,padding:'7px 10px',fontSize:12.5,outline:'none',resize:'vertical',fontFamily:'inherit'}} placeholder="維修 / 安裝內容摘要"/></div>
         <div className="wo-sec"><label>🔎 稽核備註（內部用，不對客戶顯示）</label><textarea value={auditNote} onChange={e=>setAuditNote(e.target.value)} rows={2} style={{width:'100%',border:'1px dashed var(--g300)',borderRadius:5,padding:'7px 10px',fontSize:12,outline:'none',resize:'vertical',fontFamily:'inherit',background:'var(--g50)'}} placeholder="內部稽核說明、異常記錄..."/></div>
         <div className="wo-sec"><label>客戶簽名驗收</label><SignaturePad onChange={setSig}/></div>
