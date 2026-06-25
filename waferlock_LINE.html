@@ -960,16 +960,19 @@ function AgentPage(){
     setDispModal(null);
   };
 
-  const createCase=()=>{
+  const createCase=async()=>{
     const c=getCust(active?.wfId);
     if(!c){ toast('無法立案','此對話尚未綁定會員，請先請客戶完成 LINE 綁定','warn'); return; }
-    const rid='R-'+Date.now();
+    const rid=(await sb.rpc('next_case_no',{p_prefix:'R'})).data || ('R-'+Date.now());
     const newRepair={id:rid,wfId:c.wfId,name:c.name,phone:c.phone,
       district:c.district,area:c.area,building:c.address,date:today(),
       type:caseForm.type,issue:caseForm.issue||'異常問題',space:caseForm.space,
       status:'pending',urgency:caseForm.urgency,workerId:null,
       scheduledDate:caseForm.scheduledDate,desc:caseForm.desc,
-      unread:false,arrivalPushed:false,rating:null};
+      contactName:c.name,contactPhone:c.phone,handlingUnit:'',warrantyIn:null,
+      createdBy:'LINE 自助報修',createdAt:today()+' '+now(),auditNote:'',
+      slaLevel:caseForm.urgency==='urgent'?'high':'normal',history:[],
+      unread:false,arrivalPushed:false,rating:null,receiptNo:null};
     const pushMsg={id:'c'+Date.now(),from:'bot',
       text:`📋 已為您建立報修單\n\n案件：${rid}\n問題：${caseForm.type} - ${caseForm.issue||'異常問題'}\n狀態：待派工\n客服將盡快安排師傅 🔧`,time:now()};
     updateDB(prev=>{
