@@ -70,6 +70,81 @@ function warrantyBadge(r){ if(r.warranty_in===true)return '<span class="badge b-
 async function pushCustomer(wfId,text,sender={name:'維夫拉克客服'}){ const c=custMap[wfId]; if(c&&c.line_uid&&String(c.line_uid).startsWith('U')){ sb.functions.invoke('line-push',{body:{to:c.line_uid,text,sender}}).catch(e=>console.error(e)); } }
 async function pushByPhone(phone,text,sender={name:'維夫拉克客服'}){ if(!phone)return; const {data}=await sb.from('customers').select('line_uid').eq('phone',phone).maybeSingle(); if(data?.line_uid&&String(data.line_uid).startsWith('U')){ sb.functions.invoke('line-push',{body:{to:data.line_uid,text,sender}}).catch(e=>console.error(e)); } }
 
+// ───── ETA 估算（純函式，確定性邏輯不交給模型） ─────
+const ROAD_FACTOR=1.3;          // 直線 → 道路 繞路係數
+const FALLBACK_MIN_PER_KM=2.4;  // 冷啟動 fallback ≈ 市區 25km/h × 繞路
+const ETA_BUFFER_MIN=10;        // 時間範圍 ±緩衝（分）
+function haversineKm(la1,lo1,la2,lo2){ const R=6371,d=x=>x*Math.PI/180; const dLa=d(la2-la1),dLo=d(lo2-lo1); const a=Math.sin(dLa/2)**2+Math.cos(d(la1))*Math.cos(d(la2))*Math.sin(dLo/2)**2; return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)); }
+// OSM Nominatim 對台灣「含門牌號」的地址查不到，需逐級降級：
+// ① 去號(保留路/段) ② 砍到 路/街/段 ③ 縣市+區 中心。配個人化校準，街道/區級精度已足夠。
+function addrVariants(addr){
+  const a=String(addr).replace(/\s/g,'').replace(/^\d{3,6}/,''); // 去郵遞區號
+  const v=[];
+  const noNo=a.replace(/\d+號.*$/,'').replace(/之\d+.*/,'');      // 去「號」之後
+  if(noNo&&noNo!==a) v.push(noNo);
+  const toSeg=a.replace(/(段|路|街).*$/,'$1');                    // 砍到 路/街/段
+  if(toSeg) v.push(toSeg);
+  const m=a.match(/^(.{2,3}[縣市].*?[鄉鎮市區])/);                // 縣市+區 中心（最後保底）
+  if(m) v.push(m[1]);
+  return [...new Set(v.filter(Boolean))];
+}
+async function nominatim(q){
+  const url='https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=tw&q='+encodeURIComponent(q);
+  const res=await fetch(url,{headers:{'Accept':'application/json'}});
+  const arr=await res.json();
+  if(!arr||!arr.length) return null;
+  const lat=parseFloat(arr[0].lat), lng=parseFloat(arr[0].lon);
+  return (isNaN(lat)||isNaN(lng))?null:{lat,lng};
+}
+// 客戶地址 → 座標：先查 customers 快取，未命中才打 OSM（逐級降級）並寫回快取
+async function geocodeCustomer(wfId,address){
+  if(!address) return null;
+  const c=custMap[wfId];
+  if(c&&c.lat!=null&&c.lng!=null) return {lat:c.lat,lng:c.lng};
+  try{
+    let hit=null;
+    const vs=addrVariants(address);
+    for(let i=0;i<vs.length;i++){
+      hit=await nominatim(vs[i]);                                 // 用量政策：低頻 on-demand、結果快取
+      if(hit) break;
+      if(i<vs.length-1) await new Promise(r=>setTimeout(r,1100)); // 遵守 Nominatim 1req/s
+    }
+    if(!hit) return null;
+    if(wfId){ sb.from('customers').update({lat:hit.lat,lng:hit.lng}).eq('wf_id',wfId).then(()=>{}); if(c){c.lat=hit.lat;c.lng=hit.lng;} }
+    return hit;
+  }catch(e){ console.error('geocode fail',e); return null; }
+}
+// 該師傅過去 gps 案件的「實際分鐘 ÷ 距離」中位數；無歷史回 fallback
+async function getWorkerMinPerKm(workerId){
+  try{
+    const {data}=await sb.from('repairs').select('accepted_at,arrived_at,est_distance_km')
+      .eq('worker_id',workerId).eq('eta_source','gps').not('arrived_at','is',null).not('accepted_at','is',null).limit(50);
+    const rates=(data||[]).map(r=>{
+      const dist=Number(r.est_distance_km); if(!dist||dist<=0) return null;
+      const mins=(new Date(r.arrived_at)-new Date(r.accepted_at))/60000;
+      if(!(mins>0)||mins>240) return null;  // 濾掉異常（負值/隔天結案）
+      return mins/dist;
+    }).filter(x=>x!=null).sort((a,b)=>a-b);
+    if(!rates.length) return FALLBACK_MIN_PER_KM;
+    const m=Math.floor(rates.length/2);
+    return rates.length%2? rates[m] : (rates[m-1]+rates[m])/2;
+  }catch(e){ console.error('minPerKm fail',e); return FALLBACK_MIN_PER_KM; }
+}
+function fmtHM(d){ return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+// 距離 + 個人化 min/km → {etaAt, etaText}（時間範圍呈現）
+function estimateEta(distKm,minPerKm){
+  const mins=distKm*ROAD_FACTOR*minPerKm;
+  const eta=new Date(Date.now()+mins*60000);
+  const lo=new Date(eta.getTime()-ETA_BUFFER_MIN*60000), hi=new Date(eta.getTime()+ETA_BUFFER_MIN*60000);
+  return {etaAt:eta.toISOString(), etaText:fmtHM(lo)+'–'+fmtHM(hi)};
+}
+// 手選退路：以「現在 + offset 分鐘」為中心做範圍
+function manualEta(offsetMin){
+  const eta=new Date(Date.now()+offsetMin*60000);
+  const lo=new Date(eta.getTime()-ETA_BUFFER_MIN*60000), hi=new Date(eta.getTime()+ETA_BUFFER_MIN*60000);
+  return {etaAt:eta.toISOString(), etaText:fmtHM(lo)+'–'+fmtHM(hi)};
+}
+
 // ───── 登入 ─────
 function renderLogin(){
   $('#root').innerHTML=`<div class="login">
@@ -114,7 +189,7 @@ async function loadCases(){
   ]);
   cases={avail:a.data||[],mine:m.data||[],done:d.data||[],installs:mi.data||[],doneInstalls:di.data||[]};
   const wfIds=[...new Set([...cases.avail,...cases.mine,...cases.done].map(r=>r.wf_id).filter(Boolean))];
-  if(wfIds.length){ const {data}=await sb.from('customers').select('wf_id,name,phone,address,line_uid,product_id,install_date,warranty_months,warranty_end').in('wf_id',wfIds); (data||[]).forEach(c=>custMap[c.wf_id]=c); }
+  if(wfIds.length){ const {data}=await sb.from('customers').select('wf_id,name,phone,address,line_uid,product_id,install_date,warranty_months,warranty_end,lat,lng').in('wf_id',wfIds); (data||[]).forEach(c=>custMap[c.wf_id]=c); }
   renderApp();
 }
 
@@ -127,6 +202,7 @@ function caseCard(r,kind){
     <div class="crow">🔧 ${r.type||''} － ${r.issue||''}</div>
     ${kind!=='avail'?`<div class="crow">📞 ${r.phone||c.phone||'—'}</div><div class="crow">🏠 ${r.building||c.address||'地址待補'}</div>`:`<div class="crow">📍 ${r.district||''}${r.area||''}</div>`}
     ${r.desc?`<div class="crow">📝 ${r.desc}</div>`:''}
+    ${kind==='mine'&&r.eta_text?`<div class="crow" style="color:#0284C7;font-weight:700">🚗 預計 ${r.eta_text} 抵達${r.eta_source==='manual'?'（手動）':''}</div>`:''}
     ${kind==='avail'?`<button class="btn go" onclick="accept('${r.id}')">接案</button>`:''}
     ${kind==='mine'?`<button class="btn done" onclick="openReport('${r.id}')">現場回報 / 結案</button>`:''}
     ${kind==='done'?`<div class="crow" style="color:#10B981;font-weight:700;margin-top:6px">✅ ${r.completed_date||''}　${r.charge_total>0?'$'+r.charge_total+(r.paid?'（已收）':'（未收）'):'免費'}　${r.receipt_no||''}</div>`:''}
@@ -176,12 +252,64 @@ function installCard(o,kind){
   </div>`;
 }
 
-// ───── 接案 ─────
+// ───── 接案：讀定位 → 回推 ETA → 確認 ─────
+let pendingAccept=null; // {id, wfId, centerMs, source, distKm}
+function rangeText(ms){ const lo=new Date(ms-ETA_BUFFER_MIN*60000),hi=new Date(ms+ETA_BUFFER_MIN*60000); return fmtHM(lo)+'–'+fmtHM(hi); }
+function getGps(){ return new Promise(res=>{ if(!navigator.geolocation) return res(null); navigator.geolocation.getCurrentPosition(p=>res(p),()=>res(null),{enableHighAccuracy:true,timeout:8000,maximumAge:0}); }); }
 async function accept(id){
-  await sb.from('repairs').update({worker_id:worker.id,status:'dispatched',scheduled_date:today()+' 師傅接案',arrival_pushed:false}).eq('id',id);
-  const r=cases.avail.find(x=>x.id===id);
-  if(r) pushCustomer(r.wf_id, `🧰 ${worker.name} 已接下您的案件（${r.id}），將盡快與您聯繫並前往處理。`);
-  tab='mine'; await loadCases();
+  const r=cases.avail.find(x=>x.id===id); if(!r)return;
+  const c=custMap[r.wf_id]||{}; const addr=c.address||r.building||'';
+  // 限當次使用：只在此刻讀一次 GPS，只用來算距離、不存原始座標
+  const pos=await getGps();
+  if(pos&&addr){
+    const geo=await geocodeCustomer(r.wf_id,addr);
+    if(geo){
+      const distKm=haversineKm(pos.coords.latitude,pos.coords.longitude,geo.lat,geo.lng);
+      const mpk=await getWorkerMinPerKm(worker.id);
+      const est=estimateEta(distKm,mpk);
+      return openEtaSheet(r,new Date(est.etaAt).getTime(),'gps',distKm);
+    }
+  }
+  // 退路：抓不到定位或地址無法轉座標 → 手選
+  openEtaSheet(r,new Date(manualEta(40).etaAt).getTime(),'manual',null);
+}
+function openEtaSheet(r,centerMs,source,distKm){ pendingAccept={id:r.id,wfId:r.wf_id,centerMs,source,distKm}; renderEtaSheet(); }
+function renderEtaSheet(){
+  const p=pendingAccept; if(!p)return;
+  const srcLabel=p.source==='gps'?`📍 依定位與您過往時程估算（約 ${p.distKm.toFixed(1)} km）`:'✋ 未取得定位，請手動設定';
+  let d=$('#etamo');
+  if(!d){ d=document.createElement('div'); d.className='mo'; d.id='etamo'; d.onclick=e=>{if(e.target===d)closeEtaSheet();}; document.body.appendChild(d); }
+  d.innerHTML=`<div class="sheet">
+    <h3>🚗 回推抵達時間 — ${p.id}</h3>
+    <div style="background:#F8FAFC;border-radius:8px;padding:14px;text-align:center">
+      <div style="font-size:12px;color:#64748B">${srcLabel}</div>
+      <div style="font-size:26px;font-weight:800;color:#0F2744;margin:4px 0">${rangeText(p.centerMs)}</div>
+      <div style="font-size:12px;color:#64748B">預計今日抵達</div>
+    </div>
+    <div class="sec">微調</div>
+    <div class="pm">
+      <button onclick="bumpEta(-10)">－10 分</button>
+      <button onclick="bumpEta(10)">＋10 分</button>
+      <button onclick="bumpEta(20)">＋20 分</button>
+      ${p.source==='manual'?'<button onclick="bumpEta(30)">＋30 分</button><button onclick="bumpEta(60)">＋60 分</button>':''}
+    </div>
+    <div class="act"><button class="cancel" onclick="closeEtaSheet()">取消</button><button class="ok" onclick="confirmAccept()">確認接案 + 通知客戶</button></div>
+    <div id="eerr" style="color:#EF4444;font-size:13px;margin-top:8px"></div>
+  </div>`;
+}
+function bumpEta(min){ if(!pendingAccept)return; pendingAccept.centerMs+=min*60000; renderEtaSheet(); }
+function closeEtaSheet(){ const m=$('#etamo'); if(m)m.remove(); pendingAccept=null; }
+async function confirmAccept(){
+  const p=pendingAccept; if(!p)return;
+  const btn=$('#etamo .ok'); if(btn)btn.disabled=true;
+  const etaText=rangeText(p.centerMs);
+  await sb.from('repairs').update({
+    worker_id:worker.id,status:'dispatched',scheduled_date:today()+' 師傅接案',arrival_pushed:false,
+    accepted_at:new Date().toISOString(),eta_at:new Date(p.centerMs).toISOString(),eta_text:etaText,
+    est_distance_km:p.source==='gps'?Number(p.distKm.toFixed(2)):null,eta_source:p.source
+  }).eq('id',p.id);
+  pushCustomer(p.wfId, `🧰 ${worker.name} 已接單（${p.id}），預計今天 ${etaText} 抵達 🚗`);
+  closeEtaSheet(); tab='mine'; await loadCases();
 }
 
 // ───── 安裝動作 ─────
@@ -285,7 +413,8 @@ async function submitReport(){
     status:'done', photos, signature:sig, charges, charge_total:total,
     payment_method:pay, paid:pay==='free'?true:$('#paid').checked,
     warranty_judgment:wj, exclude_reason:exclVal,
-    work_note:$('#wnote').value.trim(), receipt_no:receipt, completed_date:today()
+    work_note:$('#wnote').value.trim(), receipt_no:receipt, completed_date:today(),
+    arrived_at:rep.arrived_at||new Date().toISOString()  // 校準用：結案時戳補抵達時間（若先前未記）
   }).eq('id',rep.id);
   const chargeLine = total>0 ? `\n費用：$${total}（${ {cash:'現金',transfer:'轉帳',card:'刷卡'}[pay]||'—' }）` : '\n本次免費（保固內）';
   pushCustomer(rep.wf_id, `✅ 維修完成結案\n\n案件：${rep.id}\n問題：${rep.type} － ${rep.issue}${chargeLine}\n師傅：${worker.name}\n簽收單號：${receipt}\n\n感謝您的使用 🙏 ⭐ 歡迎評分`);
