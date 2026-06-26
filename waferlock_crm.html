@@ -174,11 +174,11 @@ input,select,textarea{font-family:inherit}
 .ct-sb.following{background:#EDE9FE;color:#5B21B6}
 .ct-sb.closed{background:#D1FAE5;color:#065F46}
 .ct-timeline{margin-top:8px;padding:8px;background:var(--g50);border-radius:6px;border:1px solid var(--g100)}
-.ct-tl-item{display:flex;gap:7px;align-items:flex-start;margin-bottom:5px;font-size:11px}
+.ct-tl-item{display:flex;gap:7px;align-items:flex-start;margin-bottom:5px;font-size:13px}
 .ct-tl-item:last-child{margin-bottom:0}
 .ct-tl-dot{width:7px;height:7px;border-radius:50%;background:var(--g300);flex-shrink:0;margin-top:3px}
 .ct-tl-dot.ok{background:var(--ok)}
-.ct-tl-time{color:var(--g400);font-size:10px;white-space:nowrap;flex-shrink:0}
+.ct-tl-time{color:var(--g400);font-size:12px;white-space:nowrap;flex-shrink:0}
 .ct-follow-input{width:100%;border:1px dashed var(--g300);border-radius:5px;padding:6px 9px;font-size:11.5px;outline:none;resize:vertical;font-family:inherit;min-height:50px;background:var(--g50)}
 .ct-follow-input:focus{border-color:var(--purple);background:#fff}
 /* 客訴單列表頁 */
@@ -1351,6 +1351,7 @@ function CRMPage(){
     });
     toast('📞 客訴建立',`${c.name} 客訴單 ${cid} 已建立`,'ok');
     setCtModal(false);
+    setTimeout(()=>openCaseTab(c.wfId,cid),500);
   };
 
   const addFollowup=(ctId,note)=>{
@@ -1521,7 +1522,7 @@ function CRMPage(){
         return d?(<div style={{marginTop:5,fontSize:10.5,color:'var(--brand)',background:'#EFF6FF',borderRadius:4,padding:'3px 8px'}}>🔧 {d.note}</div>):null;
       })()}
       {ct.status!=='closed'&&(
-        <div style={{marginTop:8}}>
+        <div style={{marginTop:8,display:'flex',justifyContent:'flex-end'}}>
           <select onChange={e=>{
             const v=e.target.value; if(!v)return;
             if(v==='follow'){setFollowModal(ct.id);setFollowModalNote('');setFollowModalDate('');}
@@ -1530,7 +1531,7 @@ function CRMPage(){
             if(v==='close'){setCloseModal(ct.id);setCloseForm({cat1:'',cat2:'',cat3:''});}
             e.target.value='';
           }} defaultValue=""
-            style={{width:'100%',border:'1px solid var(--g200)',borderRadius:5,padding:'6px 8px',fontSize:11.5,color:'var(--g700)',background:'#fff',cursor:'pointer',outline:'none'}}>
+            style={{width:'auto',border:'1px solid var(--g200)',borderRadius:5,padding:'5px 8px',fontSize:11.5,color:'var(--g700)',background:'#fff',cursor:'pointer',outline:'none'}}>
             <option value="">— 選擇處理方式 —</option>
             <option value="follow">📅 待追蹤</option>
             <option value="repair">🔧 維修案件</option>
