@@ -1072,7 +1072,7 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
 
         </div>{/* end scrollable area */}
 
-        <div className="mact" style={{flexShrink:0,borderTop:'1px solid var(--g100)',paddingTop:12,marginTop:0}}><button className="cancel" onClick={onClose}>取消</button><button className="confirm" onClick={submit}>建立工單</button></div>
+        <div className="mact" style={{flexShrink:0,borderTop:'1px solid var(--g100)',paddingTop:12,marginTop:0}}><button className="cancel" onClick={()=>onClose()}>取消</button><button className="confirm" onClick={submit}>建立工單</button></div>
 
         {addrPicker&&<AddressPicker
           initial={{city:f.addrCity,dist:f.addrDist,road:f.addrRoad,bldg:f.site}}
