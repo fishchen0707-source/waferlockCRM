@@ -450,7 +450,7 @@ const COMPLAINT_CAT = {
     '其他': ['其他'],
   },
 };
-const COMPLAINT_STATUS_LABEL = {pending:'⏳ 待追蹤',following:'🔍 追蹤中',closed:'✅ 結案'};
+const COMPLAINT_STATUS_LABEL = {pending:'📋 待處理',following:'🔍 追蹤中',dispatched:'🔧 已派工',closed:'✅ 結案'};
 const CALL_CHANNELS = ['📞 電話來電','💬 LINE 訊息','📧 電子郵件','🏪 門市到訪','🌐 官網表單'];
 const COMPLAINT_DEPARTMENTS = ['客服課', '內銷課', '外銷課', '電商課', '行銷企劃'];
 
@@ -877,7 +877,7 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
       return {...prev,customers,installs:{...prev.installs,[id]:order}};
     });
     toast('📋 安裝工單已建立',isNew?`${f.name}｜已建立客編 ${wfId}`:`${f.name}｜歸入既有客編 ${wfId}`,'ok');
-    onClose();
+    onClose(id);
   };
 
   const submitRepair=async(common)=>{
@@ -909,7 +909,7 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
     });
     pushLineTo(uid,pushTxt);
     toast('📋 已立案',`${f.name} 報修單 ${rid} 已建立${isNew?'（新客編 '+wfId+'）':''}`,'ok');
-    onClose();
+    onClose(rid);
   };
 
   const subcats=WORK_CATEGORIES[cat]||[];
@@ -1097,6 +1097,10 @@ function CRMPage(){
   const [expandedCt,setExpandedCt] = useState(null); // 客訴展開
   const [followText,setFollowText] = useState('');
   const [followingCtId,setFollowingCtId] = useState(null);
+  const [followModal,setFollowModal] = useState(null); // ctId when open
+  const [followModalNote,setFollowModalNote] = useState('');
+  const [followModalDate,setFollowModalDate] = useState('');
+  const [sourceComplaintId,setSourceComplaintId] = useState(null); // for dispatch→complaint link
   const [projModal,setProjModal] = useState(false);
   const [projForm,setProjForm] = useState({groupId:'',projectId:''}); // 歸屬建案
   const [editAddrPicker,setEditAddrPicker] = useState(false);
@@ -1330,8 +1334,8 @@ function CRMPage(){
       callChannel:ctForm.callChannel, department:ctForm.department,
       cat1:ctForm.cat1, cat2:ctForm.cat2, cat3:ctForm.cat3,
       process:ctForm.process,
-      status:ctForm.status,
-      closedDate:ctForm.status==='closed'?today():null,
+      status:'pending',
+      closedDate:null,
       timeline:[{ts,note:'客訴單建立'+(ctForm.process?`，處理過程：${ctForm.process}`:'')}],
     };
     updateDB(prev=>{
@@ -1371,6 +1375,33 @@ function CRMPage(){
       }}};
     });
     toast('✅ 客訴已結案','','ok');
+  };
+
+  const markFollowing=(ctId,note,followUpDate)=>{
+    if(!note.trim()){toast('請填寫追蹤備註','','warn');return;}
+    const ts=today()+' '+now();
+    updateDB(prev=>{
+      const ct=prev.complaints?.[ctId];
+      if(!ct) return prev;
+      return {...prev,complaints:{...(prev.complaints||{}),[ctId]:{
+        ...ct,status:'following',
+        timeline:[...(ct.timeline||[]),{ts,by:currentUser?.name,note:note.trim(),followUpDate:followUpDate||null,type:'schedule'}],
+      }}};
+    });
+    toast('🔍 已標記追蹤','','ok');
+    setFollowModal(null); setFollowModalNote(''); setFollowModalDate('');
+  };
+
+  const linkComplaintToRepair=(ctId,repairId)=>{
+    const ts=today()+' '+now();
+    updateDB(prev=>{
+      const ct=prev.complaints?.[ctId];
+      if(!ct) return prev;
+      return {...prev,complaints:{...(prev.complaints||{}),[ctId]:{
+        ...ct,status:'dispatched',
+        timeline:[...(ct.timeline||[]),{ts,by:currentUser?.name,note:`已建立派工單 ${repairId}`,type:'dispatch'}],
+      }}};
+    });
   };
 
   const toInputDate=(s)=>{ if(!s) return ''; const d=new Date(s); if(isNaN(d)) return ''; const d2=new Date(d.getTime()-d.getTimezoneOffset()*60000); return d2.toISOString().slice(0,10); };
@@ -1530,8 +1561,25 @@ function CRMPage(){
                               ))}
                             </div>
                           )}
-                          {/* 新增追蹤備註 */}
-                          {ct.status!=='closed'&&(
+                          {/* 追蹤日期顯示（following） */}
+                          {ct.status==='following'&&(()=>{
+                            const sched=[...(ct.timeline||[])].reverse().find(t=>t.type==='schedule');
+                            return sched?.followUpDate?(
+                              <div style={{marginTop:5,fontSize:11,color:'var(--purple)',background:'#EDE9FE',borderRadius:4,padding:'3px 8px',display:'inline-block'}}>
+                                📅 下次追蹤：{sched.followUpDate}
+                              </div>
+                            ):null;
+                          })()}
+                          {/* 依狀態顯示操作 */}
+                          {ct.status==='pending'&&(
+                            <div style={{display:'flex',gap:6,marginTop:8}}>
+                              <button onClick={()=>{setFollowModal(ct.id);setFollowModalNote('');setFollowModalDate('');}}
+                                style={{padding:'4px 10px',background:'#EDE9FE',color:'var(--purple)',border:'none',borderRadius:4,fontSize:10.5,fontWeight:600,cursor:'pointer'}}>🔍 標記追蹤</button>
+                              <button onClick={()=>{setSourceComplaintId(ct.id);setCaseModal(true);}}
+                                style={{padding:'4px 10px',background:'var(--brand)',color:'#fff',border:'none',borderRadius:4,fontSize:10.5,fontWeight:600,cursor:'pointer'}}>🔧 建立派工</button>
+                            </div>
+                          )}
+                          {ct.status==='following'&&(
                             followingCtId===ct.id
                               ?<div style={{marginTop:8,display:'flex',gap:6}}>
                                   <textarea className="ct-follow-input" value={followText} onChange={e=>setFollowText(e.target.value)} placeholder="輸入追蹤備註..."/>
@@ -1542,6 +1590,10 @@ function CRMPage(){
                                 </div>
                               :<button onClick={()=>{setFollowingCtId(ct.id);setFollowText('');}} style={{marginTop:7,padding:'4px 10px',background:'#EDE9FE',color:'var(--purple)',border:'none',borderRadius:4,fontSize:10.5,fontWeight:600,cursor:'pointer'}}>+ 新增追蹤備註</button>
                           )}
+                          {ct.status==='dispatched'&&(()=>{
+                            const d=[...(ct.timeline||[])].reverse().find(t=>t.type==='dispatch');
+                            return d?(<div style={{marginTop:5,fontSize:10.5,color:'var(--brand)',background:'#EFF6FF',borderRadius:4,padding:'3px 8px'}}>🔧 {d.note}</div>):null;
+                          })()}
                         </div>
                       ))
                     }
@@ -1628,7 +1680,36 @@ function CRMPage(){
       {caseModal&&sel&&(
         <WorkOrderForm
           lockedCustomer={customers.find(c=>c.wfId===sel.wfId)||sel}
-          onClose={()=>setCaseModal(false)}/>
+          initialCategory={sourceComplaintId?'repair':undefined}
+          onClose={(newId)=>{
+            setCaseModal(false);
+            if(sourceComplaintId&&newId){
+              linkComplaintToRepair(sourceComplaintId,newId);
+            }
+            setSourceComplaintId(null);
+          }}/>
+      )}
+
+      {/* ── 追蹤排程 Modal ── */}
+      {followModal&&(
+        <div className="mo" onClick={e=>e.target===e.currentTarget&&setFollowModal(null)}>
+          <div className="mob" style={{maxWidth:420}}>
+            <h3>🔍 標記追蹤</h3>
+            <div className="mf"><label>追蹤備註 <span style={{color:'var(--err)'}}>*</span></label>
+              <textarea value={followModalNote} onChange={e=>setFollowModalNote(e.target.value)} rows={3}
+                style={{width:'100%',border:'1px solid var(--g200)',borderRadius:5,padding:'7px 10px',fontSize:12,outline:'none',resize:'vertical',fontFamily:'inherit'}}
+                placeholder="記錄此次處理結果，以及需要追蹤的原因..."/>
+            </div>
+            <div className="mf"><label>下次追蹤日期</label>
+              <input type="date" value={followModalDate} onChange={e=>setFollowModalDate(e.target.value)}
+                style={{width:'100%',border:'1px solid var(--g200)',borderRadius:5,padding:'7px 10px',fontSize:12,outline:'none'}}/>
+            </div>
+            <div className="mact">
+              <button className="cancel" onClick={()=>setFollowModal(null)}>取消</button>
+              <button className="confirm" onClick={()=>markFollowing(followModal,followModalNote,followModalDate)}>確認追蹤</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {editModal&&editForm&&sel&&(
@@ -1721,19 +1802,11 @@ function CRMPage(){
               </div>
             </div>
 
-            <div className="mf2">
-              <div className="mf"><label>目前狀態</label>
-                <select value={ctForm.status} onChange={e=>setCtForm(p=>({...p,status:e.target.value}))}>
-                  <option value="pending">⏳ 待追蹤（後續需回覆）</option>
-                  <option value="closed">✅ 直接結案（已解決）</option>
-                </select>
-              </div>
-              <div className="mf"><label>判斷原因 1（主分類） <span style={{color:'var(--err)'}}>*</span></label>
-                <select value={ctForm.cat1} onChange={e=>setCtForm(p=>({...p,cat1:e.target.value,cat2:'',cat3:''}))}>
-                  <option value="">— 請選擇 —</option>
-                  {Object.keys(COMPLAINT_CAT).map(v=><option key={v}>{v}</option>)}
-                </select>
-              </div>
+            <div className="mf"><label>判斷原因 1（主分類） <span style={{color:'var(--err)'}}>*</span></label>
+              <select value={ctForm.cat1} onChange={e=>setCtForm(p=>({...p,cat1:e.target.value,cat2:'',cat3:''}))}>
+                <option value="">— 請選擇 —</option>
+                {Object.keys(COMPLAINT_CAT).map(v=><option key={v}>{v}</option>)}
+              </select>
             </div>
             
             {ctForm.cat1&&(
@@ -2176,13 +2249,19 @@ function HomePage(){
   const allCases=[
     ...installs.filter(isOpen).map(o=>({...o,_type:'install',_date:o.createdTs||0})),
     ...repairs.filter(isOpen).map(r=>({...r,_type:'repair',_date:new Date(r.date||0).getTime()||0})),
-    ...complaints.filter(isOpen).map(ct=>({...ct,_type:'complaint',_date:new Date(ct.date||0).getTime()||0})),
+    ...complaints.filter(ct=>ct.status==='pending').map(ct=>({...ct,_type:'complaint',_date:new Date(ct.date||0).getTime()||0})),
   ].sort((a,b)=>b._date-a._date);
-  const filtered=allCases.filter(c=>{
-    if(typeFilter!=='all'&&c._type!==typeFilter)return false;
-    if(dept!=='all'&&c._type==='complaint'&&c.department!==dept)return false;
-    return true;
-  });
+  const followingComplaints=complaints.filter(ct=>ct.status==='following')
+    .map(ct=>({...ct,_type:'complaint',_date:new Date(ct.date||0).getTime()||0}))
+    .sort((a,b)=>b._date-a._date);
+  const filtered=(typeFilter==='following_complaint'
+    ? followingComplaints.filter(c=>dept==='all'||c.department===dept)
+    : allCases.filter(c=>{
+        if(typeFilter!=='all'&&c._type!==typeFilter)return false;
+        if(dept!=='all'&&c._type==='complaint'&&c.department!==dept)return false;
+        return true;
+      })
+  );
   const openCustomer=wfId=>{ setCrmTarget(wfId); setPage('crm'); };
   const doSearch=()=>{
     const term=search.trim();
@@ -2286,7 +2365,7 @@ function HomePage(){
         </div>
         <div style={{padding:'8px 0',borderBottom:'1px solid #334155'}}>
           <div style={{padding:'4px 12px',fontSize:9.5,color:'#475569',fontWeight:700,letterSpacing:1,marginBottom:2}}>案件類型</div>
-          {[['all','🗂️ 全部案件',allCases.length],['install','🛠️ 安裝件',installs.filter(isOpen).length],['repair','🔧 維修件',repairs.filter(isOpen).length],['complaint','📞 客訴件',complaints.filter(isOpen).length]].map(([v,l,cnt])=>(
+          {[['all','🗂️ 全部案件',allCases.length],['install','🛠️ 安裝件',installs.filter(isOpen).length],['repair','🔧 維修件',repairs.filter(isOpen).length],['complaint','📞 客訴件',complaints.filter(ct=>ct.status==='pending').length]].map(([v,l,cnt])=>(
             <div key={v} onClick={()=>setTypeFilter(v)}
               style={{padding:'9px 12px',cursor:'pointer',fontSize:12.5,display:'flex',alignItems:'center',justifyContent:'space-between',
                 fontWeight:typeFilter===v?700:400,background:typeFilter===v?'#334155':'transparent',
@@ -2319,6 +2398,12 @@ function HomePage(){
         <div style={{padding:'12px',borderTop:'1px solid #334155',fontSize:11,color:'#64748B',lineHeight:1.8}}>
           {urg>0&&<div style={{color:'#EF4444',fontWeight:700,marginBottom:2}}>🚨 緊急 {urg} 件</div>}
           <div>待處理 <b style={{color:'#F59E0B'}}>{pend}</b> 件</div>
+          {(()=>{const fc=followingComplaints.length; return fc>0?(
+            <div onClick={()=>setTypeFilter(typeFilter==='following_complaint'?'all':'following_complaint')}
+              style={{cursor:'pointer',color:typeFilter==='following_complaint'?'#A78BFA':'#94A3B8',fontWeight:typeFilter==='following_complaint'?700:400}}>
+              🔍 追蹤中客訴 <b style={{color:'#A78BFA'}}>{fc}</b> 件
+            </div>
+          ):null;})()}
           <div>篩選結果 <b style={{color:'#38BDF8'}}>{filtered.length}</b> 件</div>
         </div>
       </div>
