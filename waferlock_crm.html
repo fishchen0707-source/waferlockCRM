@@ -1413,6 +1413,7 @@ function CRMPage(){
         timeline:[...(ct.timeline||[]),{ts,by:currentUser?.name,note:`已建立派工單 ${repairId}`,type:'dispatch'}],
       }}};
     });
+    if(highlightedOrderId===ctId) setTimeout(()=>window.close(),700);
   };
 
   const toInputDate=(s)=>{ if(!s) return ''; const d=new Date(s); if(isNaN(d)) return ''; const d2=new Date(d.getTime()-d.getTimezoneOffset()*60000); return d2.toISOString().slice(0,10); };
@@ -1521,7 +1522,7 @@ function CRMPage(){
         const d=[...(ct.timeline||[])].reverse().find(t=>t.type==='dispatch');
         return d?(<div style={{marginTop:5,fontSize:10.5,color:'var(--brand)',background:'#EFF6FF',borderRadius:4,padding:'3px 8px'}}>🔧 {d.note}</div>):null;
       })()}
-      {ct.status!=='closed'&&(
+      {(ct.status==='pending'||ct.status==='following')&&(
         <div style={{marginTop:8,display:'flex',justifyContent:'flex-end'}}>
           <select onChange={e=>{
             const v=e.target.value; if(!v)return;
