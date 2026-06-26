@@ -2053,7 +2053,7 @@ function SchedulePage(){
                   const b=(db.bookings||[]).find(x=>x.workerId===w.id&&x.date===date&&x.hour===h);
                   if(!b) return <td key={w.id}></td>;
                   return <td key={w.id} className={'busy'+(b.refType==='install'?' inst':'')} style={{cursor:'pointer'}}
-                    title={`點擊查看案件 ${b.refId}`} onClick={()=>{const cc=caseOf(b); cc?setSel(cc):alert('找不到對應案件（'+b.refId+'）');}}>
+                    title={`點擊開啟案件 ${b.refId}`} onClick={()=>window.open(location.origin+location.pathname+'#'+(b.refType==='install'?'install':'repair')+'/'+b.refId,'_blank')}>
                     <div style={{fontWeight:700,fontSize:11}}>{b.refType==='install'?'🛠️ 安裝':'🔧 維修'}</div>
                     <div style={{fontSize:9.5,opacity:.8,fontFamily:'JetBrains Mono',marginTop:1}}>{b.refId}</div>
                   </td>;
@@ -2063,13 +2063,7 @@ function SchedulePage(){
           </table>
         ):<div style={{color:'var(--g400)',fontSize:13,padding:'30px 0',textAlign:'center'}}>此區尚無師傅</div>}
       </div>
-      <div style={{fontSize:11,color:'var(--g500)',marginTop:8}}>🟦 維修（1 格）　🟪 安裝（2 格）　空白＝可約　·　點格子可查看案件與異動紀錄</div>
-      {sel&&(
-        <div style={{position:'fixed',inset:0,top:48,zIndex:40}}>
-          <div onClick={()=>setSel(null)} style={{position:'absolute',inset:0,background:'rgba(15,39,68,.25)'}}/>
-          <div style={{position:'absolute',top:0,right:0,bottom:0,display:'flex'}}><CaseDetailPanel c={sel} onClose={()=>setSel(null)}/></div>
-        </div>
-      )}
+      <div style={{fontSize:11,color:'var(--g500)',marginTop:8}}>🟦 維修（1 格）　🟪 安裝（2 格）　空白＝可約　·　點格子開啟案件詳情（新分頁）</div>
     </div>
   );
 }
