@@ -1100,6 +1100,8 @@ function CRMPage(){
   const [followModal,setFollowModal] = useState(null); // ctId when open
   const [followModalNote,setFollowModalNote] = useState('');
   const [followModalDate,setFollowModalDate] = useState('');
+  const [closeModal,setCloseModal] = useState(null); // ctId when open
+  const [closeForm,setCloseForm] = useState({cat1:'',cat2:'',cat3:''});
   const [sourceComplaintId,setSourceComplaintId] = useState(null); // for dispatch→complaint link
   const [historyModal,setHistoryModal] = useState(false); // 客戶主檔「歷史紀錄」彈窗
   const [projModal,setProjModal] = useState(false);
@@ -1329,14 +1331,13 @@ function CRMPage(){
   const createComplaint=async()=>{
     const c=customers.find(x=>x.wfId===sel?.wfId);
     if(!c){ toast('請先選擇客戶','','warn'); return; }
-    if(!ctForm.cat1){ toast('請選擇判斷原因1','主類不可空白','warn'); return; }
     const cid=(await sb.rpc('next_case_no',{p_prefix:'C'})).data || ('CT-'+Date.now());
     const ts=today()+' '+now();
     const newCt={
       id:cid, wfId:c.wfId, name:c.name, phone:c.phone,
       date:today(), createdAt:ts, createdBy:currentUser?.name||'CRM 客服',
       callChannel:ctForm.callChannel, department:ctForm.department,
-      cat1:ctForm.cat1, cat2:ctForm.cat2, cat3:ctForm.cat3,
+      cat1:'', cat2:'', cat3:'',
       process:ctForm.process,
       status:'pending',
       closedDate:null,
@@ -1368,17 +1369,19 @@ function CRMPage(){
     setFollowingCtId(null);
   };
 
-  const closeComplaint=(ctId)=>{
+  const closeComplaint=(ctId,{cat1,cat2,cat3}={})=>{
     const ts=today()+' '+now();
     updateDB(prev=>{
       const ct=prev.complaints?.[ctId];
       if(!ct) return prev;
       return {...prev,complaints:{...(prev.complaints||{}),[ctId]:{
         ...ct,status:'closed',closedDate:today(),
-        timeline:[...(ct.timeline||[]),{ts,by:currentUser?.name,note:'結案'}],
+        cat1:cat1||ct.cat1||'', cat2:cat2||ct.cat2||'', cat3:cat3||ct.cat3||'',
+        timeline:[...(ct.timeline||[]),{ts,by:currentUser?.name,note:`結案${cat1?' — '+cat1+(cat2?' › '+cat2:'')+(cat3?' › '+cat3:''):''}` }],
       }}};
     });
     toast('✅ 客訴已結案','','ok');
+    setCloseModal(null); setCloseForm({cat1:'',cat2:'',cat3:''});
     if(highlightedOrderId===ctId) setTimeout(()=>window.close(),700);
   };
 
@@ -1493,7 +1496,7 @@ function CRMPage(){
         </div>
         <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:5}}>
           <span className={`ct-sb ${ct.status}`}>{COMPLAINT_STATUS_LABEL[ct.status]}</span>
-          {ct.status!=='closed'&&<button onClick={()=>closeComplaint(ct.id)}
+          {ct.status!=='closed'&&<button onClick={()=>{setCloseModal(ct.id);setCloseForm({cat1:'',cat2:'',cat3:''});}}
             style={{padding:'3px 9px',background:'var(--ok)',color:'#fff',border:'none',borderRadius:4,fontSize:10,fontWeight:700,cursor:'pointer'}}>結案</button>}
         </div>
       </div>
@@ -1750,6 +1753,50 @@ function CRMPage(){
         </div>
       )}
 
+      {/* ── 客訴結案 Modal ── */}
+      {closeModal&&(()=>{
+        const ct=Object.values(db.complaints||{}).find(x=>x.id===closeModal);
+        return(
+        <div className="mo" onClick={e=>e.target===e.currentTarget&&setCloseModal(null)}>
+          <div className="mob" style={{maxWidth:420}}>
+            <h3>✅ 客訴結案</h3>
+            {ct&&<div style={{background:'var(--g50)',borderRadius:6,padding:'7px 10px',marginBottom:12,fontSize:12,color:'var(--g600)'}}>
+              {ct.id}・{ct.callChannel}・{ct.date}
+            </div>}
+            <div className="mf"><label>判斷原因 1（主分類） <span style={{color:'var(--err)'}}>*</span></label>
+              <select value={closeForm.cat1} onChange={e=>setCloseForm(p=>({...p,cat1:e.target.value,cat2:'',cat3:''}))}>
+                <option value="">— 請選擇 —</option>
+                {Object.keys(COMPLAINT_CAT).map(v=><option key={v}>{v}</option>)}
+              </select>
+            </div>
+            {closeForm.cat1&&(
+              <div className="mf"><label>判斷原因 2（次分類）</label>
+                <select value={closeForm.cat2} onChange={e=>setCloseForm(p=>({...p,cat2:e.target.value,cat3:''}))}>
+                  <option value="">— 請選擇 —</option>
+                  {Object.keys(COMPLAINT_CAT[closeForm.cat1]).map(v=><option key={v}>{v}</option>)}
+                </select>
+              </div>
+            )}
+            {closeForm.cat2&&(
+              <div className="mf"><label>判斷原因 3（細項）</label>
+                <select value={closeForm.cat3} onChange={e=>setCloseForm(p=>({...p,cat3:e.target.value}))}>
+                  <option value="">— 請選擇 —</option>
+                  {COMPLAINT_CAT[closeForm.cat1][closeForm.cat2].map(v=><option key={v}>{v}</option>)}
+                </select>
+              </div>
+            )}
+            <div className="mact">
+              <button className="cancel" onClick={()=>setCloseModal(null)}>取消</button>
+              <button className="confirm" onClick={()=>{
+                if(!closeForm.cat1){toast('請選擇判斷原因1','主類不可空白','warn');return;}
+                closeComplaint(closeModal,closeForm);
+              }}>確認結案</button>
+            </div>
+          </div>
+        </div>
+        );
+      })()}
+
       {editModal&&editForm&&sel&&(
         <div className="mo" onClick={e=>e.target===e.currentTarget&&setEditModal(false)}>
           <div className="mob">
@@ -1839,31 +1886,6 @@ function CRMPage(){
                 </select>
               </div>
             </div>
-
-            <div className="mf"><label>判斷原因 1（主分類） <span style={{color:'var(--err)'}}>*</span></label>
-              <select value={ctForm.cat1} onChange={e=>setCtForm(p=>({...p,cat1:e.target.value,cat2:'',cat3:''}))}>
-                <option value="">— 請選擇 —</option>
-                {Object.keys(COMPLAINT_CAT).map(v=><option key={v}>{v}</option>)}
-              </select>
-            </div>
-            
-            {ctForm.cat1&&(
-              <div className="mf"><label>判斷原因 2（次分類）</label>
-                <select value={ctForm.cat2} onChange={e=>setCtForm(p=>({...p,cat2:e.target.value,cat3:''}))}>
-                  <option value="">— 請選擇 —</option>
-                  {Object.keys(COMPLAINT_CAT[ctForm.cat1]).map(v=><option key={v}>{v}</option>)}
-                </select>
-              </div>
-            )}
-
-            {ctForm.cat2&&(
-              <div className="mf"><label>判斷原因 3（細項）</label>
-                <select value={ctForm.cat3} onChange={e=>setCtForm(p=>({...p,cat3:e.target.value}))}>
-                  <option value="">— 請選擇 —</option>
-                  {COMPLAINT_CAT[ctForm.cat1][ctForm.cat2].map(v=><option key={v}>{v}</option>)}
-                </select>
-              </div>
-            )}
 
             <div className="mf"><label>處理過程 / 來電摘要</label>
               <textarea value={ctForm.process} onChange={e=>setCtForm(p=>({...p,process:e.target.value}))} rows={4}
