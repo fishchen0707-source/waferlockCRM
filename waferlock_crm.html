@@ -2649,36 +2649,100 @@ function App(){
     });
   },[]);
 
-  // Supabase Realtime 跨分頁與跨裝置同步
+  // Supabase Realtime 跨分頁與跨裝置同步（增量更新，不再全量重載）
   useEffect(()=>{
+    const applyPayload=(prev,table,eventType,nr,or)=>{
+      let next=prev;
+      if(table==='customers'){
+        if(eventType==='INSERT'){
+          const c=dbToCust(nr);
+          if(!(prev.customers||[]).find(x=>x.wfId===c.wfId)){
+            setNewIds(p=>[...p,c.wfId]);
+            toast('🎉 新客戶保固登錄',c.name+' 已完成登錄','ok');
+            setTimeout(()=>setNewIds(p=>p.filter(id=>id!==c.wfId)),6000);
+            next={...prev,customers:[...(prev.customers||[]),c]};
+          }
+        } else if(eventType==='UPDATE'){
+          next={...prev,customers:(prev.customers||[]).map(c=>c.wfId===nr.wf_id?dbToCust(nr):c)};
+        } else if(eventType==='DELETE'){
+          next={...prev,customers:(prev.customers||[]).filter(c=>c.wfId!==or.wf_id)};
+        }
+      } else if(table==='repairs'){
+        if(eventType==='INSERT'){
+          const r=dbToRepair(nr);
+          toast(r.urgency==='urgent'?'🚨 緊急報修':'📋 新報修案件',`${r.name} — ${r.issue}`,r.urgency==='urgent'?'err':'warn');
+          next={...prev,repairs:{...prev.repairs,[r.id]:r}};
+        } else if(eventType==='UPDATE'){
+          next={...prev,repairs:{...prev.repairs,[nr.id]:dbToRepair(nr)}};
+        } else if(eventType==='DELETE'){
+          const {[or.id]:_,...rest}=prev.repairs||{};
+          next={...prev,repairs:rest};
+        }
+      } else if(table==='installs'){
+        if(eventType==='INSERT'||eventType==='UPDATE'){
+          next={...prev,installs:{...prev.installs,[nr.id]:dbToInstall(nr)}};
+        } else if(eventType==='DELETE'){
+          const {[or.id]:_,...rest}=prev.installs||{};
+          next={...prev,installs:rest};
+        }
+      } else if(table==='complaints'){
+        if(eventType==='INSERT'){
+          const ct=dbToCt(nr);
+          toast('📞 新客訴單',`${ct.name} — ${ct.cat1}`,'ok');
+          next={...prev,complaints:{...prev.complaints,[ct.id]:ct}};
+        } else if(eventType==='UPDATE'){
+          next={...prev,complaints:{...prev.complaints,[nr.id]:dbToCt(nr)}};
+        } else if(eventType==='DELETE'){
+          const {[or.id]:_,...rest}=prev.complaints||{};
+          next={...prev,complaints:rest};
+        }
+      } else if(table==='conversations'){
+        if(eventType==='INSERT'||eventType==='UPDATE'){
+          const convs=(prev.conversations||[]).filter(c=>c.id!==nr.id);
+          next={...prev,conversations:[...convs,dbToConv(nr)]};
+        } else if(eventType==='DELETE'){
+          next={...prev,conversations:(prev.conversations||[]).filter(c=>c.id!==or.id)};
+        }
+      } else if(table==='bookings'){
+        if(eventType==='INSERT'||eventType==='UPDATE'){
+          const bks=(prev.bookings||[]).filter(b=>b.id!==nr.id);
+          next={...prev,bookings:[...bks,dbToBooking(nr)]};
+        } else if(eventType==='DELETE'){
+          next={...prev,bookings:(prev.bookings||[]).filter(b=>b.id!==or.id)};
+        }
+      } else if(table==='workers'){
+        if(eventType==='INSERT'||eventType==='UPDATE'){
+          const wks=(prev.workers||[]).filter(w=>w.id!==nr.id);
+          const w=dbToWorker(nr);
+          next={...prev,workers:w.active===false?wks:[...wks,w]};
+        } else if(eventType==='DELETE'){
+          next={...prev,workers:(prev.workers||[]).filter(w=>w.id!==or.id)};
+        }
+      } else if(table==='groups'){
+        if(eventType==='INSERT'||eventType==='UPDATE'){
+          next={...prev,groups:[...(prev.groups||[]).filter(g=>g.id!==nr.id),dbToGroup(nr)]};
+        } else if(eventType==='DELETE'){
+          next={...prev,groups:(prev.groups||[]).filter(g=>g.id!==or.id)};
+        }
+      } else if(table==='projects'){
+        if(eventType==='INSERT'||eventType==='UPDATE'){
+          next={...prev,projects:[...(prev.projects||[]).filter(p=>p.id!==nr.id),dbToProject(nr)]};
+        } else if(eventType==='DELETE'){
+          next={...prev,projects:(prev.projects||[]).filter(p=>p.id!==or.id)};
+        }
+      } else if(table==='config'){
+        if((eventType==='INSERT'||eventType==='UPDATE')&&nr.key==='wf_counter'){
+          next={...prev,wfCounter:parseInt(nr.value||'0')};
+        }
+      }
+      prevDbRef.current=next;
+      return next;
+    };
     const channel = sb.channel('db-realtime')
-      .on('postgres_changes',{event:'*',schema:'public'},()=>{
-        loadFromSupabase().then(data=>{
-          setDB(prev=>{
-            const prevSet=new Set((prev.customers||[]).map(c=>c.wfId));
-            const added=(data.customers||[]).filter(c=>!prevSet.has(c.wfId));
-            if(added.length>0){
-              setNewIds(p=>[...p,...added.map(c=>c.wfId)]);
-              toast('🎉 新客戶保固登錄',added.map(c=>c.name).join('、')+' 已完成登錄','ok');
-              setTimeout(()=>setNewIds(p=>p.filter(id=>!added.map(c=>c.wfId).includes(id))),6000);
-            }
-            const prevRids=new Set(Object.keys(prev.repairs||{}));
-            const newRids=Object.keys(data.repairs||{}).filter(id=>!prevRids.has(id));
-            if(newRids.length>0){
-              const r=data.repairs[newRids[0]];
-              if(r) toast(r.urgency==='urgent'?'🚨 緊急報修':'📋 新報修案件',`${r.name} — ${r.issue}`,r.urgency==='urgent'?'err':'warn');
-            }
-            const prevCtIds=new Set(Object.keys(prev.complaints||{}));
-            const newCtIds=Object.keys(data.complaints||{}).filter(id=>!prevCtIds.has(id));
-            if(newCtIds.length>0){
-              const ct=data.complaints[newCtIds[0]];
-              if(ct) toast('📞 新客訴單',`${ct.name} — ${ct.cat1}`,'ok');
-            }
-            prevDbRef.current = data;
-            return data;
-          });
-          setSynced(true);
-        });
+      .on('postgres_changes',{event:'*',schema:'public'},(payload)=>{
+        const {table,eventType,new:nr={},old:or={}}=payload;
+        setDB(prev=>applyPayload(prev,table,eventType,nr,or));
+        setSynced(true);
       })
       .subscribe(status=>setSynced(status==='SUBSCRIBED'));
     return ()=>sb.removeChannel(channel);
