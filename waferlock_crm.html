@@ -1148,22 +1148,25 @@ function CRMPage(){
     }
   },[crmTarget,customers]);
 
-  // 高亮工單卡片：自動捲動，3 秒後取消高亮
+  // 聚焦的 case 卡片：自動捲動並持續高亮（代表「目前選中案件」，切客戶/點別張才換）
   useEffect(()=>{
     if(!highlightedOrderId||!hlRef.current) return;
     hlRef.current.scrollIntoView({behavior:'smooth',block:'center'});
-    const t=setTimeout(()=>setHighlightedOrderId(null),3000);
-    return ()=>clearTimeout(t);
   },[highlightedOrderId,sel]);
 
-  // 案件專屬網址：開啟維修/安裝排程畫面時，網址自動反映該案件（可直接從網址列複製分享）；
-  // 關閉排程後還原成客戶網址。分享出去的 #repair/#install 連結由 App 的 hash 解析定位＋高亮。
+  // 階層式案件網址：#crm/{wfId}/{caseId}。caseId 取目前聚焦案件（或開排程中的案件），
+  // 且須驗證屬於目前客戶（避免切客戶後殘留前一個 caseId）；不屬於則只到客戶層級 #crm/{wfId}。
   useEffect(()=>{
+    if(!sel) return;
     const base=location.pathname+location.search;
-    if(dispatchRepair) window.history.replaceState(null,'',base+'#repair/'+dispatchRepair.id);
-    else if(schedInstall) window.history.replaceState(null,'',base+'#install/'+schedInstall.id);
-    else if(sel) window.history.replaceState(null,'',base+'#crm/'+sel.wfId);
-  },[dispatchRepair,schedInstall,sel]);
+    const cid=highlightedOrderId||dispatchRepair?.id||schedInstall?.id;
+    const belongs=cid&&(
+      (sel.complaintIds||[]).includes(cid)||
+      (sel.repairIds||[]).includes(cid)||
+      Object.values(db.installs||{}).some(o=>o.id===cid&&o.wfId===sel.wfId)
+    );
+    window.history.replaceState(null,'',base+'#crm/'+sel.wfId+(belongs?'/'+cid:''));
+  },[sel,highlightedOrderId,dispatchRepair,schedInstall]);
 
   const doSearch=()=>{
     const lq=q.trim().toLowerCase();
@@ -1185,7 +1188,7 @@ function CRMPage(){
 
   // ── 維修派工 ──
   const openRepairDispatch=r=>{
-    setDispatchRepair(r);
+    setDispatchRepair(r); setHighlightedOrderId(r.id);
     setDispSw(''); setDispStart(null); setDispChargeRows([]);
     setDispRegion('central'); setDispSd(todayISO());
     setDispHiRisk(false); setDispHardJob(false); setDispBomber(!!r.flagBomber);
@@ -1244,7 +1247,7 @@ function CRMPage(){
 
   // ── 安裝排程 ──
   const openInstallSchedule=o=>{
-    setSchedInstall(o); setDispRegion('central'); setDispSw(''); setDispSd(todayISO()); setDispStart(null);
+    setSchedInstall(o); setHighlightedOrderId(o.id); setDispRegion('central'); setDispSw(''); setDispSd(todayISO()); setDispStart(null);
   };
   const doInstallSchedule=async()=>{
     if(!dispSw){ toast('請選擇師傅','先選區域與師傅','warn'); return; }
@@ -1536,7 +1539,9 @@ function CRMPage(){
                     {complaints.length===0
                       ?<div style={{textAlign:'center',color:'var(--g400)',fontSize:11.5,padding:'10px 0'}}>尚無立案紀錄</div>
                       :complaints.map(ct=>(
-                        <div key={ct.id} className={`ctcard ${ct.status}`}>
+                        <div key={ct.id} ref={ct.id===highlightedOrderId?hlRef:null} className={`ctcard ${ct.status}`}
+                          onClick={e=>{if(e.target.closest('button,textarea,input,a'))return;setHighlightedOrderId(ct.id);}}
+                          style={{cursor:'pointer',...(ct.id===highlightedOrderId?{outline:'2px solid var(--brand)',outlineOffset:2}:{})}}>
                           <div style={{display:'flex',alignItems:'flex-start',gap:8}}>
                             <div style={{flex:1}}>
                               <div style={{fontWeight:700,fontSize:12}}>{ct.cat1}{ct.cat2?` › ${ct.cat2}`:''}{ct.cat3?` › ${ct.cat3}`:''}</div>
@@ -1606,7 +1611,9 @@ function CRMPage(){
               {repairs.length===0
                 ? <div className="empty" style={{height:100}}><div style={{fontSize:26,opacity:.3}}>📋</div><div style={{fontSize:12,marginTop:8}}>尚無派工紀錄</div></div>
                 : repairs.map(r=>{const isHL=r.id===highlightedOrderId; return(
-                  <div key={r.id} ref={isHL?hlRef:null} className={`rcard ${r.urgency==='urgent'?'urgent':r.status}`} style={isHL?{outline:'2px solid var(--brand)',outlineOffset:2}:{}}>
+                  <div key={r.id} ref={isHL?hlRef:null} className={`rcard ${r.urgency==='urgent'?'urgent':r.status}`}
+                    onClick={e=>{if(e.target.closest('button,textarea,input,a'))return;setHighlightedOrderId(r.id);}}
+                    style={{cursor:'pointer',...(isHL?{outline:'2px solid var(--brand)',outlineOffset:2}:{})}}>
                     <div className="rch">
                       <div>
                         <div style={{fontSize:12,fontWeight:700}}>{r.type} — {r.issue}</div>
@@ -1648,7 +1655,9 @@ function CRMPage(){
               {curInstalls.length===0
                 ?<div className="empty" style={{height:80}}><div style={{fontSize:22,opacity:.3}}>🛠️</div><div style={{fontSize:12,marginTop:6}}>尚無安裝工單</div></div>
                 :curInstalls.map(o=>{const isHLo=o.id===highlightedOrderId; return(
-                  <div key={o.id} ref={isHLo?hlRef:null} className={`rcard ${o.status==='done'?'done':o.status==='failed'?'urgent':'dispatched'}`} style={isHLo?{outline:'2px solid var(--brand)',outlineOffset:2}:{}}>
+                  <div key={o.id} ref={isHLo?hlRef:null} className={`rcard ${o.status==='done'?'done':o.status==='failed'?'urgent':'dispatched'}`}
+                    onClick={e=>{if(e.target.closest('button,textarea,input,a'))return;setHighlightedOrderId(o.id);}}
+                    style={{cursor:'pointer',...(isHLo?{outline:'2px solid var(--brand)',outlineOffset:2}:{})}}>
                     <div className="rch">
                       <div>
                         <div style={{fontSize:12,fontWeight:700}}>安裝 — {PRODUCTS[o.productId]?.name||o.productId||'—'}</div>
@@ -2707,20 +2716,20 @@ function App(){
 
   // Hash deep link：登入後 + db 載入後解析一次，導向對應工單/客戶
   useEffect(()=>{
-    if(!currentUser||!db.customers||hashApplied.current) return;
+    if(!currentUser||!(db.customers&&db.customers.length)||hashApplied.current) return;
     hashApplied.current=true;
     const hash=window.location.hash.slice(1);
     if(!hash) return;
-    const slash=hash.indexOf('/');
-    const type=slash===-1?hash:hash.slice(0,slash);
-    const id=slash===-1?'':hash.slice(slash+1);
-    if(type==='crm'&&id){ setCrmTarget(id); setPage('crm'); }
-    else if(type==='repair'&&id){
-      const r=Object.values(db.repairs||{}).find(x=>x.id===id);
-      if(r?.wfId){ setCrmTarget(r.wfId); setHighlightedOrderId(id); setPage('crm'); }
-    } else if(type==='install'&&id){
-      const o=Object.values(db.installs||{}).find(x=>x.id===id);
-      if(o?.wfId){ setCrmTarget(o.wfId); setHighlightedOrderId(id); setPage('crm'); }
+    const [type,a,b]=hash.split('/');
+    // 新格式 #crm/{wfId}/{caseId}（caseId 選填，C/R/IW 皆可，靠 id 比對高亮）
+    if(type==='crm'&&a){ setCrmTarget(a); if(b) setHighlightedOrderId(b); setPage('crm'); }
+    // 向後相容舊連結 #repair/{id}、#install/{id}
+    else if(type==='repair'&&a){
+      const r=Object.values(db.repairs||{}).find(x=>x.id===a);
+      if(r?.wfId){ setCrmTarget(r.wfId); setHighlightedOrderId(a); setPage('crm'); }
+    } else if(type==='install'&&a){
+      const o=Object.values(db.installs||{}).find(x=>x.id===a);
+      if(o?.wfId){ setCrmTarget(o.wfId); setHighlightedOrderId(a); setPage('crm'); }
     }
   },[currentUser,db.customers]);
 
