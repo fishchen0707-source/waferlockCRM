@@ -1103,6 +1103,7 @@ function CRMPage(){
   const [closeModal,setCloseModal] = useState(null); // ctId when open
   const [closeForm,setCloseForm] = useState({cat1:'',cat2:'',cat3:''});
   const [sourceComplaintId,setSourceComplaintId] = useState(null); // for dispatch→complaint link
+  const [sourceComplaintType,setSourceComplaintType] = useState('repair'); // 'repair' | 'install'
   const [historyModal,setHistoryModal] = useState(false); // 客戶主檔「歷史紀錄」彈窗
   const [projModal,setProjModal] = useState(false);
   const [projForm,setProjForm] = useState({groupId:'',projectId:''}); // 歸屬建案
@@ -1494,11 +1495,7 @@ function CRMPage(){
           <div style={{fontSize:10,color:'var(--g400)',marginTop:1}}>{ct.id} · {ct.callChannel} · {ct.date}</div>
           {ct.process&&<div style={{marginTop:5,fontSize:11.5,color:'var(--g700)',lineHeight:1.5,background:'var(--g50)',borderRadius:4,padding:'4px 7px'}}>{ct.process}</div>}
         </div>
-        <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:5}}>
-          <span className={`ct-sb ${ct.status}`}>{COMPLAINT_STATUS_LABEL[ct.status]}</span>
-          {ct.status!=='closed'&&<button onClick={()=>{setCloseModal(ct.id);setCloseForm({cat1:'',cat2:'',cat3:''});}}
-            style={{padding:'3px 9px',background:'var(--ok)',color:'#fff',border:'none',borderRadius:4,fontSize:10,fontWeight:700,cursor:'pointer'}}>結案</button>}
-        </div>
+        <span className={`ct-sb ${ct.status}`}>{COMPLAINT_STATUS_LABEL[ct.status]}</span>
       </div>
       {(ct.timeline||[]).length>0&&(
         <div className="ct-timeline">
@@ -1515,33 +1512,33 @@ function CRMPage(){
         const sched=[...(ct.timeline||[])].reverse().find(t=>t.type==='schedule');
         return sched?.followUpDate?(
           <div style={{marginTop:5,fontSize:11,color:'var(--purple)',background:'#EDE9FE',borderRadius:4,padding:'3px 8px',display:'inline-block'}}>
-            📅 下次追蹤：{sched.followUpDate}
+            📅 下次追蹤：{sched.followUpDate.replace('T',' ')}
           </div>
         ):null;
       })()}
-      {ct.status==='pending'&&(
-        <div style={{display:'flex',gap:6,marginTop:8}}>
-          <button onClick={()=>{setFollowModal(ct.id);setFollowModalNote('');setFollowModalDate('');}}
-            style={{padding:'4px 10px',background:'#EDE9FE',color:'var(--purple)',border:'none',borderRadius:4,fontSize:10.5,fontWeight:600,cursor:'pointer'}}>🔍 標記追蹤</button>
-          <button onClick={()=>{setSourceComplaintId(ct.id);setCaseModal(true);}}
-            style={{padding:'4px 10px',background:'var(--brand)',color:'#fff',border:'none',borderRadius:4,fontSize:10.5,fontWeight:600,cursor:'pointer'}}>🔧 建立派工</button>
-        </div>
-      )}
-      {ct.status==='following'&&(
-        followingCtId===ct.id
-          ?<div style={{marginTop:8,display:'flex',gap:6}}>
-              <textarea className="ct-follow-input" value={followText} onChange={e=>setFollowText(e.target.value)} placeholder="輸入追蹤備註..."/>
-              <div style={{display:'flex',flexDirection:'column',gap:4}}>
-                <button className="ct-follow-btn" onClick={()=>addFollowup(ct.id,followText)}>儲存</button>
-                <button onClick={()=>{setFollowingCtId(null);setFollowText('');}} style={{padding:'5px 8px',background:'var(--g100)',color:'var(--g600)',border:'none',borderRadius:4,fontSize:11,cursor:'pointer'}}>取消</button>
-              </div>
-            </div>
-          :<button onClick={()=>{setFollowingCtId(ct.id);setFollowText('');}} style={{marginTop:7,padding:'4px 10px',background:'#EDE9FE',color:'var(--purple)',border:'none',borderRadius:4,fontSize:10.5,fontWeight:600,cursor:'pointer'}}>+ 新增追蹤備註</button>
-      )}
       {ct.status==='dispatched'&&(()=>{
         const d=[...(ct.timeline||[])].reverse().find(t=>t.type==='dispatch');
         return d?(<div style={{marginTop:5,fontSize:10.5,color:'var(--brand)',background:'#EFF6FF',borderRadius:4,padding:'3px 8px'}}>🔧 {d.note}</div>):null;
       })()}
+      {ct.status!=='closed'&&(
+        <div style={{marginTop:8}}>
+          <select onChange={e=>{
+            const v=e.target.value; if(!v)return;
+            if(v==='follow'){setFollowModal(ct.id);setFollowModalNote('');setFollowModalDate('');}
+            if(v==='repair'){setSourceComplaintId(ct.id);setSourceComplaintType('repair');setCaseModal(true);}
+            if(v==='install'){setSourceComplaintId(ct.id);setSourceComplaintType('install');setCaseModal(true);}
+            if(v==='close'){setCloseModal(ct.id);setCloseForm({cat1:'',cat2:'',cat3:''});}
+            e.target.value='';
+          }} defaultValue=""
+            style={{width:'100%',border:'1px solid var(--g200)',borderRadius:5,padding:'6px 8px',fontSize:11.5,color:'var(--g700)',background:'#fff',cursor:'pointer',outline:'none'}}>
+            <option value="">— 選擇處理方式 —</option>
+            <option value="follow">📅 待追蹤</option>
+            <option value="repair">🔧 維修案件</option>
+            <option value="install">🛠️ 裝機案件</option>
+            <option value="close">✅ 線上結單</option>
+          </select>
+        </div>
+      )}
     </div>
   );
   const renderRepairCard=r=>(
@@ -1721,13 +1718,14 @@ function CRMPage(){
       {caseModal&&sel&&(
         <WorkOrderForm
           lockedCustomer={customers.find(c=>c.wfId===sel.wfId)||sel}
-          initialCategory={sourceComplaintId?'repair':undefined}
+          initialCategory={sourceComplaintId?sourceComplaintType:undefined}
           onClose={(newId)=>{
             setCaseModal(false);
             if(sourceComplaintId&&newId){
               linkComplaintToRepair(sourceComplaintId,newId);
             }
             setSourceComplaintId(null);
+            setSourceComplaintType('repair');
           }}/>
       )}
 
@@ -1741,8 +1739,8 @@ function CRMPage(){
                 style={{width:'100%',border:'1px solid var(--g200)',borderRadius:5,padding:'7px 10px',fontSize:12,outline:'none',resize:'vertical',fontFamily:'inherit'}}
                 placeholder="記錄此次處理結果，以及需要追蹤的原因..."/>
             </div>
-            <div className="mf"><label>下次追蹤日期</label>
-              <input type="date" value={followModalDate} onChange={e=>setFollowModalDate(e.target.value)}
+            <div className="mf"><label>下次追蹤時間（24 小時制）</label>
+              <input type="datetime-local" value={followModalDate} onChange={e=>setFollowModalDate(e.target.value)}
                 style={{width:'100%',border:'1px solid var(--g200)',borderRadius:5,padding:'7px 10px',fontSize:12,outline:'none'}}/>
             </div>
             <div className="mact">
@@ -2425,7 +2423,7 @@ function HomePage(){
         </div>
         <div style={{padding:'8px 0',borderBottom:'1px solid #334155'}}>
           <div style={{padding:'4px 12px',fontSize:9.5,color:'#475569',fontWeight:700,letterSpacing:1,marginBottom:2}}>案件類型</div>
-          {[['all','🗂️ 全部案件',allCases.length],['install','🛠️ 安裝件',installs.filter(isOpen).length],['repair','🔧 維修件',repairs.filter(isOpen).length],['complaint','📞 客訴件',complaints.filter(ct=>ct.status==='pending').length]].map(([v,l,cnt])=>(
+          {[['all','🗂️ 全部案件',allCases.length],['install','🛠️ 安裝件',installs.filter(isOpen).length],['repair','🔧 維修件',repairs.filter(isOpen).length],['complaint','📞 客訴件',complaints.filter(ct=>ct.status==='pending'||ct.status==='following').length]].map(([v,l,cnt])=>(
             <div key={v} onClick={()=>setTypeFilter(v)}
               style={{padding:'9px 12px',cursor:'pointer',fontSize:12.5,display:'flex',alignItems:'center',justifyContent:'space-between',
                 fontWeight:typeFilter===v?700:400,background:typeFilter===v?'#334155':'transparent',
@@ -2458,12 +2456,7 @@ function HomePage(){
         <div style={{padding:'12px',borderTop:'1px solid #334155',fontSize:11,color:'#64748B',lineHeight:1.8}}>
           {urg>0&&<div style={{color:'#EF4444',fontWeight:700,marginBottom:2}}>🚨 緊急 {urg} 件</div>}
           <div>待處理 <b style={{color:'#F59E0B'}}>{pend}</b> 件</div>
-          {(()=>{const fc=followingComplaints.length; return fc>0?(
-            <div onClick={()=>setTypeFilter(typeFilter==='following_complaint'?'all':'following_complaint')}
-              style={{cursor:'pointer',color:typeFilter==='following_complaint'?'#A78BFA':'#94A3B8',fontWeight:typeFilter==='following_complaint'?700:400}}>
-              🔍 追蹤中客訴 <b style={{color:'#A78BFA'}}>{fc}</b> 件
-            </div>
-          ):null;})()}
+          {followingComplaints.length>0&&<div style={{color:'#A78BFA'}}>🔍 追蹤中客訴 <b>{followingComplaints.length}</b> 件</div>}
           <div>篩選結果 <b style={{color:'#38BDF8'}}>{filtered.length}</b> 件</div>
         </div>
       </div>
@@ -2528,13 +2521,59 @@ function HomePage(){
           <span style={{fontSize:11.5,color:'#64748B',background:'#F1F5F9',padding:'2px 10px',borderRadius:9}}>{filtered.length} 筆</span>
         </div>
         <div style={{padding:'12px 20px',flex:1}}>
-          {filtered.length===0&&(
+          {typeFilter!=='complaint'&&filtered.length===0&&(
             <div style={{textAlign:'center',color:'#94A3B8',padding:'80px 0',fontSize:14}}>
               <div style={{fontSize:32,marginBottom:12}}>📭</div>
               <div>無符合條件的案件</div>
             </div>
           )}
-          {filtered.map(c=>{
+          {typeFilter==='complaint'&&(()=>{
+            const pc=complaints.filter(ct=>ct.status==='pending'&&(dept==='all'||ct.department===dept))
+              .map(ct=>({...ct,_type:'complaint'})).sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
+            const fc=followingComplaints.filter(c=>dept==='all'||c.department===dept);
+            const renderCard=c=>{
+              const addr=c.address||c.building||c.district||'—';
+              const s=ST[c.status]||{label:c.status||'—',bg:'#F1F5F9',fg:'#64748B'};
+              return(
+                <div key={c.id} onClick={()=>openCaseTab(c.wfId,c.id)} title="開啟此案（新分頁）"
+                  style={{background:'#fff',borderRadius:10,padding:'11px 16px',cursor:'pointer',
+                    boxShadow:'0 1px 3px rgba(0,0,0,.06)',
+                    borderLeft:`4px solid ${typeBar[c._type]}`,
+                    display:'flex',alignItems:'center',gap:14,marginBottom:7,transition:'box-shadow .12s'}}
+                  onMouseEnter={e=>{e.currentTarget.style.boxShadow='0 3px 10px rgba(0,0,0,.1)'}}
+                  onMouseLeave={e=>{e.currentTarget.style.boxShadow='0 1px 3px rgba(0,0,0,.06)'}}>
+                  <span style={{background:typeBg[c._type],color:typeFg[c._type],fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:9,whiteSpace:'nowrap',flexShrink:0}}>
+                    {typeLabelMap[c._type]}
+                  </span>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:13,fontWeight:600,color:'#1E293B',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginBottom:2}}>{addr}</div>
+                    <div style={{fontSize:11.5,color:'#64748B',display:'flex',gap:12}}>
+                      <span>{maskName(c.name)}</span><span>{maskPhone(c.phone)}</span>
+                      {c.cat1&&<span style={{color:'#94A3B8'}}>{c.cat1}</span>}
+                    </div>
+                  </div>
+                  <div style={{fontSize:10.5,color:'#94A3B8',textAlign:'right',flexShrink:0}}>
+                    <div style={{fontFamily:'monospace',fontSize:10,marginBottom:2}}>{c.id}</div>
+                    <div>{c.date||'—'}</div>
+                  </div>
+                  <span style={{background:s.bg,color:s.fg,fontSize:10,fontWeight:700,padding:'3px 9px',borderRadius:9,whiteSpace:'nowrap',flexShrink:0,minWidth:52,textAlign:'center'}}>{s.label}</span>
+                </div>
+              );
+            };
+            return(<>
+              <div style={{fontWeight:700,fontSize:11.5,color:'#475569',padding:'6px 0',borderBottom:'1px solid #E2E8F0',marginBottom:8}}>
+                📋 未處理列表 <span style={{color:'#EF4444',fontWeight:900}}>{pc.length}</span> 件
+              </div>
+              {pc.length===0&&<div style={{fontSize:12,color:'#94A3B8',padding:'8px 0 12px'}}>目前無待處理客訴</div>}
+              {pc.map(renderCard)}
+              <div style={{fontWeight:700,fontSize:11.5,color:'#475569',padding:'6px 0',borderBottom:'1px solid #E2E8F0',marginBottom:8,marginTop:12}}>
+                🔍 待追蹤列表 <span style={{color:'#A78BFA',fontWeight:900}}>{fc.length}</span> 件
+              </div>
+              {fc.length===0&&<div style={{fontSize:12,color:'#94A3B8',padding:'8px 0 12px'}}>目前無追蹤中客訴</div>}
+              {fc.map(renderCard)}
+            </>);
+          })()}
+          {typeFilter!=='complaint'&&filtered.map(c=>{
             const addr=c.address||c.building||c.district||'—';
             const s=ST[c.status]||{label:c.status||'—',bg:'#F1F5F9',fg:'#64748B'};
             return(
