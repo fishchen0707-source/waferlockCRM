@@ -91,9 +91,9 @@ input,select,textarea{font-family:inherit}
 .lcam:hover{background:var(--g200)}
 .lcam.has-img{background:#FEF3C7;border-color:#F59E0B}
 .img-preview-wrap{position:relative;flex-shrink:0}
-.img-preview-wrap img{width:44px;height:44px;object-fit:cover;border-radius:8px;border:2px solid var(--accent);display:block}
+.img-preview-wrap img,.img-preview-wrap video{width:44px;height:44px;object-fit:cover;border-radius:8px;border:2px solid var(--accent);display:block}
 .img-preview-wrap .img-rm{position:absolute;top:-5px;right:-5px;width:16px;height:16px;background:var(--err);color:#fff;border:none;border-radius:50%;font-size:10px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1}
-.mb img.chat-img{max-width:160px;border-radius:8px;display:block;margin-top:4px}
+.mb img.chat-img,.mb video.chat-img{max-width:160px;border-radius:8px;display:block;margin-top:4px}
 /* Inline forms */
 .inline-form{background:#fff;border-radius:10px;padding:12px;margin:3px 0;font-size:11.5px;border:2px solid var(--accent)}
 .inline-form h4{font-size:12px;font-weight:700;margin-bottom:8px;color:var(--brand)}
@@ -465,7 +465,7 @@ function CustomerPage(){
       const dataUrl = ev.target.result; // data:image/jpeg;base64,XXXX
       const [header, base64] = dataUrl.split(',');
       const mimeType = header.match(/:(.*?);/)[1];
-      pendingImageRef.current = { base64, mimeType, previewUrl: dataUrl };
+      pendingImageRef.current = { base64, mimeType, previewUrl: dataUrl, isVideo: mimeType.startsWith('video/') };
       setPendingImagePreview(dataUrl);
     };
     reader.readAsDataURL(file);
@@ -481,7 +481,7 @@ function CustomerPage(){
         return;
       }
 
-      const historyText = text || '（傳送了一張照片）';
+      const historyText = text || (imageData?.isVideo ? '（傳送了一段影片）' : '（傳送了一張照片）');
       convHistoryRef.current = [...convHistoryRef.current, {role:'user', text: historyText}].slice(-6);
 
       const body = {
@@ -490,8 +490,13 @@ function CustomerPage(){
         history: convHistoryRef.current.slice(0, -1),
       };
       if (imageData) {
-        body.image_base64 = imageData.base64;
-        body.image_mime_type = imageData.mimeType;
+        if (imageData.isVideo) {
+          body.video_base64 = imageData.base64;
+          body.video_mime_type = imageData.mimeType;
+        } else {
+          body.image_base64 = imageData.base64;
+          body.image_mime_type = imageData.mimeType;
+        }
       }
 
       const response = await fetch(`${RAG_SERVER_URL}/chat`, {
@@ -800,7 +805,9 @@ function CustomerPage(){
                   {m.from!=='user'&&<div className="mav">W</div>}
                   <div>
                     <div className={`mb ${m.from==='user'?'u':m.from==='agent-reply'?'agent-reply':'bot'}`}>
-                    {m.imageUrl&&<img src={m.imageUrl} className="chat-img" alt="照片"/>}
+                    {m.imageUrl&&(m.imageUrl.startsWith('data:video')
+                      ? <video src={m.imageUrl} className="chat-img" controls/>
+                      : <img src={m.imageUrl} className="chat-img" alt="照片"/>)}
                     {m.text&&<span>{m.text}</span>}
                   </div>
                     <div className="mt" style={{textAlign:m.from==='user'?'right':'left'}}>{m.time}</div>
@@ -819,13 +826,15 @@ function CustomerPage(){
             </div>)}
           </div>
           <div className="linput-bar">
-            <input type="file" ref={fileInputRef} accept="image/*" style={{display:'none'}} onChange={handleImageSelect}/>
-            <button className={`lcam ${pendingImagePreview?'has-img':''}`} onClick={()=>fileInputRef.current?.click()} title="傳送照片辨識型號">
+            <input type="file" ref={fileInputRef} accept="image/*,video/*" style={{display:'none'}} onChange={handleImageSelect}/>
+            <button className={`lcam ${pendingImagePreview?'has-img':''}`} onClick={()=>fileInputRef.current?.click()} title="傳送照片／影片辨識型號">
               📷
             </button>
             {pendingImagePreview&&(
               <div className="img-preview-wrap">
-                <img src={pendingImagePreview} alt="預覽"/>
+                {pendingImagePreview.startsWith('data:video')
+                  ? <video src={pendingImagePreview} muted/>
+                  : <img src={pendingImagePreview} alt="預覽"/>}
                 <button className="img-rm" onClick={()=>{pendingImageRef.current=null;setPendingImagePreview(null);}}>×</button>
               </div>
             )}
