@@ -1101,6 +1101,7 @@ function CRMPage(){
   const [followModalNote,setFollowModalNote] = useState('');
   const [followModalDate,setFollowModalDate] = useState('');
   const [sourceComplaintId,setSourceComplaintId] = useState(null); // for dispatch→complaint link
+  const [historyModal,setHistoryModal] = useState(false); // 客戶主檔「歷史紀錄」彈窗
   const [projModal,setProjModal] = useState(false);
   const [projForm,setProjForm] = useState({groupId:'',projectId:''}); // 歸屬建案
   const [editAddrPicker,setEditAddrPicker] = useState(false);
@@ -1474,6 +1475,142 @@ function CRMPage(){
   const repairs = getRepairs(cur);
   const STEPLABEL={pending:'待到場',arrived:'已到場',installed:'待驗收',done:'已完成',failed:'無法安裝'};
   const curInstalls=Object.values(db.installs||{}).filter(o=>o.wfId===cur.wfId).sort((a,b)=>(b.createdTs||0)-(a.createdTs||0));
+  const curComplaints=(cur.complaintIds||[]).map(id=>(db.complaints||{})[id]).filter(Boolean).reverse();
+
+  // 開啟該案件的獨立分頁（單張案件視圖）
+  const openCaseTab=(wfId,caseId)=>window.open(location.origin+location.pathname+'#crm/'+wfId+'/'+caseId,'_blank');
+
+  // ── 三類案件卡片（供「單張案件視圖」共用；含完整操作按鈕） ──
+  const renderComplaintCard=ct=>(
+    <div key={ct.id} className={`ctcard ${ct.status}`}>
+      <div style={{display:'flex',alignItems:'flex-start',gap:8}}>
+        <div style={{flex:1}}>
+          <div style={{fontWeight:700,fontSize:12}}>{ct.cat1}{ct.cat2?` › ${ct.cat2}`:''}{ct.cat3?` › ${ct.cat3}`:''}</div>
+          <div style={{fontSize:10,color:'var(--g400)',marginTop:1}}>{ct.id} · {ct.callChannel} · {ct.date}</div>
+          {ct.process&&<div style={{marginTop:5,fontSize:11.5,color:'var(--g700)',lineHeight:1.5,background:'var(--g50)',borderRadius:4,padding:'4px 7px'}}>{ct.process}</div>}
+        </div>
+        <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:5}}>
+          <span className={`ct-sb ${ct.status}`}>{COMPLAINT_STATUS_LABEL[ct.status]}</span>
+          {ct.status!=='closed'&&<button onClick={()=>closeComplaint(ct.id)}
+            style={{padding:'3px 9px',background:'var(--ok)',color:'#fff',border:'none',borderRadius:4,fontSize:10,fontWeight:700,cursor:'pointer'}}>結案</button>}
+        </div>
+      </div>
+      {(ct.timeline||[]).length>0&&(
+        <div className="ct-timeline">
+          {ct.timeline.map((tl,i)=>(
+            <div key={i} className="ct-tl-item">
+              <div className={`ct-tl-dot ${i===ct.timeline.length-1?'ok':''}`}/>
+              <div className="ct-tl-time">{tl.ts}</div>
+              <div style={{flex:1,color:'var(--g700)'}}>{tl.note}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {ct.status==='following'&&(()=>{
+        const sched=[...(ct.timeline||[])].reverse().find(t=>t.type==='schedule');
+        return sched?.followUpDate?(
+          <div style={{marginTop:5,fontSize:11,color:'var(--purple)',background:'#EDE9FE',borderRadius:4,padding:'3px 8px',display:'inline-block'}}>
+            📅 下次追蹤：{sched.followUpDate}
+          </div>
+        ):null;
+      })()}
+      {ct.status==='pending'&&(
+        <div style={{display:'flex',gap:6,marginTop:8}}>
+          <button onClick={()=>{setFollowModal(ct.id);setFollowModalNote('');setFollowModalDate('');}}
+            style={{padding:'4px 10px',background:'#EDE9FE',color:'var(--purple)',border:'none',borderRadius:4,fontSize:10.5,fontWeight:600,cursor:'pointer'}}>🔍 標記追蹤</button>
+          <button onClick={()=>{setSourceComplaintId(ct.id);setCaseModal(true);}}
+            style={{padding:'4px 10px',background:'var(--brand)',color:'#fff',border:'none',borderRadius:4,fontSize:10.5,fontWeight:600,cursor:'pointer'}}>🔧 建立派工</button>
+        </div>
+      )}
+      {ct.status==='following'&&(
+        followingCtId===ct.id
+          ?<div style={{marginTop:8,display:'flex',gap:6}}>
+              <textarea className="ct-follow-input" value={followText} onChange={e=>setFollowText(e.target.value)} placeholder="輸入追蹤備註..."/>
+              <div style={{display:'flex',flexDirection:'column',gap:4}}>
+                <button className="ct-follow-btn" onClick={()=>addFollowup(ct.id,followText)}>儲存</button>
+                <button onClick={()=>{setFollowingCtId(null);setFollowText('');}} style={{padding:'5px 8px',background:'var(--g100)',color:'var(--g600)',border:'none',borderRadius:4,fontSize:11,cursor:'pointer'}}>取消</button>
+              </div>
+            </div>
+          :<button onClick={()=>{setFollowingCtId(ct.id);setFollowText('');}} style={{marginTop:7,padding:'4px 10px',background:'#EDE9FE',color:'var(--purple)',border:'none',borderRadius:4,fontSize:10.5,fontWeight:600,cursor:'pointer'}}>+ 新增追蹤備註</button>
+      )}
+      {ct.status==='dispatched'&&(()=>{
+        const d=[...(ct.timeline||[])].reverse().find(t=>t.type==='dispatch');
+        return d?(<div style={{marginTop:5,fontSize:10.5,color:'var(--brand)',background:'#EFF6FF',borderRadius:4,padding:'3px 8px'}}>🔧 {d.note}</div>):null;
+      })()}
+    </div>
+  );
+  const renderRepairCard=r=>(
+    <div key={r.id} className={`rcard ${r.urgency==='urgent'?'urgent':r.status}`}>
+      <div className="rch">
+        <div>
+          <div style={{fontSize:12,fontWeight:700}}>{r.type} — {r.issue}</div>
+          <div className="rid">{r.id}</div>
+          <div style={{display:'flex',gap:4,marginTop:4,flexWrap:'wrap'}}>
+            {r.warrantyIn!=null&&<span style={{fontSize:9.5,padding:'1px 6px',borderRadius:8,fontWeight:700,
+              background:r.warrantyIn?'#D1FAE5':'#FEE2E2',color:r.warrantyIn?'#065F46':'#991B1B'}}>
+              {r.warrantyIn?'✅ 保固內':'⚠️ 保固外'}</span>}
+            {r.handlingUnit&&<span style={{fontSize:9.5,padding:'1px 6px',borderRadius:8,fontWeight:600,background:'#EDE9FE',color:'#5B21B6'}}>{r.handlingUnit}</span>}
+            {(r.site||r.unit)&&<span style={{fontSize:9.5,padding:'1px 6px',borderRadius:8,fontWeight:600,background:'#FEF3C7',color:'#92400E'}}>🏗️ {[r.site,r.unit].filter(Boolean).join(' ')}</span>}
+          </div>
+        </div>
+        <span className={`sb ${r.urgency==='urgent'?'urgent':r.status}`}>
+          {r.urgency==='urgent'?'🚨緊急':r.status==='done'?'✅完成':r.status==='dispatched'?'🚗處理中':'⏳待處理'}
+        </span>
+      </div>
+      <div className="rb">
+        <div><span>📅 報修日期</span><br/><strong>{r.date}</strong></div>
+        <div><span>🏠 空間</span><br/><strong>{r.space}</strong></div>
+        <div><span>👷 師傅</span><br/><strong>{WORKERS.find(w=>w.id===r.workerId)?.name||'未指派'}</strong></div>
+        <div><span>⏰ 預約</span><br/><strong>{r.scheduledDate||'未排定'}</strong></div>
+        {r.status==='dispatched'&&r.etaText&&<div><span>🚗 預計抵達</span><br/><strong style={{color:'var(--accent)'}}>{r.etaText}{r.etaSource==='manual'?'（手動）':''}</strong></div>}
+        {r.desc&&<div style={{gridColumn:'1/-1'}}><span>💬 描述</span><br/><strong>{r.desc}</strong></div>}
+        {r.note&&<div style={{gridColumn:'1/-1'}}><span>📝 備註</span><br/><strong style={{color:'var(--g700)'}}>{r.note}</strong></div>}
+      </div>
+      {r.receiptNo&&<div style={{marginTop:6,fontSize:10.5,padding:'5px 9px',background:'#EFF6FF',borderRadius:5,color:'var(--accent)',fontWeight:700}}>📋 簽收單號：{r.receiptNo}</div>}
+      {r.arrivalPushed&&<div style={{marginTop:6,fontSize:10.5,color:'var(--accent)',padding:'4px 8px',background:'#EFF6FF',borderRadius:4}}>✅ 師傅抵達通知已推播</div>}
+      {r.rating!=null&&<div style={{marginTop:5,display:'flex',alignItems:'center',gap:4}}><div className="stars">{stars(r.rating)}</div><span style={{fontSize:10.5,color:'var(--g400)'}}>客戶評分 {r.rating}</span></div>}
+      {r.status!=='done'&&<div style={{marginTop:8,display:'flex',gap:6,flexWrap:'wrap'}}>
+        {r.status==='pending'&&<button onClick={()=>openRepairDispatch(r)} style={{padding:'5px 12px',background:'#EDE9FE',color:'#5B21B6',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>📅 排程派工</button>}
+        {r.status==='dispatched'&&<button onClick={()=>setClosingRepair(r)} style={{padding:'5px 12px',background:'var(--ok)',color:'#fff',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>✅ 完工結案</button>}
+      </div>}
+    </div>
+  );
+  const renderInstallCard=o=>(
+    <div key={o.id} className={`rcard ${o.status==='done'?'done':o.status==='failed'?'urgent':'dispatched'}`}>
+      <div className="rch">
+        <div>
+          <div style={{fontSize:12,fontWeight:700}}>安裝 — {PRODUCTS[o.productId]?.name||o.productId||'—'}</div>
+          <div className="rid">{o.id}</div>
+        </div>
+        <span className={`sb ${o.status==='done'?'done':o.status==='failed'?'urgent':o.status==='pending'?'pending':'dispatched'}`}>{STEPLABEL[o.status]}</span>
+      </div>
+      <div className="rb">
+        <div><span>🔑 負責師傅</span><br/><strong>{LOCKSMITHS.find(s=>s.id===o.locksmithId)?.name||'未指派'}</strong></div>
+        <div><span>👷 派工師傅</span><br/><strong>{(db.workers||[]).find(w=>w.id===o.workerId)?.name||WORKERS.find(w=>w.id===o.workerId)?.name||'未排程'}</strong></div>
+        {o.schedDate&&<div><span>⏰ 預約</span><br/><strong>{o.schedDate} {String(o.schedStart||0).padStart(2,'0')}:00</strong></div>}
+        {o.serialNo&&<div><span>📋 序號</span><br/><strong style={{fontFamily:'JetBrains Mono',fontSize:10}}>{o.serialNo}</strong></div>}
+      </div>
+      {o.status==='done'&&<div style={{fontSize:11,color:'var(--ok)',fontWeight:700,marginTop:4}}>✅ 完工 {o.completedDate}　·　保固至 {o.warrantyEnd}</div>}
+      {o.status==='failed'&&<div style={{fontSize:11,color:'var(--err)',fontWeight:700,marginTop:4}}>❌ 已回報客服處理</div>}
+      {o.status!=='done'&&o.status!=='failed'&&(
+        <div style={{marginTop:8,display:'flex',gap:6,flexWrap:'wrap'}}>
+          {(o.status==='pending'||o.status==='arrived')&&<button onClick={()=>openInstallSchedule(o)} style={{padding:'5px 12px',background:'#EDE9FE',color:'#5B21B6',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>📅 {o.schedDate?'改排程':'排程派工'}</button>}
+          {o.status==='pending'&&<button onClick={()=>arriveInstall(o)} style={{padding:'5px 12px',background:'var(--accent)',color:'var(--brand)',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>📍 標記到場</button>}
+          {o.status==='arrived'&&<button onClick={()=>installedDone(o)} style={{padding:'5px 12px',background:'var(--ok)',color:'#fff',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>🔧 施工完成</button>}
+          {o.status==='installed'&&<button onClick={()=>setVerifyInstall(o)} style={{padding:'5px 12px',background:'var(--ok)',color:'#fff',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>🔬 完工驗收 + 保固登錄</button>}
+          {(o.status==='pending'||o.status==='arrived')&&<button onClick={()=>failInstall(o)} style={{padding:'5px 12px',background:'#FEE2E2',color:'var(--err)',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>無法安裝</button>}
+        </div>
+      )}
+    </div>
+  );
+  // 聚焦案件（deep link #crm/wfId/caseId 或主檔內開啟）→ 屬於本客戶才生效
+  const focusedCase = highlightedOrderId && (
+    (curComplaints.find(x=>x.id===highlightedOrderId)&&{...curComplaints.find(x=>x.id===highlightedOrderId),_type:'complaint'}) ||
+    (repairs.find(x=>x.id===highlightedOrderId)&&{...repairs.find(x=>x.id===highlightedOrderId),_type:'repair'}) ||
+    (curInstalls.find(x=>x.id===highlightedOrderId)&&{...curInstalls.find(x=>x.id===highlightedOrderId),_type:'install'}) ||
+    null
+  );
+  const historyCount=curComplaints.length+repairs.length+curInstalls.length;
 
   return(
     <div className="crm-layer2" style={{position:'relative',zIndex:1}}>
@@ -1527,164 +1664,54 @@ function CRMPage(){
                   </div>
                 </div>
               </div>
-              {/* ── 立案紀錄 ── */}
-              {(()=>{
-                const complaints=(cur.complaintIds||[]).map(id=>(db.complaints||{})[id]).filter(Boolean).reverse();
+              {/* ── 案件視圖（單張）或 客戶主檔（歷史紀錄入口） ── */}
+              {focusedCase ? (
+                <div>
+                  <div style={{display:'flex',alignItems:'center',gap:10,margin:'4px 0 10px'}}>
+                    <button onClick={()=>setHighlightedOrderId(null)} style={{padding:'5px 12px',background:'var(--g100)',color:'var(--g600)',border:'none',borderRadius:6,fontSize:12,fontWeight:700,cursor:'pointer'}}>← 返回客戶主檔</button>
+                    <span style={{fontSize:11.5,color:'var(--g400)'}}>單張案件視圖</span>
+                  </div>
+                  {focusedCase._type==='complaint'?renderComplaintCard(focusedCase)
+                    :focusedCase._type==='repair'?renderRepairCard(focusedCase)
+                    :renderInstallCard(focusedCase)}
+                </div>
+              ) : (
+                <button onClick={()=>setHistoryModal(true)}
+                  style={{width:'100%',marginTop:6,padding:'13px',background:'#0F2744',color:'#fff',border:'none',borderRadius:8,fontSize:13,fontWeight:700,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
+                  📜 歷史紀錄（{historyCount}）— 聯繫 / 維修 / 派工
+                </button>
+              )}
+
+      {/* ── 歷史紀錄 Modal：該客戶所有聯繫/維修/派工，點「開啟此案」開獨立分頁 ── */}
+      {historyModal&&(
+        <div className="mo" onClick={e=>e.target===e.currentTarget&&setHistoryModal(false)}>
+          <div className="mob" style={{maxWidth:560,maxHeight:'80vh',display:'flex',flexDirection:'column'}}>
+            <h3>📜 歷史紀錄 — {cur.name}</h3>
+            <div style={{fontSize:11.5,color:'var(--g400)',marginBottom:10}}>{cur.wfId}　共 {historyCount} 筆（聯繫 / 維修 / 派工）</div>
+            <div style={{flex:1,overflowY:'auto',display:'flex',flexDirection:'column',gap:7,paddingRight:2}}>
+              {[
+                ...curComplaints.map(ct=>({_type:'complaint',id:ct.id,date:ct.date,title:`${ct.cat1||'客訴'}${ct.cat2?' › '+ct.cat2:''}`,_ts:new Date(ct.date||0).getTime()||0})),
+                ...repairs.map(r=>({_type:'repair',id:r.id,date:r.date,title:`${r.type||'維修'} — ${r.issue||''}`,_ts:new Date(r.date||0).getTime()||0})),
+                ...curInstalls.map(o=>({_type:'install',id:o.id,date:o.createdDate,title:`安裝 ${PRODUCTS[o.productId]?.name||o.productId||''}`,_ts:o.createdTs||0})),
+              ].sort((a,b)=>b._ts-a._ts).map(item=>{
+                const lab={complaint:['客訴','#FEF3C7','#B45309'],repair:['維修','#E0F2FE','#0369A1'],install:['安裝','#EDE9FE','#5B21B6']}[item._type];
                 return(
-                  <div className="ct-sec">
-                    <div className="ct-sec-title">
-                      <span>📞 客訴立案紀錄</span>
-                      <span style={{marginLeft:'auto',fontSize:10.5,background:'var(--g100)',padding:'1px 7px',borderRadius:8,color:'var(--g500)'}}>{complaints.length} 筆</span>
+                  <div key={item.id} style={{display:'flex',alignItems:'center',gap:10,padding:'9px 12px',background:'#fff',border:'1px solid var(--g200)',borderRadius:8}}>
+                    <span style={{background:lab[1],color:lab[2],fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:9,flexShrink:0}}>{lab[0]}</span>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:12,fontWeight:600,color:'#1E293B',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.title}</div>
+                      <div style={{fontSize:10.5,color:'var(--g400)',fontFamily:'monospace'}}>{item.id} · {item.date||'—'}</div>
                     </div>
-                    {complaints.length===0
-                      ?<div style={{textAlign:'center',color:'var(--g400)',fontSize:11.5,padding:'10px 0'}}>尚無立案紀錄</div>
-                      :complaints.map(ct=>(
-                        <div key={ct.id} ref={ct.id===highlightedOrderId?hlRef:null} className={`ctcard ${ct.status}`}
-                          onClick={e=>{if(e.target.closest('button,textarea,input,a'))return;setHighlightedOrderId(ct.id);}}
-                          style={{cursor:'pointer',...(ct.id===highlightedOrderId?{outline:'2px solid var(--brand)',outlineOffset:2}:{})}}>
-                          <div style={{display:'flex',alignItems:'flex-start',gap:8}}>
-                            <div style={{flex:1}}>
-                              <div style={{fontWeight:700,fontSize:12}}>{ct.cat1}{ct.cat2?` › ${ct.cat2}`:''}{ct.cat3?` › ${ct.cat3}`:''}</div>
-                              <div style={{fontSize:10,color:'var(--g400)',marginTop:1}}>{ct.id} · {ct.callChannel} · {ct.date}</div>
-                              {ct.process&&<div style={{marginTop:5,fontSize:11.5,color:'var(--g700)',lineHeight:1.5,background:'var(--g50)',borderRadius:4,padding:'4px 7px'}}>{ct.process}</div>}
-                            </div>
-                            <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:5}}>
-                              <span className={`ct-sb ${ct.status}`}>{COMPLAINT_STATUS_LABEL[ct.status]}</span>
-                              {ct.status!=='closed'&&<button onClick={()=>closeComplaint(ct.id)}
-                                style={{padding:'3px 9px',background:'var(--ok)',color:'#fff',border:'none',borderRadius:4,fontSize:10,fontWeight:700,cursor:'pointer'}}>結案</button>}
-                            </div>
-                          </div>
-                          {/* 追蹤歷程 */}
-                          {(ct.timeline||[]).length>0&&(
-                            <div className="ct-timeline">
-                              {ct.timeline.map((tl,i)=>(
-                                <div key={i} className="ct-tl-item">
-                                  <div className={`ct-tl-dot ${i===ct.timeline.length-1?'ok':''}`}/>
-                                  <div className="ct-tl-time">{tl.ts}</div>
-                                  <div style={{flex:1,color:'var(--g700)'}}>{tl.note}</div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          {/* 追蹤日期顯示（following） */}
-                          {ct.status==='following'&&(()=>{
-                            const sched=[...(ct.timeline||[])].reverse().find(t=>t.type==='schedule');
-                            return sched?.followUpDate?(
-                              <div style={{marginTop:5,fontSize:11,color:'var(--purple)',background:'#EDE9FE',borderRadius:4,padding:'3px 8px',display:'inline-block'}}>
-                                📅 下次追蹤：{sched.followUpDate}
-                              </div>
-                            ):null;
-                          })()}
-                          {/* 依狀態顯示操作 */}
-                          {ct.status==='pending'&&(
-                            <div style={{display:'flex',gap:6,marginTop:8}}>
-                              <button onClick={()=>{setFollowModal(ct.id);setFollowModalNote('');setFollowModalDate('');}}
-                                style={{padding:'4px 10px',background:'#EDE9FE',color:'var(--purple)',border:'none',borderRadius:4,fontSize:10.5,fontWeight:600,cursor:'pointer'}}>🔍 標記追蹤</button>
-                              <button onClick={()=>{setSourceComplaintId(ct.id);setCaseModal(true);}}
-                                style={{padding:'4px 10px',background:'var(--brand)',color:'#fff',border:'none',borderRadius:4,fontSize:10.5,fontWeight:600,cursor:'pointer'}}>🔧 建立派工</button>
-                            </div>
-                          )}
-                          {ct.status==='following'&&(
-                            followingCtId===ct.id
-                              ?<div style={{marginTop:8,display:'flex',gap:6}}>
-                                  <textarea className="ct-follow-input" value={followText} onChange={e=>setFollowText(e.target.value)} placeholder="輸入追蹤備註..."/>
-                                  <div style={{display:'flex',flexDirection:'column',gap:4}}>
-                                    <button className="ct-follow-btn" onClick={()=>addFollowup(ct.id,followText)}>儲存</button>
-                                    <button onClick={()=>{setFollowingCtId(null);setFollowText('');}} style={{padding:'5px 8px',background:'var(--g100)',color:'var(--g600)',border:'none',borderRadius:4,fontSize:11,cursor:'pointer'}}>取消</button>
-                                  </div>
-                                </div>
-                              :<button onClick={()=>{setFollowingCtId(ct.id);setFollowText('');}} style={{marginTop:7,padding:'4px 10px',background:'#EDE9FE',color:'var(--purple)',border:'none',borderRadius:4,fontSize:10.5,fontWeight:600,cursor:'pointer'}}>+ 新增追蹤備註</button>
-                          )}
-                          {ct.status==='dispatched'&&(()=>{
-                            const d=[...(ct.timeline||[])].reverse().find(t=>t.type==='dispatch');
-                            return d?(<div style={{marginTop:5,fontSize:10.5,color:'var(--brand)',background:'#EFF6FF',borderRadius:4,padding:'3px 8px'}}>🔧 {d.note}</div>):null;
-                          })()}
-                        </div>
-                      ))
-                    }
+                    <button onClick={()=>openCaseTab(cur.wfId,item.id)} style={{padding:'5px 11px',background:'var(--brand)',color:'#fff',border:'none',borderRadius:5,fontSize:11,fontWeight:700,cursor:'pointer',flexShrink:0,whiteSpace:'nowrap'}}>🔗 開啟此案</button>
                   </div>
                 );
-              })()}
-
-              {/* ── 派工紀錄 ── */}
-              <div className="sec-t">🔧 派工紀錄（{repairs.length} 筆）</div>
-              {repairs.length===0
-                ? <div className="empty" style={{height:100}}><div style={{fontSize:26,opacity:.3}}>📋</div><div style={{fontSize:12,marginTop:8}}>尚無派工紀錄</div></div>
-                : repairs.map(r=>{const isHL=r.id===highlightedOrderId; return(
-                  <div key={r.id} ref={isHL?hlRef:null} className={`rcard ${r.urgency==='urgent'?'urgent':r.status}`}
-                    onClick={e=>{if(e.target.closest('button,textarea,input,a'))return;setHighlightedOrderId(r.id);}}
-                    style={{cursor:'pointer',...(isHL?{outline:'2px solid var(--brand)',outlineOffset:2}:{})}}>
-                    <div className="rch">
-                      <div>
-                        <div style={{fontSize:12,fontWeight:700}}>{r.type} — {r.issue}</div>
-                        <div className="rid">{r.id}</div>
-                        <div style={{display:'flex',gap:4,marginTop:4,flexWrap:'wrap'}}>
-                          {r.warrantyIn!=null&&<span style={{fontSize:9.5,padding:'1px 6px',borderRadius:8,fontWeight:700,
-                            background:r.warrantyIn?'#D1FAE5':'#FEE2E2',color:r.warrantyIn?'#065F46':'#991B1B'}}>
-                            {r.warrantyIn?'✅ 保固內':'⚠️ 保固外'}</span>}
-                          {r.handlingUnit&&<span style={{fontSize:9.5,padding:'1px 6px',borderRadius:8,fontWeight:600,background:'#EDE9FE',color:'#5B21B6'}}>{r.handlingUnit}</span>}
-                          {(r.site||r.unit)&&<span style={{fontSize:9.5,padding:'1px 6px',borderRadius:8,fontWeight:600,background:'#FEF3C7',color:'#92400E'}}>🏗️ {[r.site,r.unit].filter(Boolean).join(' ')}</span>}
-                        </div>
-                      </div>
-                      <span className={`sb ${r.urgency==='urgent'?'urgent':r.status}`}>
-                        {r.urgency==='urgent'?'🚨緊急':r.status==='done'?'✅完成':r.status==='dispatched'?'🚗處理中':'⏳待處理'}
-                      </span>
-                    </div>
-                    <div className="rb">
-                      <div><span>📅 報修日期</span><br/><strong>{r.date}</strong></div>
-                      <div><span>🏠 空間</span><br/><strong>{r.space}</strong></div>
-                      <div><span>👷 師傅</span><br/><strong>{WORKERS.find(w=>w.id===r.workerId)?.name||'未指派'}</strong></div>
-                      <div><span>⏰ 預約</span><br/><strong>{r.scheduledDate||'未排定'}</strong></div>
-                      {r.status==='dispatched'&&r.etaText&&<div><span>🚗 預計抵達</span><br/><strong style={{color:'var(--accent)'}}>{r.etaText}{r.etaSource==='manual'?'（手動）':''}</strong></div>}
-                      {r.desc&&<div style={{gridColumn:'1/-1'}}><span>💬 描述</span><br/><strong>{r.desc}</strong></div>}
-                      {r.note&&<div style={{gridColumn:'1/-1'}}><span>📝 備註</span><br/><strong style={{color:'var(--g700)'}}>{r.note}</strong></div>}
-                    </div>
-                    {r.receiptNo&&<div style={{marginTop:6,fontSize:10.5,padding:'5px 9px',background:'#EFF6FF',borderRadius:5,color:'var(--accent)',fontWeight:700}}>📋 簽收單號：{r.receiptNo}</div>}
-                    {r.arrivalPushed&&<div style={{marginTop:6,fontSize:10.5,color:'var(--accent)',padding:'4px 8px',background:'#EFF6FF',borderRadius:4}}>✅ 師傅抵達通知已推播</div>}
-                    {r.rating!=null&&<div style={{marginTop:5,display:'flex',alignItems:'center',gap:4}}><div className="stars">{stars(r.rating)}</div><span style={{fontSize:10.5,color:'var(--g400)'}}>客戶評分 {r.rating}</span></div>}
-                    {r.status!=='done'&&<div style={{marginTop:8,display:'flex',gap:6,flexWrap:'wrap'}}>
-                      {r.status==='pending'&&<button onClick={()=>openRepairDispatch(r)} style={{padding:'5px 12px',background:'#EDE9FE',color:'#5B21B6',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>📅 排程派工</button>}
-                      {r.status==='dispatched'&&<button onClick={()=>setClosingRepair(r)} style={{padding:'5px 12px',background:'var(--ok)',color:'#fff',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>✅ 完工結案</button>}
-                    </div>}
-                  </div>
-                )})
-              }
-
-              {/* ── 安裝工單 ── */}
-              <div className="sec-t">🛠️ 安裝工單（{curInstalls.length} 筆）</div>
-              {curInstalls.length===0
-                ?<div className="empty" style={{height:80}}><div style={{fontSize:22,opacity:.3}}>🛠️</div><div style={{fontSize:12,marginTop:6}}>尚無安裝工單</div></div>
-                :curInstalls.map(o=>{const isHLo=o.id===highlightedOrderId; return(
-                  <div key={o.id} ref={isHLo?hlRef:null} className={`rcard ${o.status==='done'?'done':o.status==='failed'?'urgent':'dispatched'}`}
-                    onClick={e=>{if(e.target.closest('button,textarea,input,a'))return;setHighlightedOrderId(o.id);}}
-                    style={{cursor:'pointer',...(isHLo?{outline:'2px solid var(--brand)',outlineOffset:2}:{})}}>
-                    <div className="rch">
-                      <div>
-                        <div style={{fontSize:12,fontWeight:700}}>安裝 — {PRODUCTS[o.productId]?.name||o.productId||'—'}</div>
-                        <div className="rid">{o.id}</div>
-                      </div>
-                      <span className={`sb ${o.status==='done'?'done':o.status==='failed'?'urgent':o.status==='pending'?'pending':'dispatched'}`}>{STEPLABEL[o.status]}</span>
-                    </div>
-                    <div className="rb">
-                      <div><span>🔑 負責師傅</span><br/><strong>{LOCKSMITHS.find(s=>s.id===o.locksmithId)?.name||'未指派'}</strong></div>
-                      <div><span>👷 派工師傅</span><br/><strong>{(db.workers||[]).find(w=>w.id===o.workerId)?.name||WORKERS.find(w=>w.id===o.workerId)?.name||'未排程'}</strong></div>
-                      {o.schedDate&&<div><span>⏰ 預約</span><br/><strong>{o.schedDate} {String(o.schedStart||0).padStart(2,'0')}:00</strong></div>}
-                      {o.serialNo&&<div><span>📋 序號</span><br/><strong style={{fontFamily:'JetBrains Mono',fontSize:10}}>{o.serialNo}</strong></div>}
-                    </div>
-                    {o.status==='done'&&<div style={{fontSize:11,color:'var(--ok)',fontWeight:700,marginTop:4}}>✅ 完工 {o.completedDate}　·　保固至 {o.warrantyEnd}</div>}
-                    {o.status==='failed'&&<div style={{fontSize:11,color:'var(--err)',fontWeight:700,marginTop:4}}>❌ 已回報客服處理</div>}
-                    {o.status!=='done'&&o.status!=='failed'&&(
-                      <div style={{marginTop:8,display:'flex',gap:6,flexWrap:'wrap'}}>
-                        {(o.status==='pending'||o.status==='arrived')&&<button onClick={()=>openInstallSchedule(o)} style={{padding:'5px 12px',background:'#EDE9FE',color:'#5B21B6',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>📅 {o.schedDate?'改排程':'排程派工'}</button>}
-                        {o.status==='pending'&&<button onClick={()=>arriveInstall(o)} style={{padding:'5px 12px',background:'var(--accent)',color:'var(--brand)',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>📍 標記到場</button>}
-                        {o.status==='arrived'&&<button onClick={()=>installedDone(o)} style={{padding:'5px 12px',background:'var(--ok)',color:'#fff',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>🔧 施工完成</button>}
-                        {o.status==='installed'&&<button onClick={()=>setVerifyInstall(o)} style={{padding:'5px 12px',background:'var(--ok)',color:'#fff',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>🔬 完工驗收 + 保固登錄</button>}
-                        {(o.status==='pending'||o.status==='arrived')&&<button onClick={()=>failInstall(o)} style={{padding:'5px 12px',background:'#FEE2E2',color:'var(--err)',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>無法安裝</button>}
-                      </div>
-                    )}
-                  </div>
-                )})
-              }
+              })}
+              {historyCount===0&&<div style={{textAlign:'center',color:'var(--g400)',padding:'30px 0'}}>尚無任何紀錄</div>}
+            </div>
+            <div className="mact"><button className="cancel" onClick={()=>setHistoryModal(false)}>關閉</button></div>
+          </div>
+        </div>
+      )}
 
       {caseModal&&sel&&(
         <WorkOrderForm
@@ -2247,7 +2274,6 @@ function HomePage(){
   const [search,setSearch]=useState('');
   const [typeFilter,setTypeFilter]=useState('all');
   const [dept,setDept]=useState('all');
-  const [selected,setSelected]=useState(null);
   const [results,setResults]=useState(null); // null=案件池模式, array=客戶搜尋結果
   const [custModal,setCustModal]=useState(false);
   const installs=Object.values(db.installs||{});
@@ -2272,6 +2298,7 @@ function HomePage(){
       })
   );
   const openCustomer=wfId=>{ setCrmTarget(wfId); setPage('crm'); };
+  const openCaseTab=(wfId,caseId)=>{ if(!wfId){ toast('此案件尚未歸戶','請先整理客編再開啟','warn'); return; } window.open(location.origin+location.pathname+'#crm/'+wfId+'/'+caseId,'_blank'); };
   const doSearch=()=>{
     const term=search.trim();
     if(!term){ setResults(null); return; }
@@ -2436,7 +2463,7 @@ function HomePage(){
                 const prod=PRODUCTS[c.productId];
                 const inWar=c.installDate&&pctW(c.installDate,c.warrantyMonths||36)>0;
                 return(
-                  <div key={(c.wfId||c.phone||i)+''} onClick={()=>c._registered?openCustomer(c.wfId):setSelected(c._anchor)}
+                  <div key={(c.wfId||c.phone||i)+''} onClick={()=>c._registered?openCustomer(c.wfId):(c._anchor?.wfId?openCaseTab(c._anchor.wfId,c._anchor.id):toast('此案件尚未歸戶','請先整理客編再開啟','warn'))}
                     style={{background:'#fff',borderRadius:10,padding:'13px 18px',cursor:'pointer',
                       boxShadow:'0 1px 3px rgba(0,0,0,.06)',borderLeft:`4px solid ${c._registered?'#10B981':'#94A3B8'}`,
                       display:'flex',alignItems:'center',gap:14,marginBottom:8,transition:'box-shadow .12s'}}
@@ -2487,13 +2514,13 @@ function HomePage(){
             const addr=c.address||c.building||c.district||'—';
             const s=ST[c.status]||{label:c.status||'—',bg:'#F1F5F9',fg:'#64748B'};
             return(
-              <div key={c.id} onClick={()=>setSelected(selected?.id===c.id?null:c)}
+              <div key={c.id} onClick={()=>openCaseTab(c.wfId,c.id)} title="開啟此案（新分頁）"
                 style={{background:'#fff',borderRadius:10,padding:'11px 16px',cursor:'pointer',
-                  boxShadow:selected?.id===c.id?'0 0 0 2px #38BDF8':'0 1px 3px rgba(0,0,0,.06)',
+                  boxShadow:'0 1px 3px rgba(0,0,0,.06)',
                   borderLeft:`4px solid ${typeBar[c._type]}`,
                   display:'flex',alignItems:'center',gap:14,marginBottom:7,transition:'box-shadow .12s'}}
-                onMouseEnter={e=>{if(selected?.id!==c.id)e.currentTarget.style.boxShadow='0 3px 10px rgba(0,0,0,.1)'}}
-                onMouseLeave={e=>{if(selected?.id!==c.id)e.currentTarget.style.boxShadow='0 1px 3px rgba(0,0,0,.06)'}}>
+                onMouseEnter={e=>{e.currentTarget.style.boxShadow='0 3px 10px rgba(0,0,0,.1)'}}
+                onMouseLeave={e=>{e.currentTarget.style.boxShadow='0 1px 3px rgba(0,0,0,.06)'}}>
                 <span style={{background:typeBg[c._type],color:typeFg[c._type],fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:9,whiteSpace:'nowrap',flexShrink:0}}>
                   {typeLabelMap[c._type]}
                 </span>
@@ -2521,7 +2548,6 @@ function HomePage(){
           </>
         )}
       </div>
-      {selected&&<CaseDetailPanel c={selected} onClose={()=>setSelected(null)} onOpenFull={openCustomer}/>}
       {custModal&&<CreateCustomerModal onClose={()=>setCustModal(false)}/>}
     </div>
   );
