@@ -928,6 +928,12 @@ function AgentPage(){
     sb.functions.invoke('line-push',{ body:{ to, text, sender } }).catch(e=>console.error('line-push',e));
   };
 
+  const pushMeta=(to,text)=>{
+    // to 格式為 fb_<PSID> 或 ig_<IGSID>
+    if(!to || (!to.startsWith('fb_') && !to.startsWith('ig_'))) return;
+    sb.functions.invoke('meta-push',{ body:{ to, text } }).catch(e=>console.error('meta-push',e));
+  };
+
   const sendMsg=()=>{
     if(!input.trim()||!active) return;
     const t=input.trim(); setInput('');
@@ -935,7 +941,9 @@ function AgentPage(){
     updateDB(prev=>({...prev,conversations:prev.conversations.map(c=>c.id===active.id
       ?{...c,msgs:[...(c.msgs||[]),m],lastMsg:t,lastTime:now(),agentTakeover:true}:c)}));
     setActive(p=>({...p,msgs:[...(p.msgs||[]),m],agentTakeover:true}));
-    pushLine(active.id, t, {name:'真人客服'});
+    const plat = active.platform;
+    if(plat==='facebook'||plat==='instagram') pushMeta(active.id, t);
+    else pushLine(active.id, t, {name:'真人客服'});
     toast('✉️ 已送出',`回覆 ${active.name}`,'ok');
   };
 
