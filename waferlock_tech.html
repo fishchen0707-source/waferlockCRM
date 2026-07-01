@@ -50,6 +50,13 @@ input:focus,select:focus,textarea:focus{border-color:#38BDF8}
 .act{display:flex;gap:8px;margin-top:16px}
 .act button{flex:1;padding:12px;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer}
 .act .cancel{background:#F1F5F9;color:#475569}.act .ok{background:#10B981;color:#fff}
+.rp-month{margin-bottom:10px}
+.rp-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:6px}
+.rp-card{background:#fff;border-radius:10px;padding:12px 8px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.07)}
+.rp-n{font-size:18px;font-weight:800;color:#0F2744}
+.rp-l{font-size:10.5px;color:#94A3B8;margin-top:2px}
+.rp-row{display:flex;justify-content:space-between;background:#fff;border-radius:8px;padding:8px 12px;margin-bottom:5px;font-size:12.5px}
+.rp-detail{background:#fff;border-radius:9px;padding:10px 12px;margin-bottom:8px;font-size:12.5px;border-left:3px solid #38BDF8}
 </style>
 </head>
 <body>
@@ -64,6 +71,83 @@ let worker=JSON.parse(localStorage.getItem('wl_tech')||'null');
 let tab='avail', cases={avail:[],mine:[],done:[],installs:[],doneInstalls:[]}, custMap={}, rep=null;
 const PRODUCT_NAMES={L376:'L376 智能電子鎖',L396:'L396 進階電子鎖',L600:'L600 人臉辨識旗艦',L901:'L901 掌靜脈頂規',L900:'L900 旗艦款'};
 const INSTALL_STATUS={pending:'待到場',arrived:'已到場',installed:'施工完成(待驗收)',done:'已完成',failed:'無法安裝'};
+
+// 型號屬性（依 WAFERLOCK 全型號知識庫：開鎖方式/電源類型/特殊功能），供結案故障分類動態組出選項
+const MODEL_ATTRS={
+  D300:{unlock:['卡片','密碼'],power:'鹼性'},
+  D303:{unlock:['卡片','密碼'],power:'鹼性'},
+  D310:{unlock:['指紋','卡片','密碼'],power:'鹼性'},
+  D312:{unlock:['指紋','密碼'],power:'鹼性'},
+  C210:{unlock:['卡片','旋轉密碼盤','App'],power:'鋰電池'},
+  C760:{unlock:['卡片','旋轉密碼盤','App'],power:'鋰電池'},
+  L301:{unlock:['卡片','鑰匙'],power:'鹼性'},
+  L310:{unlock:['卡片','密碼','App','鑰匙'],power:'鹼性'},
+  L345:{unlock:['卡片','鑰匙'],power:'鋰電池'},
+  L346:{unlock:['卡片','密碼','鑰匙','App'],power:'鋰電池'},
+  L360:{unlock:['卡片','鑰匙'],power:'鹼性'},
+  L361:{unlock:['卡片','鑰匙','App'],power:'鋰電池'},
+  L370:{unlock:['卡片','密碼','鑰匙'],power:'鹼性'},
+  L372:{unlock:['卡片','密碼','鑰匙','App'],power:'鋰電池'},
+  'L375/L775':{unlock:['卡片','密碼','鑰匙'],power:'鹼性'},
+  L376:{unlock:['卡片','密碼','鑰匙','Keyless','App'],power:'鋰電池'},
+  'L379/L779':{unlock:['指紋','卡片','密碼','鑰匙'],power:'鹼性'},
+  L380:{unlock:['卡片','密碼','鑰匙'],power:'鹼性'},
+  L381:{unlock:['卡片','密碼','鑰匙','App'],power:'鋰電池'},
+  L390:{unlock:['指紋','卡片','密碼','鑰匙'],power:'鹼性'},
+  L391:{unlock:['指紋','卡片','密碼','鑰匙','App'],power:'鋰電池'},
+  L396:{unlock:['指紋','卡片','密碼','鑰匙','App'],power:'鋰電池'},
+  L600:{unlock:['人臉','卡片','密碼','鑰匙','App'],power:'鋰電池',hasScreen:true},
+  L701:{unlock:['密碼','卡片','App','鑰匙'],power:'鋰電池'},
+  L900:{unlock:['指紋','卡片','密碼','鑰匙'],power:'鹼性',emergencyPower:'USB-C'},
+  L901:{unlock:['掌靜脈','指紋','卡片','密碼','鑰匙'],power:'鹼性',emergencyPower:'USB-C',hasReverse:true},
+  R400:{type:'gateway'},
+  WAFERKEY:{type:'app'},
+};
+const HANDLING_RESULTS=['已協助更換零件（電池/機板等）','已排除警報並確認正常','已重新設定/配對（App/Gateway/感應憑證）','已教學客戶操作','需再觀察（待追蹤）','轉廠內維修','判定人為/外力損壞','建議更換新品','其他（手動輸入）'];
+
+function faultMajorsFor(model){
+  const a=MODEL_ATTRS[model];
+  if(!a) return ['其他'];
+  if(a.type==='gateway') return ['Gateway連線/配對','Gateway燈號異常','Gateway重置','供電異常','其他'];
+  if(a.type==='app') return ['帳號/登入問題','近端藍牙無法開關鎖','遠端(Gateway)無法開關鎖','韌體更新失敗','配對後憑證失效','其他'];
+  const majors=['開門/解鎖失敗','上鎖/自動上鎖失敗','電力/電池問題','認證/感應元件異常','機械/結構問題'];
+  if((a.unlock||[]).includes('App')) majors.push('App/連線問題');
+  majors.push('其他');
+  return majors;
+}
+function faultDetailsFor(model,major){
+  const a=MODEL_ATTRS[model]||{};
+  const u=a.unlock||[];
+  const map={
+    '認證/感應元件異常':[
+      ...(u.includes('指紋')?['指紋辨識失敗','指紋組數已滿']:[]),
+      ...(u.includes('人臉')?['人臉辨識失敗','人臉組數已滿']:[]),
+      ...(u.includes('掌靜脈')?['掌靜脈辨識失敗','掌靜脈組數已滿']:[]),
+      ...(u.includes('卡片')?['卡片無法感應','卡片組數已滿']:[]),
+      ...((u.includes('密碼')||u.includes('旋轉密碼盤'))?['密碼輸入無反應','連續錯誤鎖定(3分鐘)','忘記管理者密碼']:[]),
+      ...(a.hasScreen?['觸控螢幕無法喚醒']:[]),
+    ],
+    '電力/電池問題':[
+      ...(a.power==='鹼性'?['低電量警報(嗶3聲)','9V緊急供電使用','電池反向放置']:[]),
+      ...(a.power==='鋰電池'?['低電壓警示(嗶5次+紅燈閃)','鋰電池更換']:[]),
+      ...(a.emergencyPower==='USB-C'?['USB-C緊急供電異常']:[]),
+    ],
+    '機械/結構問題':['方舌卡住(警報聲)','鎖芯不順','把手鬆動','面板按鍵失靈',...(a.hasReverse?['室內/室外反鎖功能異常']:[])],
+    '開門/解鎖失敗':['未知原因無法開門'],
+    '上鎖/自動上鎖失敗':['自動上鎖模式異常','手動上鎖失敗'],
+    'App/連線問題':['近端藍牙無法開鎖','遠端(Gateway)無法開鎖','App登入/配對異常'],
+    'Gateway連線/配對':['配對失敗','連線中斷'],
+    'Gateway燈號異常':['Service燈異常','Zigbee燈異常','WAN燈異常','Power燈異常'],
+    'Gateway重置':['需重置後重新配對'],
+    '供電異常':['變壓器供電異常'],
+    '帳號/登入問題':['忘記密碼','無法登入'],
+    '近端藍牙無法開關鎖':['藍牙連線失敗','App權限未開啟'],
+    '遠端(Gateway)無法開關鎖':['Gateway離線','網路異常'],
+    '韌體更新失敗':['更新中斷','版本不相容'],
+    '配對後憑證失效':['原卡片/密碼/指紋失效需重新設定'],
+  };
+  return [...(map[major]||[]), '其他（手動輸入）'];
+}
 
 function pctW(install,months){if(!install||!months)return null;const s=new Date(install);if(isNaN(s))return null;const e=new Date(s);e.setMonth(e.getMonth()+months);const n=new Date();if(n>e)return 0;return Math.max(0,Math.min(100,Math.round((1-(n-s)/(e-s))*100)));}
 function warrantyBadge(r){ if(r.warranty_in===true)return '<span class="badge b-in">保固內</span>'; if(r.warranty_in===false)return '<span class="badge b-out">保固外</span>'; return ''; }
@@ -193,11 +277,65 @@ function renderApp(){
       <div class="tab ${tab==='avail'?'on':''}" onclick="setTab('avail')">可接案<span class="n" id="n-avail" style="display:none"></span></div>
       <div class="tab ${tab==='mine'?'on':''}" onclick="setTab('mine')">進行中<span class="n" id="n-mine" style="display:none"></span></div>
       <div class="tab ${tab==='done'?'on':''}" onclick="setTab('done')">已完成</div>
+      <div class="tab ${tab==='report'?'on':''}" onclick="setTab('report')">📊 我的報表</div>
     </div>
     <div class="wrap" id="list"></div>`;
-  renderList();
+  if(tab==='report'){ renderReport(); } else { renderList(); }
 }
-function setTab(t){ tab=t; renderApp(); }
+function setTab(t){ tab=t; if(t==='report'&&!reportData.length) loadReport(); renderApp(); }
+
+// ───── 我的報表 ─────
+let reportMonth=new Date().toISOString().slice(0,7), reportData=[];
+function nextYm(ym){ const [y,m]=ym.split('-').map(Number); const d=new Date(y,m,1); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+async function loadReport(){
+  if(!worker) return;
+  const {data}=await sb.from('repairs').select('*').eq('worker_id',worker.id).eq('status','done')
+    .gte('completed_date',reportMonth+'-01').lt('completed_date',nextYm(reportMonth)+'-01')
+    .order('completed_date',{ascending:false});
+  reportData=data||[];
+  if(tab==='report') renderApp();
+}
+function onReportMonth(v){ reportMonth=v; loadReport(); }
+function renderReport(){
+  const rows=reportData;
+  const cnt=rows.length;
+  const totalAmt=rows.reduce((s,r)=>s+(r.charge_total||0),0);
+  const paidAmt=rows.filter(r=>r.paid).reduce((s,r)=>s+(r.charge_total||0),0);
+  const unpaidAmt=totalAmt-paidAmt;
+  const durs=rows.map(r=>{
+    if(!r.date||!r.completed_date) return null;
+    const d1=new Date(r.date), d2=new Date(r.completed_date);
+    if(isNaN(d1)||isNaN(d2)) return null;
+    return (d2-d1)/86400000;
+  }).filter(x=>x!=null&&x>=0);
+  const avgDur=durs.length?(durs.reduce((s,x)=>s+x,0)/durs.length).toFixed(1)+' 天':'—';
+  const modelCount={};
+  rows.forEach(r=>{ const m=r.fault_model||'未分類'; modelCount[m]=(modelCount[m]||0)+1; });
+  const modelRank=Object.entries(modelCount).sort((a,b)=>b[1]-a[1]);
+  const unpaid=rows.filter(r=>!r.paid&&(r.charge_total||0)>0);
+  $('#list').innerHTML=`
+    <input type="month" class="rp-month" value="${reportMonth}" onchange="onReportMonth(this.value)">
+    <div class="rp-summary">
+      <div class="rp-card"><div class="rp-n">${cnt}</div><div class="rp-l">本月案件數</div></div>
+      <div class="rp-card"><div class="rp-n">$${totalAmt}</div><div class="rp-l">應收合計</div></div>
+      <div class="rp-card"><div class="rp-n">$${paidAmt}</div><div class="rp-l">已收</div></div>
+      <div class="rp-card"><div class="rp-n">$${unpaidAmt}</div><div class="rp-l">待收</div></div>
+      <div class="rp-card"><div class="rp-n">${avgDur}</div><div class="rp-l">平均處理時效</div></div>
+      <div class="rp-card"><div class="rp-n">${unpaid.length}</div><div class="rp-l">待對帳件數</div></div>
+    </div>
+    <div class="sec">型號故障率排行</div>
+    ${modelRank.length?modelRank.map(([m,n])=>`<div class="rp-row"><span>${m}</span><span>${n} 件</span></div>`).join(''):'<div class="empty">本月無資料</div>'}
+    <div class="sec">未收款/待對帳清單（${unpaid.length}）</div>
+    ${unpaid.length?unpaid.map(r=>`<div class="rp-row"><span>${r.id}｜${r.name||''}</span><span>$${r.charge_total||0}</span></div>`).join(''):'<div class="empty">無待收款案件</div>'}
+    <div class="sec">工單細項（${cnt}）</div>
+    ${cnt?rows.map(r=>`<div class="rp-detail">
+      <div><b>${r.id}</b>　${r.name||''}　${r.date||''} → ${r.completed_date||''}</div>
+      <div style="color:#64748B;font-size:11px;margin-top:3px">型號：${r.fault_model||'—'}｜故障：${r.fault_reason_major||'—'}${r.fault_reason_detail?'/'+r.fault_reason_detail:''}</div>
+      <div style="color:#64748B;font-size:11px">處理：${r.handling_result||'—'}</div>
+      <div style="color:#64748B;font-size:11px">品項：${(r.charges||[]).map(c=>c.item).join('、')||'—'}　金額：$${r.charge_total||0}　${r.paid?'✅已收':'⏳未收'}</div>
+    </div>`).join(''):'<div class="empty">本月無已結案案件</div>'}
+  `;
+}
 
 async function loadCases(){
   if(!worker) return;
@@ -348,12 +486,17 @@ async function installedInstall(id){
 
 // ───── 現場回報 ─────
 let photos=[], sig=null, charges=[], pay='cash', paid=false, wj='out', excl='';
+let faultModel='', faultMajor='', faultDetail='', handlingResult='';
 function openReport(id){
   rep=cases.mine.find(x=>x.id===id); if(!rep)return;
-  photos=[]; sig=null; charges=[]; pay=(rep.warranty_in?'free':'cash'); paid=false; wj=(rep.warranty_in?'in':'out'); excl='';
   const c=custMap[rep.wf_id]||{};
+  photos=[]; sig=null;
+  charges = Array.isArray(rep.charges) ? [...rep.charges] : [];  // 帶入客服建單/派工時已設定的品項，師傅可編輯/追加
+  pay=(rep.warranty_in?'free':'cash'); paid=false; wj=(rep.warranty_in?'in':'out'); excl='';
+  faultModel = MODEL_ATTRS[c.product_id] ? c.product_id : ''; faultMajor=''; faultDetail=''; handlingResult='';
   const d=document.createElement('div'); d.className='mo'; d.id='repmo';
   d.onclick=e=>{if(e.target===d)closeReport();};
+  const modelOptions=Object.keys(MODEL_ATTRS).map(m=>`<option value="${m}" ${m===faultModel?'selected':''}>${m}</option>`).join('');
   d.innerHTML=`<div class="sheet">
     <h3>📋 現場回報 — ${rep.id}</h3>
     <div style="background:#F8FAFC;border-radius:8px;padding:10px;font-size:13px">
@@ -362,8 +505,26 @@ function openReport(id){
     <div class="sec">現場照片</div>
     <label class="photo-add">📷 拍照 / 選擇<input id="ph" type="file" accept="image/*" capture="environment" multiple style="display:none"></label>
     <div class="thumbs" id="thumbs"></div>
-    <div class="sec">處理說明</div>
-    <textarea id="wnote" rows="2" placeholder="維修內容摘要"></textarea>
+    <div class="sec">① 故障型號（確認/修正）</div>
+    <select id="fmodel" onchange="onFaultModel()" style="width:100%;border:1px solid #E2E8F0;border-radius:8px;padding:10px;font-size:14px">
+      <option value="">— 選擇型號 —</option>${modelOptions}
+    </select>
+    <div class="sec">② 故障原因</div>
+    <select id="fmajor" onchange="onFaultMajor()" style="width:100%;border:1px solid #E2E8F0;border-radius:8px;padding:10px;font-size:14px;margin-bottom:6px">
+      <option value="">— 先選型號 —</option>
+    </select>
+    <select id="fdetail" onchange="onFaultDetail()" style="width:100%;border:1px solid #E2E8F0;border-radius:8px;padding:10px;font-size:14px">
+      <option value="">— 先選大類 —</option>
+    </select>
+    <input id="fdetailOther" placeholder="請描述故障細節" style="display:none;margin-top:6px;width:100%;border:1px solid #E2E8F0;border-radius:8px;padding:9px 11px;font-size:13px">
+    <div class="sec">③ 處理過程</div>
+    <select id="hresult" onchange="onHandlingResult()" style="width:100%;border:1px solid #E2E8F0;border-radius:8px;padding:10px;font-size:14px">
+      <option value="">— 選擇處理過程 —</option>
+      ${HANDLING_RESULTS.map(h=>`<option value="${h}">${h}</option>`).join('')}
+    </select>
+    <input id="hresultOther" placeholder="請描述處理過程" style="display:none;margin-top:6px;width:100%;border:1px solid #E2E8F0;border-radius:8px;padding:9px 11px;font-size:13px">
+    <div class="sec">處理說明（補充備註，選填）</div>
+    <textarea id="wnote" rows="2" placeholder="其他補充說明"></textarea>
     <div class="sec">保固判定</div>
     <select id="wj" onchange="onWj()" style="width:100%;border:1px solid #E2E8F0;border-radius:8px;padding:10px;font-size:14px">
       <option value="in">保固內 — 免費</option>
@@ -382,7 +543,7 @@ function openReport(id){
       <button data-v="card" onclick="setPay('card')">刷卡</button>
       <button data-v="free" onclick="setPay('free')">免費</button>
     </div>
-    <label style="display:flex;align-items:center;gap:8px;margin-top:10px"><input type="checkbox" id="paid" style="width:18px"> 已收款</label>
+    <div style="font-size:12px;color:#64748B;margin-top:10px;background:#F8FAFC;border-radius:6px;padding:8px 10px">💳 送出後將模擬完成收款並產生交易編號（之後串接金流 API）；保固內免費則不收款。</div>
     <div class="sec">客戶簽名驗收</div>
     <canvas id="sig" class="sig" width="500" height="150"></canvas>
     <div style="text-align:right"><button class="btn gray" style="width:auto;margin-top:4px;padding:5px 12px" onclick="clearSig()">清除簽名</button></div>
@@ -393,13 +554,42 @@ function openReport(id){
   $('#ph').addEventListener('change',onPhotos);
   initSig($('#sig'));
   $('#wj').value=wj; onWj(); renderCharges();
+  if(faultModel){ $('#fmodel').value=faultModel; onFaultModel(); }
 }
 function onWj(){
   wj=$('#wj').value;
   $('#excl').style.display = wj==='in_excluded' ? 'block' : 'none';
   if(wj==='in') setPay('free'); else if(pay==='free') setPay('cash');
 }
+function onFaultModel(){
+  faultModel=$('#fmodel').value;
+  const majors=faultModel?faultMajorsFor(faultModel):[];
+  $('#fmajor').innerHTML='<option value="">— 選擇故障大類 —</option>'+majors.map(m=>`<option value="${m}">${m}</option>`).join('');
+  faultMajor=''; $('#fdetail').innerHTML='<option value="">— 先選大類 —</option>'; faultDetail='';
+  $('#fdetailOther').style.display='none'; $('#fdetailOther').value='';
+}
+function onFaultMajor(){
+  faultMajor=$('#fmajor').value;
+  const details=faultMajor?faultDetailsFor(faultModel,faultMajor):[];
+  $('#fdetail').innerHTML='<option value="">— 選擇故障細項 —</option>'+details.map(d=>`<option value="${d}">${d}</option>`).join('');
+  faultDetail=''; $('#fdetailOther').style.display='none'; $('#fdetailOther').value='';
+}
+function onFaultDetail(){
+  faultDetail=$('#fdetail').value;
+  $('#fdetailOther').style.display = faultDetail.includes('其他') ? 'block' : 'none';
+}
+function onHandlingResult(){
+  handlingResult=$('#hresult').value;
+  $('#hresultOther').style.display = handlingResult.includes('其他') ? 'block' : 'none';
+}
 function closeReport(){ const m=$('#repmo'); if(m)m.remove(); rep=null; }
+// 模擬金流交易（之後串真 API 只改這裡）：免費不產生交易編號，其餘產生虛擬 txnId
+function mockPayment(method, amount){
+  if(method==='free'||!amount){ return {method:method||'free', paid:true, txnId:null, paidAt:new Date().toISOString()}; }
+  const pre={cash:'CASH',transfer:'TRF',card:'CARD'}[method]||'TXN';
+  const txnId=pre+'-'+Date.now()+'-'+Math.random().toString(36).slice(2,6).toUpperCase();
+  return {method, paid:true, txnId, paidAt:new Date().toISOString()};
+}
 // 照片上傳 Supabase Storage（取代 base64 入庫）：回傳 public URL 陣列
 async function uploadPhotos(files, folder){
   const urls=[];
@@ -440,19 +630,30 @@ function initSig(cv,onEnd){
 async function submitReport(){
   const total=charges.reduce((s,c)=>s+(c.amount||0),0);
   const exclVal=$('#excl').value.trim();
+  const fdetailOtherVal=$('#fdetailOther').value.trim();
+  const hresultOtherVal=$('#hresultOther').value.trim();
   if(photos.length===0){ $('#rerr').textContent='請至少拍一張現場照片'; return; }
   if(!sig){ $('#rerr').textContent='請讓客戶簽名'; return; }
+  if(!faultModel){ $('#rerr').textContent='請確認故障型號'; return; }
+  if(!faultMajor){ $('#rerr').textContent='請選擇故障原因大類'; return; }
+  if(!faultDetail || (faultDetail.includes('其他') && !fdetailOtherVal)){ $('#rerr').textContent='請選擇故障細項（選「其他」需填寫說明）'; return; }
+  if(!handlingResult || (handlingResult.includes('其他') && !hresultOtherVal)){ $('#rerr').textContent='請選擇處理過程（選「其他」需填寫說明）'; return; }
   if(wj==='in_excluded' && !exclVal){ $('#rerr').textContent='「保內但不保固」需填寫原因'; return; }
   if(wj!=='in' && total<=0){ $('#rerr').textContent='需收費案件請填寫收費品項'; return; }
   $('.act .ok')&&($('.act .ok').disabled=true);
   let receipt=null;
   try{ const {data}=await sb.rpc('next_case_no',{p_prefix:'SR'}); receipt=data; }catch(e){ receipt='SR'+Date.now(); }
+  const txn=mockPayment(pay, total);
+  const faultDetailFinal = faultDetail.includes('其他') ? `其他：${fdetailOtherVal}` : faultDetail;
+  const handlingResultFinal = handlingResult.includes('其他') ? `其他：${hresultOtherVal}` : handlingResult;
   await sb.from('repairs').update({
     status:'done', photos, signature:sig, charges, charge_total:total,
-    payment_method:pay, paid:pay==='free'?true:$('#paid').checked,
+    payment_method:txn.method, paid:txn.paid, txn_id:txn.txnId, paid_at:txn.paidAt,
     warranty_judgment:wj, exclude_reason:exclVal,
+    fault_model:faultModel, fault_reason_major:faultMajor, fault_reason_detail:faultDetailFinal, handling_result:handlingResultFinal,
     work_note:$('#wnote').value.trim(), receipt_no:receipt, completed_date:today(),
-    arrived_at:rep.arrived_at||new Date().toISOString()  // 校準用：結案時戳補抵達時間（若先前未記）
+    arrived_at:rep.arrived_at||new Date().toISOString(),  // 校準用：結案時戳補抵達時間（若先前未記）
+    history:[...(rep.history||[]),{ts:Date.now(),by:worker.name,action:`師傅結案｜${faultModel} ${faultMajor}/${faultDetailFinal}｜品項：${charges.map(c=>c.item).join('、')||'無'} 合計$${total}`}]
   }).eq('id',rep.id);
   const chargeLine = total>0 ? `\n費用：$${total}（${ {cash:'現金',transfer:'轉帳',card:'刷卡'}[pay]||'—' }）` : '\n本次免費（保固內）';
   const r=await pushCustomer(rep.wf_id, `✅ 維修完成結案\n\n案件：${rep.id}\n問題：${rep.type} － ${rep.issue}${chargeLine}\n師傅：${worker.name}\n簽收單號：${receipt}\n\n感謝您的使用 🙏 ⭐ 歡迎評分`);
@@ -461,10 +662,10 @@ async function submitReport(){
 }
 
 // ───── 安裝回報 modal ─────
-let instRep=null, instPhotos=[], instSig=null;
+let instRep=null, instPhotos=[], instSig=null, instCharges=[], instPay='free';
 function openInstallReport(id){
   instRep=cases.installs.find(x=>x.id===id); if(!instRep)return;
-  instPhotos=[]; instSig=null;
+  instPhotos=[]; instSig=null; instCharges=[]; instPay='free';
   const prod=PRODUCT_NAMES[instRep.product_id]||instRep.product_id||'門鎖';
   const d=document.createElement('div'); d.className='mo'; d.id='instrmo';
   d.onclick=e=>{if(e.target===d)closeInstallReport();};
@@ -478,6 +679,18 @@ function openInstallReport(id){
     <div class="thumbs" id="ithumbs"></div>
     <div class="sec">師傅施工說明</div>
     <textarea id="iwnote" rows="2" placeholder="安裝過程說明、教學內容、注意事項…"></textarea>
+    <div class="sec">收費品項（數量×單價，可勾贈品；安裝多為免費，可留空）</div>
+    <div id="icharges"></div>
+    <div class="cadd"><input id="ici" placeholder="品項"><input id="icq" type="number" value="1" style="max-width:52px" title="數量"><input id="icp" type="number" placeholder="單價" style="max-width:74px"><label style="display:flex;align-items:center;gap:3px;font-size:12px;white-space:nowrap"><input type="checkbox" id="icg">贈</label><button class="btn go" style="width:auto;margin:0;padding:9px 12px" onclick="addInstCharge()">加</button></div>
+    <div class="total" id="itotal"></div>
+    <div class="sec">收款方式</div>
+    <div class="pm" id="ipm">
+      <button data-v="free" onclick="setInstPay('free')">免費</button>
+      <button data-v="cash" onclick="setInstPay('cash')">現金</button>
+      <button data-v="transfer" onclick="setInstPay('transfer')">轉帳</button>
+      <button data-v="card" onclick="setInstPay('card')">刷卡</button>
+    </div>
+    <div style="font-size:12px;color:#64748B;margin-top:8px;background:#F8FAFC;border-radius:6px;padding:8px 10px">💳 送出後將模擬完成收款並產生交易編號（之後串接金流 API）；免費則不收款。</div>
     <div class="sec">客戶簽名確認安裝完成</div>
     <canvas id="isig" class="sig" width="500" height="150"></canvas>
     <div style="text-align:right"><button class="btn gray" style="width:auto;margin-top:4px;padding:5px 12px" onclick="clearInstSig()">清除簽名</button></div>
@@ -495,7 +708,12 @@ function openInstallReport(id){
     if(txt) txt.textContent=old;
   });
   initSig($('#isig'),s=>instSig=s);
+  renderInstCharges(); setInstPay('free');
 }
+function addInstCharge(){ const it=$('#ici').value.trim(); if(!it)return; const qty=Number($('#icq').value)||1, gift=$('#icg').checked, price=gift?0:(Number($('#icp').value)||0); instCharges.push({item:it,qty,price,gift,amount:gift?0:qty*price}); $('#ici').value='';$('#icq').value='1';$('#icp').value='';$('#icg').checked=false; renderInstCharges(); }
+function rmInstCharge(i){ instCharges.splice(i,1); renderInstCharges(); }
+function renderInstCharges(){ const el=$('#icharges'); if(!el)return; el.innerHTML=instCharges.map((c,i)=>`<div class="crow2"><span style="flex:1">${c.item} ${c.gift?'<b style=\"color:#10B981\">[贈]</b>':`×${c.qty} @$${c.price}`}</span><span>$${c.amount}</span><span class="del" onclick="rmInstCharge(${i})">×</span></div>`).join(''); const t=instCharges.reduce((s,c)=>s+(c.amount||0),0); $('#itotal').textContent=t?('合計 $'+t):''; }
+function setInstPay(v){ instPay=v; document.querySelectorAll('#ipm button').forEach(b=>b.classList.toggle('on',b.dataset.v===v)); }
 function closeInstallReport(){ const m=$('#instrmo'); if(m)m.remove(); instRep=null; }
 function renderInstThumbs(){ $('#ithumbs').innerHTML=instPhotos.map((s,i)=>`<div class="thumb" style="background-image:url(${s})"><span onclick="rmInstPhoto(${i})">×</span></div>`).join(''); }
 function rmInstPhoto(i){ instPhotos.splice(i,1); renderInstThumbs(); }
@@ -503,10 +721,15 @@ function clearInstSig(){ const c=$('#isig'); c.getContext('2d').clearRect(0,0,c.
 async function submitInstallReport(){
   if(instPhotos.length===0){ $('#ierr').textContent='請至少上傳一張安裝照片'; return; }
   if(!instSig){ $('#ierr').textContent='請讓客戶簽名確認'; return; }
+  const total=instCharges.reduce((s,c)=>s+(c.amount||0),0);
+  if(instPay!=='free' && total<=0){ $('#ierr').textContent='需收費請填寫收費品項，或選「免費」'; return; }
   const btn=$('#instrmo .ok'); if(btn) btn.disabled=true;
+  const txn=mockPayment(instPay, total);
   await sb.from('installs').update({
     photos:instPhotos, signature:instSig,
     work_note:$('#iwnote').value.trim(),
+    charges:instCharges, charge_total:total,
+    payment_method:txn.method, paid:txn.paid, txn_id:txn.txnId, paid_at:txn.paidAt,
   }).eq('id',instRep.id);
   const prod=PRODUCT_NAMES[instRep.product_id]||instRep.product_id||'門鎖';
   const r=await pushByPhone(instRep.phone,`🔧 安裝師傅已完成施工並請您簽名確認。\n師傅：${worker.name}\n安裝項目：${prod}\n\n後續保固登錄將由客服確認，感謝 🙏`);

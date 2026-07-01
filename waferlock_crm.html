@@ -257,12 +257,12 @@ const pushLineTo = (to, text, sender={name:'維夫拉克客服'}) => {
 // ── DB 欄位轉換（camelCase <-> snake_case） ──
 const custToDb = c => ({wf_id:c.wfId,name:c.name,phone:c.phone,email:c.email,address:c.address,district:c.district,area:c.area,channel:c.channel,product_id:c.productId,serial_no:c.serialNo,install_date:c.installDate,warranty_months:c.warrantyMonths,warranty_end:c.warrantyEnd,tags:c.tags||[],reg_type:c.regType,reg_date:c.regDate,line_uid:c.lineUid,fb_id:c.fbId,ig_id:c.igId,repair_ids:c.repairIds||[],complaint_ids:c.complaintIds||[],site:c.site,unit:c.unit,order_no:c.orderNo,group_id:c.groupId,project_id:c.projectId,zip:c.zip});
 const dbToCust = r => ({wfId:r.wf_id,name:r.name,phone:r.phone,email:r.email,address:r.address,district:r.district,area:r.area,channel:r.channel,productId:r.product_id,serialNo:r.serial_no,installDate:r.install_date,warrantyMonths:r.warranty_months,warrantyEnd:r.warranty_end,tags:r.tags||[],regType:r.reg_type,regDate:r.reg_date,lineUid:r.line_uid,fbId:r.fb_id,igId:r.ig_id,repairIds:r.repair_ids||[],complaintIds:r.complaint_ids||[],site:r.site,unit:r.unit,orderNo:r.order_no,groupId:r.group_id,projectId:r.project_id,zip:r.zip});
-const repairToDb = r => ({id:r.id,wf_id:r.wfId,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,worker_id:r.workerId,scheduled_date:r.scheduledDate,desc:r.desc,contact_name:r.contactName,contact_phone:r.contactPhone,site:r.site,unit:r.unit,handling_unit:r.handlingUnit,note:r.note,warranty_in:r.warrantyIn,created_by:r.createdBy,created_at:r.createdAt,unread:r.unread,arrival_pushed:r.arrivalPushed,rating:r.rating,receipt_no:r.receiptNo,audit_note:r.auditNote,completed_date:r.completedDate,sched_date:r.schedDate,sched_start:r.schedStart,sched_span:r.schedSpan,charges:r.charges||[],charge_total:r.chargeTotal,payment_method:r.paymentMethod,paid:r.paid,work_note:r.workNote,warranty_judgment:r.warrantyJudgment,exclude_reason:r.excludeReason,photos:r.photos||[],signature:r.signature,sla_level:r.slaLevel,tenant_type:r.tenantType,landlord_confirmed:r.landlordConfirmed,source_channel:r.sourceChannel,community_note:r.communityNote,zip:r.zip,category2:r.category2,time_range:r.timeRange,qty:r.qty,work_hours:r.workHours,flag_bomber:r.flagBomber,eta_at:r.etaAt,eta_text:r.etaText,accepted_at:r.acceptedAt,arrived_at:r.arrivedAt,est_distance_km:r.estDistanceKm,eta_source:r.etaSource,history:r.history||[]});
-const dbToRepair = r => ({id:r.id,wfId:r.wf_id,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,workerId:r.worker_id,scheduledDate:r.scheduled_date,desc:r.desc,contactName:r.contact_name,contactPhone:r.contact_phone,site:r.site,unit:r.unit,handlingUnit:r.handling_unit,note:r.note,warrantyIn:r.warranty_in,createdBy:r.created_by,createdAt:r.created_at,unread:r.unread,arrivalPushed:r.arrival_pushed,rating:r.rating,receiptNo:r.receipt_no,auditNote:r.audit_note,completedDate:r.completed_date,schedDate:r.sched_date,schedStart:r.sched_start,schedSpan:r.sched_span,charges:r.charges||[],chargeTotal:r.charge_total,paymentMethod:r.payment_method,paid:r.paid,workNote:r.work_note,warrantyJudgment:r.warranty_judgment,excludeReason:r.exclude_reason,photos:r.photos||[],signature:r.signature,slaLevel:r.sla_level,tenantType:r.tenant_type,landlordConfirmed:r.landlord_confirmed,sourceChannel:r.source_channel,communityNote:r.community_note,zip:r.zip,category2:r.category2,timeRange:r.time_range,qty:r.qty,workHours:r.work_hours,flagBomber:r.flag_bomber,etaAt:r.eta_at,etaText:r.eta_text,acceptedAt:r.accepted_at,arrivedAt:r.arrived_at,estDistanceKm:r.est_distance_km,etaSource:r.eta_source,history:r.history||[]});
+const repairToDb = r => ({id:r.id,wf_id:r.wfId,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,worker_id:r.workerId,scheduled_date:r.scheduledDate,desc:r.desc,contact_name:r.contactName,contact_phone:r.contactPhone,site:r.site,unit:r.unit,handling_unit:r.handlingUnit,note:r.note,warranty_in:r.warrantyIn,created_by:r.createdBy,created_at:r.createdAt,unread:r.unread,arrival_pushed:r.arrivalPushed,rating:r.rating,receipt_no:r.receiptNo,audit_note:r.auditNote,completed_date:r.completedDate,sched_date:r.schedDate,sched_start:r.schedStart,sched_span:r.schedSpan,charges:r.charges||[],charge_total:r.chargeTotal,payment_method:r.paymentMethod,paid:r.paid,txn_id:r.txnId,paid_at:r.paidAt,work_note:r.workNote,warranty_judgment:r.warrantyJudgment,exclude_reason:r.excludeReason,photos:r.photos||[],signature:r.signature,sla_level:r.slaLevel,tenant_type:r.tenantType,landlord_confirmed:r.landlordConfirmed,source_channel:r.sourceChannel,community_note:r.communityNote,zip:r.zip,category2:r.category2,time_range:r.timeRange,qty:r.qty,work_hours:r.workHours,flag_bomber:r.flagBomber,eta_at:r.etaAt,eta_text:r.etaText,accepted_at:r.acceptedAt,arrived_at:r.arrivedAt,est_distance_km:r.estDistanceKm,eta_source:r.etaSource,history:r.history||[],fault_model:r.faultModel,fault_reason_major:r.faultReasonMajor,fault_reason_detail:r.faultReasonDetail,handling_result:r.handlingResult});
+const dbToRepair = r => ({id:r.id,wfId:r.wf_id,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,workerId:r.worker_id,scheduledDate:r.scheduled_date,desc:r.desc,contactName:r.contact_name,contactPhone:r.contact_phone,site:r.site,unit:r.unit,handlingUnit:r.handling_unit,note:r.note,warrantyIn:r.warranty_in,createdBy:r.created_by,createdAt:r.created_at,unread:r.unread,arrivalPushed:r.arrival_pushed,rating:r.rating,receiptNo:r.receipt_no,auditNote:r.audit_note,completedDate:r.completed_date,schedDate:r.sched_date,schedStart:r.sched_start,schedSpan:r.sched_span,charges:r.charges||[],chargeTotal:r.charge_total,paymentMethod:r.payment_method,paid:r.paid,txnId:r.txn_id,paidAt:r.paid_at,workNote:r.work_note,warrantyJudgment:r.warranty_judgment,excludeReason:r.exclude_reason,photos:r.photos||[],signature:r.signature,slaLevel:r.sla_level,tenantType:r.tenant_type,landlordConfirmed:r.landlord_confirmed,sourceChannel:r.source_channel,communityNote:r.community_note,zip:r.zip,category2:r.category2,timeRange:r.time_range,qty:r.qty,workHours:r.work_hours,flagBomber:r.flag_bomber,etaAt:r.eta_at,etaText:r.eta_text,acceptedAt:r.accepted_at,arrivedAt:r.arrived_at,estDistanceKm:r.est_distance_km,etaSource:r.eta_source,history:r.history||[],faultModel:r.fault_model,faultReasonMajor:r.fault_reason_major,faultReasonDetail:r.fault_reason_detail,handlingResult:r.handling_result});
 const ctToDb = c => ({id:c.id,wf_id:c.wfId,name:c.name,phone:c.phone,date:c.date,created_at:c.createdAt,created_by:c.createdBy,call_channel:c.callChannel,department:c.department,cat1:c.cat1,cat2:c.cat2,cat3:c.cat3,process:c.process,status:c.status,closed_date:c.closedDate,timeline:c.timeline||[]});
 const dbToCt = r => ({id:r.id,wfId:r.wf_id,name:r.name,phone:r.phone,date:r.date,createdAt:r.created_at,createdBy:r.created_by,callChannel:r.call_channel,department:r.department,cat1:r.cat1,cat2:r.cat2,cat3:r.cat3,process:r.process,status:r.status,closedDate:r.closed_date,timeline:r.timeline||[]});
-const installToDb = o => ({id:o.id,name:o.name,phone:o.phone,address:o.address,channel:o.channel,note:o.note,product_id:o.productId,serial_no:o.serialNo,locksmith_id:o.locksmithId,status:o.status,created_date:o.createdDate,created_ts:o.createdTs,arrival_pushed:o.arrivalPushed,photos:o.photos||[],signature:o.signature,verify:o.verify||{},taught:o.taught||{},work_note:o.workNote,completed_date:o.completedDate,wf_id:o.wfId,warranty_end:o.warrantyEnd,worker_id:o.workerId,sched_date:o.schedDate,sched_start:o.schedStart,sched_span:o.schedSpan,charges:o.charges||[],charge_total:o.chargeTotal,tenant_type:o.tenantType,landlord_confirmed:o.landlordConfirmed,source_channel:o.sourceChannel,community_note:o.communityNote,zip:o.zip,category2:o.category2,time_range:o.timeRange,qty:o.qty,work_hours:o.workHours,flag_bomber:o.flagBomber,history:o.history||[]});
-const dbToInstall = r => ({id:r.id,name:r.name,phone:r.phone,address:r.address,channel:r.channel,note:r.note,productId:r.product_id,serialNo:r.serial_no,locksmithId:r.locksmith_id,status:r.status,createdDate:r.created_date,createdTs:r.created_ts?parseInt(r.created_ts):null,arrivalPushed:r.arrival_pushed,photos:r.photos||[],signature:r.signature,verify:r.verify||{},taught:r.taught||{},workNote:r.work_note,completedDate:r.completed_date,wfId:r.wf_id,warrantyEnd:r.warranty_end,workerId:r.worker_id,schedDate:r.sched_date,schedStart:r.sched_start,schedSpan:r.sched_span,charges:r.charges||[],chargeTotal:r.charge_total,tenantType:r.tenant_type,landlordConfirmed:r.landlord_confirmed,sourceChannel:r.source_channel,communityNote:r.community_note,zip:r.zip,category2:r.category2,timeRange:r.time_range,qty:r.qty,workHours:r.work_hours,flagBomber:r.flag_bomber,history:r.history||[]});
+const installToDb = o => ({id:o.id,name:o.name,phone:o.phone,address:o.address,channel:o.channel,note:o.note,product_id:o.productId,serial_no:o.serialNo,locksmith_id:o.locksmithId,status:o.status,created_date:o.createdDate,created_ts:o.createdTs,arrival_pushed:o.arrivalPushed,photos:o.photos||[],signature:o.signature,verify:o.verify||{},taught:o.taught||{},work_note:o.workNote,completed_date:o.completedDate,wf_id:o.wfId,warranty_end:o.warrantyEnd,worker_id:o.workerId,sched_date:o.schedDate,sched_start:o.schedStart,sched_span:o.schedSpan,charges:o.charges||[],charge_total:o.chargeTotal,payment_method:o.paymentMethod,paid:o.paid,txn_id:o.txnId,paid_at:o.paidAt,tenant_type:o.tenantType,landlord_confirmed:o.landlordConfirmed,source_channel:o.sourceChannel,community_note:o.communityNote,zip:o.zip,category2:o.category2,time_range:o.timeRange,qty:o.qty,work_hours:o.workHours,flag_bomber:o.flagBomber,history:o.history||[]});
+const dbToInstall = r => ({id:r.id,name:r.name,phone:r.phone,address:r.address,channel:r.channel,note:r.note,productId:r.product_id,serialNo:r.serial_no,locksmithId:r.locksmith_id,status:r.status,createdDate:r.created_date,createdTs:r.created_ts?parseInt(r.created_ts):null,arrivalPushed:r.arrival_pushed,photos:r.photos||[],signature:r.signature,verify:r.verify||{},taught:r.taught||{},workNote:r.work_note,completedDate:r.completed_date,wfId:r.wf_id,warrantyEnd:r.warranty_end,workerId:r.worker_id,schedDate:r.sched_date,schedStart:r.sched_start,schedSpan:r.sched_span,charges:r.charges||[],chargeTotal:r.charge_total,paymentMethod:r.payment_method,paid:r.paid,txnId:r.txn_id,paidAt:r.paid_at,tenantType:r.tenant_type,landlordConfirmed:r.landlord_confirmed,sourceChannel:r.source_channel,communityNote:r.community_note,zip:r.zip,category2:r.category2,timeRange:r.time_range,qty:r.qty,workHours:r.work_hours,flagBomber:r.flag_bomber,history:r.history||[]});
 const convToDb = c => ({id:c.id,wf_id:c.wfId,name:c.name,platform:c.platform,av:c.av,unread:c.unread||0,last_msg:c.lastMsg,last_time:c.lastTime,msgs:c.msgs||[],agent_takeover:c.agentTakeover||false,need_case:c.needCase||false,biz_inquiry:c.bizInquiry||false});
 const dbToConv = r => ({id:r.id,wfId:r.wf_id,name:r.name,platform:r.platform,av:r.av,unread:r.unread||0,lastMsg:r.last_msg,lastTime:r.last_time,msgs:r.msgs||[],agentTakeover:r.agent_takeover||false,needCase:r.need_case||false,bizInquiry:r.biz_inquiry||false});
 
@@ -581,6 +581,7 @@ function WorkOrderModal({mode,record,warrantyIn,onClose,onSubmit}){
   const [v,setV]=useState({s1:false,s2:false,s3:false});
   const [taught,setTaught]=useState(false);
   const [receiptNo,setReceiptNo]=useState(null);
+  const [pay,setPay]=useState(warrantyIn?'free':'cash');
   const chargeable = wj!=='in';
   const total=chargesTotal(chargeRows);
   const genReceiptNo=()=>{
@@ -598,7 +599,9 @@ function WorkOrderModal({mode,record,warrantyIn,onClose,onSubmit}){
     if(mode==='install'&&!taught){alert('請確認已完成現場操作教學');return;}
     const rno=genReceiptNo();
     setReceiptNo(rno);
-    onSubmit({photos,signature:sig,note,auditNote,charges:normCharges(chargeRows),total,verify:v,taught,receiptNo:rno,warrantyJudgment:wj,excludeReason:excl.trim()});
+    const payMethod=(mode==='repair'&&wj==='in')?'free':pay;
+    const txn=mockPayment(payMethod, total);
+    onSubmit({photos,signature:sig,note,auditNote,charges:normCharges(chargeRows),total,verify:v,taught,receiptNo:rno,warrantyJudgment:wj,excludeReason:excl.trim(),paymentMethod:txn.method,paid:txn.paid,txnId:txn.txnId,paidAt:txn.paidAt});
   };
   return(
     <div className="mo" onClick={e=>e.target===e.currentTarget&&onClose()}>
@@ -640,6 +643,19 @@ function WorkOrderModal({mode,record,warrantyIn,onClose,onSubmit}){
           </div>
         </>)}
 
+        <div className="wo-sec"><label>收款方式</label>
+          {(mode==='repair'&&wj==='in')
+            ? <div style={{fontSize:12,color:'var(--ok)',fontWeight:700,padding:'4px 0'}}>✅ 保固內，本次免費（不收款）</div>
+            : <>
+              <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                {[['cash','現金'],['transfer','轉帳'],['card','刷卡'],['free','免費']].map(([k,l])=>(
+                  <button key={k} type="button" onClick={()=>setPay(k)}
+                    style={{padding:'6px 14px',borderRadius:6,border:`1px solid ${pay===k?'var(--brand)':'var(--g200)'}`,background:pay===k?'var(--brand)':'#fff',color:pay===k?'#fff':'var(--g600)',fontSize:12,fontWeight:700,cursor:'pointer'}}>{l}</button>
+                ))}
+              </div>
+              <div style={{fontSize:11.5,color:'var(--g400)',marginTop:6}}>💳 金額 ${total}；送出後將模擬完成收款並產生交易編號（之後串接金流 API）。</div>
+            </>}
+        </div>
         <div className="wo-sec"><label>現場照片</label><PhotoUpload photos={photos} setPhotos={setPhotos} folder={`${mode==='install'?'installs':'repairs'}/${record?.id||'misc'}`}/></div>
         <div className="wo-sec"><label>處理說明</label><textarea value={note} onChange={e=>setNote(e.target.value)} rows={2} style={{width:'100%',border:'1px solid var(--g200)',borderRadius:5,padding:'7px 10px',fontSize:12.5,outline:'none',resize:'vertical',fontFamily:'inherit'}} placeholder="維修 / 安裝內容摘要"/></div>
         <div className="wo-sec"><label>🔎 稽核備註（內部用，不對客戶顯示）</label><textarea value={auditNote} onChange={e=>setAuditNote(e.target.value)} rows={2} style={{width:'100%',border:'1px dashed var(--g300)',borderRadius:5,padding:'7px 10px',fontSize:12,outline:'none',resize:'vertical',fontFamily:'inherit',background:'var(--g50)'}} placeholder="內部稽核說明、異常記錄..."/></div>
@@ -738,6 +754,13 @@ function ChargeTable({rows,setRows}){
 }
 const chargesTotal = rows => rows.reduce((s,r)=>s+(r.gift?0:(Number(r.qty)||0)*(Number(r.price)||0)),0);
 const normCharges = rows => rows.filter(r=>r.item&&r.item.trim()).map(r=>({item:r.item.trim(),qty:Number(r.qty)||0,price:r.gift?0:(Number(r.price)||0),gift:!!r.gift,amount:r.gift?0:(Number(r.qty)||0)*(Number(r.price)||0)}));
+// 模擬金流交易（之後串真 API 只改這裡）：免費不產生交易編號
+const mockPayment = (method, amount) => {
+  if(method==='free'||!amount) return {method:method||'free', paid:true, txnId:null, paidAt:new Date().toISOString()};
+  const pre={cash:'CASH',transfer:'TRF',card:'CARD'}[method]||'TXN';
+  return {method, paid:true, txnId:pre+'-'+Date.now()+'-'+Math.random().toString(36).slice(2,6).toUpperCase(), paidAt:new Date().toISOString()};
+};
+const PAY_LABEL = {cash:'現金',transfer:'轉帳',card:'刷卡',free:'免費'};
 
 // ─── 地址選取畫面（中華郵政風格：縣市→鄉鎮自動帶 3 碼，其餘自行輸入）───
 function AddressPicker({initial, onConfirm, onClose}){
@@ -1095,6 +1118,7 @@ function CRMPage(){
   const [ctModal,setCtModal] = useState(false);
   const [ctForm,setCtForm] = useState({callChannel:CALL_CHANNELS[0],department:COMPLAINT_DEPARTMENTS[0],cat1:'',cat2:'',cat3:'',process:'',status:'pending'});
   const [expandedCt,setExpandedCt] = useState(null); // 客訴展開
+  const [showHist,setShowHist] = useState(null); // 展開中的異動紀錄案件 id（隱藏按鈕觸發）
   const [followText,setFollowText] = useState('');
   const [followingCtId,setFollowingCtId] = useState(null);
   const [followModal,setFollowModal] = useState(null); // ctId when open
@@ -1217,7 +1241,7 @@ function CRMPage(){
       const nr={...prev.repairs,[dispatchRepair.id]:pushHist({...cur,status:'dispatched',workerId:dispSw,scheduledDate:slotTxt,
         schedDate:dispSd,schedStart:dispStart,schedSpan:span,arrivalPushed:true,charges,chargeTotal:ctotal,
         slaLevel:dispHiRisk?'high':cur.slaLevel,flagBomber:dispBomber,
-        note:[cur.note,dispHiRisk?'⚠️高風險維修':'',dispHardJob?'困難施工':'',dispBomber?'💣轟炸戶':''].filter(Boolean).join(' / ')},currentUser?.name,`派工：${w?.name}｜${slotTxt}`)};
+        note:[cur.note,dispHiRisk?'⚠️高風險維修':'',dispHardJob?'困難施工':'',dispBomber?'💣轟炸戶':''].filter(Boolean).join(' / ')},currentUser?.name,`派工：${w?.name}｜${slotTxt}${ctotal>0?`｜品項異動：${charges.map(c=>c.item).join('、')} 合計$${ctotal}`:''}`)};
       const nc=(prev.conversations||[]).map(c=>(uid&&c.id===uid)
         ?{...c,msgs:[...(c.msgs||[]),pushMsg],lastMsg:'師傅通知已送出',lastTime:now()}:c);
       return {...prev,repairs:nr,conversations:nc};
@@ -1237,6 +1261,7 @@ function CRMPage(){
       repairs:{...prev.repairs,[r.id]:pushHist({...prev.repairs[r.id],
         status:'done',photos:d.photos,signature:d.signature,
         charges:d.charges,chargeTotal:d.total,workNote:d.note,
+        paymentMethod:d.paymentMethod,paid:d.paid,txnId:d.txnId,paidAt:d.paidAt,
         warrantyJudgment:d.warrantyJudgment,excludeReason:d.excludeReason,
         auditNote:d.auditNote||'',receiptNo:d.receiptNo,
         completedDate:today()},currentUser?.name,`完工結案｜簽收單號 ${d.receiptNo}`)},
@@ -1314,7 +1339,7 @@ function CRMPage(){
           tags:[...new Set([...(c.tags||[]).filter(t=>t!=='待安裝'),'保固中'])]});
       }
       return {...prev,
-        installs:{...prev.installs,[o.id]:pushHist({...prev.installs[o.id],status:'done',photos:d.photos,signature:d.signature,verify:d.verify,taught:d.taught,workNote:d.note,completedDate:today(),wfId,warrantyEnd},currentUser?.name,`完工驗收｜保固至 ${warrantyEnd}`)},
+        installs:{...prev.installs,[o.id]:pushHist({...prev.installs[o.id],status:'done',photos:d.photos,signature:d.signature,verify:d.verify,taught:d.taught,workNote:d.note,charges:d.charges,chargeTotal:d.total,paymentMethod:d.paymentMethod,paid:d.paid,txnId:d.txnId,paidAt:d.paidAt,receiptNo:d.receiptNo,completedDate:today(),wfId,warrantyEnd},currentUser?.name,`完工驗收｜保固至 ${warrantyEnd}`)},
         customers};
     });
     const uid=lineUidByPhone(o.phone);
@@ -1570,13 +1595,38 @@ function CRMPage(){
         {r.desc&&<div style={{gridColumn:'1/-1'}}><span>💬 描述</span><br/><strong>{r.desc}</strong></div>}
         {r.note&&<div style={{gridColumn:'1/-1'}}><span>📝 備註</span><br/><strong style={{color:'var(--g700)'}}>{r.note}</strong></div>}
       </div>
+      {r.paymentMethod&&<div style={{marginTop:6,fontSize:10.5,padding:'5px 9px',background:'#F0FDF4',borderRadius:5,color:'#065F46',fontWeight:700}}>💳 {PAY_LABEL[r.paymentMethod]||r.paymentMethod}{r.chargeTotal>0?` $${r.chargeTotal}`:''}{r.paymentMethod!=='free'?`　${r.paid?'✅ 已收款':'未收款'}`:''}{r.txnId?` · ${r.txnId}`:''}</div>}
       {r.receiptNo&&<div style={{marginTop:6,fontSize:10.5,padding:'5px 9px',background:'#EFF6FF',borderRadius:5,color:'var(--accent)',fontWeight:700}}>📋 簽收單號：{r.receiptNo}</div>}
       {r.arrivalPushed&&<div style={{marginTop:6,fontSize:10.5,color:'var(--accent)',padding:'4px 8px',background:'#EFF6FF',borderRadius:4}}>✅ 師傅抵達通知已推播</div>}
       {r.rating!=null&&<div style={{marginTop:5,display:'flex',alignItems:'center',gap:4}}><div className="stars">{stars(r.rating)}</div><span style={{fontSize:10.5,color:'var(--g400)'}}>客戶評分 {r.rating}</span></div>}
+      {r.faultModel&&(
+        <div style={{marginTop:6,background:'#F8FAFC',border:'1px solid var(--g200)',borderRadius:6,padding:'8px 10px',fontSize:11.5,color:'var(--g700)',lineHeight:1.7}}>
+          <div style={{fontSize:10,color:'var(--g500)',fontWeight:700,marginBottom:3,letterSpacing:.5}}>🔍 QC 結案分類</div>
+          <div>型號：<b>{r.faultModel}</b></div>
+          <div>故障原因：{r.faultReasonMajor||'—'}{r.faultReasonDetail?` / ${r.faultReasonDetail}`:''}</div>
+          <div>處理過程：{r.handlingResult||'—'}</div>
+        </div>
+      )}
       {r.status!=='done'&&<div style={{marginTop:8,display:'flex',gap:6,flexWrap:'wrap'}}>
         {r.status==='pending'&&<button onClick={()=>openRepairDispatch(r)} style={{padding:'5px 12px',background:'#EDE9FE',color:'#5B21B6',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>📅 排程派工</button>}
         {r.status==='dispatched'&&<button onClick={()=>setClosingRepair(r)} style={{padding:'5px 12px',background:'var(--ok)',color:'#fff',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>✅ 完工結案</button>}
       </div>}
+      {(r.history||[]).length>0&&(
+        <div style={{marginTop:8}}>
+          <button onClick={()=>setShowHist(v=>v===r.id?null:r.id)} title="異動紀錄" style={{background:'transparent',border:'none',cursor:'pointer',fontSize:11,color:'var(--g400)',padding:'2px 0'}}>🕓 異動紀錄（{(r.history||[]).length}）</button>
+          {showHist===r.id&&(
+            <div style={{marginTop:4,background:'#F8FAFC',borderRadius:6,padding:'8px 10px'}}>
+              {(r.history||[]).slice().reverse().map((h,i)=>(
+                <div key={i} style={{display:'flex',gap:8,fontSize:11,padding:'4px 0',borderBottom:i<r.history.length-1?'1px dashed var(--g200)':'none'}}>
+                  <span style={{color:'var(--g400)',whiteSpace:'nowrap'}}>{h.ts?new Date(Number(h.ts)).toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):'—'}</span>
+                  <span style={{flex:1,color:'var(--g700)'}}>{h.action||'—'}</span>
+                  <span style={{color:'var(--brand)',fontWeight:600,whiteSpace:'nowrap'}}>{h.by||'—'}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
   const renderInstallCard=o=>(
@@ -2091,6 +2141,7 @@ const maskPhone=phone=>{
 
 function CaseDetailPanel({c,onClose,onOpenFull}){
   const {db}=useContext(Ctx);
+  const [showHist,setShowHist]=useState(false);
   const customers=db.customers||[];
   const repairs=db.repairs||{};
   const installs=db.installs||{};
@@ -2120,7 +2171,12 @@ function CaseDetailPanel({c,onClose,onOpenFull}){
     <div style={{width:360,background:'#fff',borderLeft:'1px solid #E2E8F0',overflowY:'auto',flexShrink:0,display:'flex',flexDirection:'column'}}>
       <div style={{padding:'12px 16px',borderBottom:'1px solid #E2E8F0',display:'flex',alignItems:'center',justifyContent:'space-between',background:'#0F2744'}}>
         <div><div style={{fontSize:10.5,color:'rgba(255,255,255,.45)',marginBottom:2}}>{c._type==='customer'?'客戶總覽':'案件詳情'}</div><div style={{fontSize:13,fontWeight:700,color:'#fff'}}>{c._type==='customer'?(cust?.name||c.name||c.id):c.id}</div></div>
-        <button onClick={onClose} style={{background:'rgba(255,255,255,.12)',border:'none',borderRadius:6,padding:'5px 11px',cursor:'pointer',fontSize:14,color:'#fff'}}>✕</button>
+        <div style={{display:'flex',gap:6,alignItems:'center'}}>
+          {c._type!=='customer'&&hist.length>0&&(
+            <button onClick={()=>setShowHist(v=>!v)} title="異動紀錄" style={{background:'transparent',border:'none',cursor:'pointer',fontSize:12,color:'rgba(255,255,255,.35)',padding:'3px 5px'}}>🕓</button>
+          )}
+          <button onClick={onClose} style={{background:'rgba(255,255,255,.12)',border:'none',borderRadius:6,padding:'5px 11px',cursor:'pointer',fontSize:14,color:'#fff'}}>✕</button>
+        </div>
       </div>
       {c._type!=='customer'&&(
       <div style={{padding:'13px 16px',background:'#F8FAFC',borderBottom:'1px solid #E2E8F0'}}>
@@ -2139,6 +2195,14 @@ function CaseDetailPanel({c,onClose,onOpenFull}){
           📅 {c.date||c.createdDate||'—'}
           {c.schedDate&&<span style={{marginLeft:8}}>🗓️ 約工 {c.schedDate}{c.schedStart!=null?` ${String(c.schedStart).padStart(2,'0')}:00`:''}</span>}
         </div>
+        {c._type==='repair'&&c.faultModel&&(
+          <div style={{marginTop:8,background:'#fff',border:'1px solid #E2E8F0',borderRadius:6,padding:'8px 10px',fontSize:11.5,color:'#334155',lineHeight:1.7}}>
+            <div style={{fontSize:10,color:'#64748B',fontWeight:700,marginBottom:3,letterSpacing:.5}}>🔍 QC 結案分類</div>
+            <div>型號：<b>{c.faultModel}</b></div>
+            <div>故障原因：{c.faultReasonMajor||'—'}{c.faultReasonDetail?` / ${c.faultReasonDetail}`:''}</div>
+            <div>處理過程：{c.handlingResult||'—'}</div>
+          </div>
+        )}
       </div>
       )}
       {cust?(
@@ -2172,7 +2236,7 @@ function CaseDetailPanel({c,onClose,onOpenFull}){
           <div style={{fontSize:12.5,color:'#334155'}}><b>{c.name}</b>　{c.phone}</div>
         </div>
       )}
-      {c._type!=='customer'&&hist.length>0&&(
+      {c._type!=='customer'&&hist.length>0&&showHist&&(
         <div style={{padding:'13px 16px',borderBottom:'1px solid #E2E8F0',background:'#F8FAFC'}}>
           <div style={{fontSize:10,color:'#64748B',fontWeight:700,marginBottom:8,letterSpacing:.5}}>📝 本案異動紀錄（{hist.length}）</div>
           {hist.slice().reverse().map((h,i)=>(
@@ -2650,6 +2714,79 @@ function LoginScreen({onLogin}){
 }
 
 // ─── MD 5：集團 → 建案 階層瀏覽（瀏覽階層、依建案檢視客戶與案件）───
+// ─── 師傅報表（管理端）：可切換師傅＋月份，查案件數/應收/處理時效/型號故障排行/待對帳 ───
+function WorkerReportPage(){
+  const {db}=useContext(Ctx);
+  const workers=(db.workers&&db.workers.length)?db.workers:WORKERS;
+  const [selWorker,setSelWorker]=useState(workers[0]?.id||'');
+  const [ym,setYm]=useState(new Date().toISOString().slice(0,7));
+  const repairs=Object.values(db.repairs||{});
+  const rows=repairs.filter(r=>r.workerId===selWorker&&r.status==='done'&&r.completedDate&&r.completedDate>=ym+'-01'&&r.completedDate<ym+'-32');
+  const cnt=rows.length;
+  const totalAmt=rows.reduce((s,r)=>s+(r.chargeTotal||0),0);
+  const paidAmt=rows.filter(r=>r.paid).reduce((s,r)=>s+(r.chargeTotal||0),0);
+  const unpaidAmt=totalAmt-paidAmt;
+  const durs=rows.map(r=>{
+    if(!r.date||!r.completedDate) return null;
+    const d1=new Date(r.date), d2=new Date(r.completedDate);
+    if(isNaN(d1)||isNaN(d2)) return null;
+    return (d2-d1)/86400000;
+  }).filter(x=>x!=null&&x>=0);
+  const avgDur=durs.length?(durs.reduce((s,x)=>s+x,0)/durs.length).toFixed(1)+' 天':'—';
+  const modelCount={};
+  rows.forEach(r=>{ const m=r.faultModel||'未分類'; modelCount[m]=(modelCount[m]||0)+1; });
+  const modelRank=Object.entries(modelCount).sort((a,b)=>b[1]-a[1]);
+  const unpaid=rows.filter(r=>!r.paid&&(r.chargeTotal||0)>0);
+  const cardStyle={background:'#fff',borderRadius:10,padding:'14px 10px',textAlign:'center',boxShadow:'0 1px 3px rgba(0,0,0,.06)'};
+  return(
+    <div style={{padding:'20px 28px',maxWidth:900,margin:'0 auto'}}>
+      <h2 style={{fontSize:18,fontWeight:800,color:'var(--brand)',marginBottom:16}}>👷 師傅報表</h2>
+      <div style={{display:'flex',gap:10,marginBottom:16}}>
+        <select value={selWorker} onChange={e=>setSelWorker(e.target.value)} style={{border:'1px solid var(--g200)',borderRadius:7,padding:'8px 12px',fontSize:13}}>
+          {workers.map(w=><option key={w.id} value={w.id}>{w.name}</option>)}
+        </select>
+        <input type="month" value={ym} onChange={e=>setYm(e.target.value)} style={{border:'1px solid var(--g200)',borderRadius:7,padding:'8px 12px',fontSize:13}}/>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:10,marginBottom:20}}>
+        <div style={cardStyle}><div style={{fontSize:20,fontWeight:800,color:'var(--brand)'}}>{cnt}</div><div style={{fontSize:10.5,color:'var(--g400)',marginTop:2}}>本月案件數</div></div>
+        <div style={cardStyle}><div style={{fontSize:20,fontWeight:800,color:'var(--brand)'}}>${totalAmt}</div><div style={{fontSize:10.5,color:'var(--g400)',marginTop:2}}>應收合計</div></div>
+        <div style={cardStyle}><div style={{fontSize:20,fontWeight:800,color:'#10B981'}}>${paidAmt}</div><div style={{fontSize:10.5,color:'var(--g400)',marginTop:2}}>已收</div></div>
+        <div style={cardStyle}><div style={{fontSize:20,fontWeight:800,color:'#F59E0B'}}>${unpaidAmt}</div><div style={{fontSize:10.5,color:'var(--g400)',marginTop:2}}>待收</div></div>
+        <div style={cardStyle}><div style={{fontSize:20,fontWeight:800,color:'var(--brand)'}}>{avgDur}</div><div style={{fontSize:10.5,color:'var(--g400)',marginTop:2}}>平均處理時效</div></div>
+        <div style={cardStyle}><div style={{fontSize:20,fontWeight:800,color:'#EF4444'}}>{unpaid.length}</div><div style={{fontSize:10.5,color:'var(--g400)',marginTop:2}}>待對帳件數</div></div>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20}}>
+        <div>
+          <div style={{fontSize:12,fontWeight:700,color:'var(--g600)',marginBottom:8}}>型號故障率排行</div>
+          {modelRank.length?modelRank.map(([m,n])=>(
+            <div key={m} style={{display:'flex',justifyContent:'space-between',background:'#fff',borderRadius:7,padding:'7px 12px',marginBottom:5,fontSize:12.5}}>
+              <span>{m}</span><span style={{fontWeight:700}}>{n} 件</span>
+            </div>
+          )):<div style={{color:'var(--g400)',fontSize:12}}>本月無資料</div>}
+        </div>
+        <div>
+          <div style={{fontSize:12,fontWeight:700,color:'var(--g600)',marginBottom:8}}>未收款/待對帳清單</div>
+          {unpaid.length?unpaid.map(r=>(
+            <div key={r.id} style={{display:'flex',justifyContent:'space-between',background:'#fff',borderRadius:7,padding:'7px 12px',marginBottom:5,fontSize:12.5}}>
+              <span>{r.id}｜{r.name}</span><span style={{fontWeight:700,color:'#EF4444'}}>${r.chargeTotal||0}</span>
+            </div>
+          )):<div style={{color:'var(--g400)',fontSize:12}}>無待收款案件</div>}
+        </div>
+      </div>
+      <div style={{marginTop:20}}>
+        <div style={{fontSize:12,fontWeight:700,color:'var(--g600)',marginBottom:8}}>工單細項（{cnt}）</div>
+        {cnt?rows.map(r=>(
+          <div key={r.id} style={{background:'#fff',borderRadius:8,padding:'10px 14px',marginBottom:6,fontSize:12,borderLeft:'3px solid var(--accent)'}}>
+            <div><b>{r.id}</b>　{r.name}　{r.date} → {r.completedDate}</div>
+            <div style={{color:'var(--g500)',fontSize:11,marginTop:2}}>型號：{r.faultModel||'—'}｜故障：{r.faultReasonMajor||'—'}{r.faultReasonDetail?'/'+r.faultReasonDetail:''}｜處理：{r.handlingResult||'—'}</div>
+            <div style={{color:'var(--g500)',fontSize:11}}>品項：{(r.charges||[]).map(c=>c.item).join('、')||'—'}　金額：${r.chargeTotal||0}　{r.paid?'✅已收':'⏳未收'}</div>
+          </div>
+        )):<div style={{color:'var(--g400)',fontSize:12}}>本月無已結案案件</div>}
+      </div>
+    </div>
+  );
+}
+
 function GroupProjectPage(){
   const {db,setPage,setCrmTarget}=useContext(Ctx);
   const [selGroup,setSelGroup]=useState(null);
@@ -2944,6 +3081,7 @@ function App(){
         <button className={`nbtn ${page==='home'||page==='crm'?'on':''}`} onClick={()=>{setPage('home');window.history.replaceState(null,'',location.pathname+location.search);}}>🏠 首頁 / 客戶查詢</button>
         <button className={`nbtn ${page==='schedule'?'on':''}`} onClick={()=>{setPage('schedule');window.history.replaceState(null,'',location.pathname+location.search);}}>📅 工務時刻表</button>
         <button className={`nbtn ${page==='groups'?'on':''}`} onClick={()=>{setPage('groups');window.history.replaceState(null,'',location.pathname+location.search);}}>🏢 集團/建案</button>
+        <button className={`nbtn ${page==='workerReport'?'on':''}`} onClick={()=>{setPage('workerReport');window.history.replaceState(null,'',location.pathname+location.search);}}>👷 師傅報表</button>
         <div className="sync-area">
           {isAdmin
             ? <select value={adminView} onChange={e=>setAdminView(e.target.value)} style={{fontSize:11,padding:'2px 4px',borderRadius:4,marginRight:10}}>
@@ -2982,6 +3120,7 @@ function App(){
         {page==='crm'&&<CRMPage/>}
         {page==='schedule'&&<SchedulePage/>}
         {page==='groups'&&<GroupProjectPage/>}
+        {page==='workerReport'&&<WorkerReportPage/>}
       </div>
       <Toasts items={toasts}/>
     </Ctx.Provider>
