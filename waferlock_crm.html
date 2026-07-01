@@ -2721,7 +2721,14 @@ function WorkerReportPage(){
   const [selWorker,setSelWorker]=useState(workers[0]?.id||'');
   const [ym,setYm]=useState(new Date().toISOString().slice(0,7));
   const repairs=Object.values(db.repairs||{});
-  const rows=repairs.filter(r=>r.workerId===selWorker&&r.status==='done'&&r.completedDate&&r.completedDate>=ym+'-01'&&r.completedDate<ym+'-32');
+  // completedDate 是 today() 產生的「M/D/YYYY」格式（無補零、斜線分隔），不能用字串範圍比較，改用 Date 物件解析比對月份
+  const inMonth=(dateStr,ymStr)=>{
+    if(!dateStr) return false;
+    const d=new Date(dateStr); if(isNaN(d)) return false;
+    const [y,m]=ymStr.split('-').map(Number);
+    return d.getFullYear()===y && (d.getMonth()+1)===m;
+  };
+  const rows=repairs.filter(r=>r.workerId===selWorker&&r.status==='done'&&inMonth(r.completedDate,ym));
   const cnt=rows.length;
   const totalAmt=rows.reduce((s,r)=>s+(r.chargeTotal||0),0);
   const paidAmt=rows.filter(r=>r.paid).reduce((s,r)=>s+(r.chargeTotal||0),0);

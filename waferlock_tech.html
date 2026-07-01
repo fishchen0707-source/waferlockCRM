@@ -282,17 +282,23 @@ function renderApp(){
     <div class="wrap" id="list"></div>`;
   if(tab==='report'){ renderReport(); } else { renderList(); }
 }
-function setTab(t){ tab=t; if(t==='report'&&!reportData.length) loadReport(); renderApp(); }
+function setTab(t){ tab=t; if(t==='report') loadReport(); renderApp(); }
 
 // ───── 我的報表 ─────
+// 注意：completed_date 是 today() 產生的 toLocaleDateString('zh-TW')，格式為「M/D/YYYY」（無補零、斜線分隔），
+// 不能用字串範圍比較（.gte/.lt）篩選月份，一律抓回全部已結案案件，改在前端用 Date 物件解析比對月份。
 let reportMonth=new Date().toISOString().slice(0,7), reportData=[];
-function nextYm(ym){ const [y,m]=ym.split('-').map(Number); const d=new Date(y,m,1); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+function inReportMonth(dateStr,ym){
+  if(!dateStr) return false;
+  const d=new Date(dateStr); if(isNaN(d)) return false;
+  const [y,m]=ym.split('-').map(Number);
+  return d.getFullYear()===y && (d.getMonth()+1)===m;
+}
 async function loadReport(){
   if(!worker) return;
   const {data}=await sb.from('repairs').select('*').eq('worker_id',worker.id).eq('status','done')
-    .gte('completed_date',reportMonth+'-01').lt('completed_date',nextYm(reportMonth)+'-01')
-    .order('completed_date',{ascending:false});
-  reportData=data||[];
+    .order('completed_date',{ascending:false}).limit(500);
+  reportData=(data||[]).filter(r=>inReportMonth(r.completed_date,reportMonth));
   if(tab==='report') renderApp();
 }
 function onReportMonth(v){ reportMonth=v; loadReport(); }
