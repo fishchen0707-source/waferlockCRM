@@ -208,12 +208,12 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── DB 欄位轉換（camelCase <-> snake_case） ──
 const custToDb = c => ({wf_id:c.wfId,name:c.name,phone:c.phone,email:c.email,address:c.address,district:c.district,area:c.area,channel:c.channel,product_id:c.productId,serial_no:c.serialNo,install_date:c.installDate,warranty_months:c.warrantyMonths,warranty_end:c.warrantyEnd,tags:c.tags||[],reg_type:c.regType,reg_date:c.regDate,line_uid:c.lineUid,fb_id:c.fbId,ig_id:c.igId,repair_ids:c.repairIds||[],complaint_ids:c.complaintIds||[],site:c.site,unit:c.unit,order_no:c.orderNo});
 const dbToCust = r => ({wfId:r.wf_id,name:r.name,phone:r.phone,email:r.email,address:r.address,district:r.district,area:r.area,channel:r.channel,productId:r.product_id,serialNo:r.serial_no,installDate:r.install_date,warrantyMonths:r.warranty_months,warrantyEnd:r.warranty_end,tags:r.tags||[],regType:r.reg_type,regDate:r.reg_date,lineUid:r.line_uid,fbId:r.fb_id,igId:r.ig_id,repairIds:r.repair_ids||[],complaintIds:r.complaint_ids||[],site:r.site,unit:r.unit,orderNo:r.order_no});
-const repairToDb = r => ({id:r.id,wf_id:r.wfId,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,worker_id:r.workerId,scheduled_date:r.scheduledDate,desc:r.desc,contact_name:r.contactName,contact_phone:r.contactPhone,site:r.site,unit:r.unit,handling_unit:r.handlingUnit,note:r.note,warranty_in:r.warrantyIn,created_by:r.createdBy,created_at:r.createdAt,unread:r.unread,arrival_pushed:r.arrivalPushed,rating:r.rating,receipt_no:r.receiptNo,audit_note:r.auditNote,completed_date:r.completedDate});
-const dbToRepair = r => ({id:r.id,wfId:r.wf_id,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,workerId:r.worker_id,scheduledDate:r.scheduled_date,desc:r.desc,contactName:r.contact_name,contactPhone:r.contact_phone,site:r.site,unit:r.unit,handlingUnit:r.handling_unit,note:r.note,warrantyIn:r.warranty_in,createdBy:r.created_by,createdAt:r.created_at,unread:r.unread,arrivalPushed:r.arrival_pushed,rating:r.rating,receiptNo:r.receipt_no,auditNote:r.audit_note,completedDate:r.completed_date});
+const repairToDb = r => ({id:r.id,wf_id:r.wfId,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,worker_id:r.workerId,scheduled_date:r.scheduledDate,desc:r.desc,contact_name:r.contactName,contact_phone:r.contactPhone,site:r.site,unit:r.unit,handling_unit:r.handlingUnit,note:r.note,warranty_in:r.warrantyIn,created_by:r.createdBy,created_at:r.createdAt,unread:r.unread,arrival_pushed:r.arrivalPushed,rating:r.rating,receipt_no:r.receiptNo,audit_note:r.auditNote,completed_date:r.completedDate,charges:r.charges||[],charge_total:r.chargeTotal,payment_method:r.paymentMethod,paid:r.paid,fault_model:r.faultModel});
+const dbToRepair = r => ({id:r.id,wfId:r.wf_id,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,workerId:r.worker_id,scheduledDate:r.scheduled_date,desc:r.desc,contactName:r.contact_name,contactPhone:r.contact_phone,site:r.site,unit:r.unit,handlingUnit:r.handling_unit,note:r.note,warrantyIn:r.warranty_in,createdBy:r.created_by,createdAt:r.created_at,unread:r.unread,arrivalPushed:r.arrival_pushed,rating:r.rating,receiptNo:r.receipt_no,auditNote:r.audit_note,completedDate:r.completed_date,charges:r.charges||[],chargeTotal:r.charge_total,paymentMethod:r.payment_method,paid:r.paid,faultModel:r.fault_model});
 const ctToDb = c => ({id:c.id,wf_id:c.wfId,name:c.name,phone:c.phone,date:c.date,created_at:c.createdAt,created_by:c.createdBy,call_channel:c.callChannel,department:c.department,cat1:c.cat1,cat2:c.cat2,cat3:c.cat3,process:c.process,status:c.status,closed_date:c.closedDate,timeline:c.timeline||[]});
 const dbToCt = r => ({id:r.id,wfId:r.wf_id,name:r.name,phone:r.phone,date:r.date,createdAt:r.created_at,createdBy:r.created_by,callChannel:r.call_channel,department:r.department,cat1:r.cat1,cat2:r.cat2,cat3:r.cat3,process:r.process,status:r.status,closedDate:r.closed_date,timeline:r.timeline||[]});
-const installToDb = o => ({id:o.id,name:o.name,phone:o.phone,address:o.address,channel:o.channel,product_id:o.productId,serial_no:o.serialNo,locksmith_id:o.locksmithId,status:o.status,created_date:o.createdDate,created_ts:o.createdTs,arrival_pushed:o.arrivalPushed,photos:o.photos||[],signature:o.signature,verify:o.verify||{},taught:o.taught||{},work_note:o.workNote,completed_date:o.completedDate,wf_id:o.wfId,warranty_end:o.warrantyEnd});
-const dbToInstall = r => ({id:r.id,name:r.name,phone:r.phone,address:r.address,channel:r.channel,productId:r.product_id,serialNo:r.serial_no,locksmithId:r.locksmith_id,status:r.status,createdDate:r.created_date,createdTs:r.created_ts?parseInt(r.created_ts):null,arrivalPushed:r.arrival_pushed,photos:r.photos||[],signature:r.signature,verify:r.verify||{},taught:r.taught||{},workNote:r.work_note,completedDate:r.completed_date,wfId:r.wf_id,warrantyEnd:r.warranty_end});
+const installToDb = o => ({id:o.id,name:o.name,phone:o.phone,address:o.address,channel:o.channel,product_id:o.productId,serial_no:o.serialNo,locksmith_id:o.locksmithId,status:o.status,created_date:o.createdDate,created_ts:o.createdTs,arrival_pushed:o.arrivalPushed,photos:o.photos||[],signature:o.signature,verify:o.verify||{},taught:o.taught||{},work_note:o.workNote,completed_date:o.completedDate,wf_id:o.wfId,warranty_end:o.warrantyEnd,worker_id:o.workerId,charges:o.charges||[],charge_total:o.chargeTotal,payment_method:o.paymentMethod,paid:o.paid});
+const dbToInstall = r => ({id:r.id,name:r.name,phone:r.phone,address:r.address,channel:r.channel,productId:r.product_id,serialNo:r.serial_no,locksmithId:r.locksmith_id,status:r.status,createdDate:r.created_date,createdTs:r.created_ts?parseInt(r.created_ts):null,arrivalPushed:r.arrival_pushed,photos:r.photos||[],signature:r.signature,verify:r.verify||{},taught:r.taught||{},workNote:r.work_note,completedDate:r.completed_date,wfId:r.wf_id,warrantyEnd:r.warranty_end,workerId:r.worker_id,charges:r.charges||[],chargeTotal:r.charge_total,paymentMethod:r.payment_method,paid:r.paid});
 const convToDb = c => ({id:c.id,wf_id:c.wfId,name:c.name,platform:c.platform,av:c.av,unread:c.unread||0,last_msg:c.lastMsg,last_time:c.lastTime,msgs:c.msgs||[],agent_takeover:c.agentTakeover||false,need_case:c.needCase||false,biz_inquiry:c.bizInquiry||false});
 const dbToConv = r => ({id:r.id,wfId:r.wf_id,name:r.name,platform:r.platform,av:r.av,unread:r.unread||0,lastMsg:r.last_msg,lastTime:r.last_time,msgs:r.msgs||[],agentTakeover:r.agent_takeover||false,needCase:r.need_case||false,bizInquiry:r.biz_inquiry||false});
 
@@ -882,13 +882,25 @@ function AgentPage(){
   const [selTime,setSelTime] = useState('上午');
   const [caseModal,setCaseModal] = useState(false);
   const [caseForm,setCaseForm] = useState({type:'電子鎖',issue:'',space:'大門',urgency:'normal',scheduledDate:'',desc:''});
+  const [caseListOpen,setCaseListOpen] = useState(false); // 客戶資訊「案件紀錄」展開/收合
   const endRef = useRef();
+
+  // 案件狀態徽章（維修/安裝/客訴共用查表）
+  const CASE_STATUS_LABEL = {
+    repair:{pending:'⏳ 待處理',dispatched:'🚗 已派工',done:'✅ 已完成'},
+    install:{pending:'⏳ 待到場',arrived:'📍 已到場',installed:'🔧 待驗收',done:'✅ 已完成',failed:'❌ 無法安裝'},
+    complaint:{pending:'⏳ 待處理',following:'🔍 追蹤中',dispatched:'🚗 已派工',closed:'✅ 已結案'},
+  };
+  const caseStatusLabel=(type,status)=>CASE_STATUS_LABEL[type]?.[status]||status||'—';
+  // 開新分頁看 CRM 該筆案件完整資料（沿用 CRM 既有 hash deep link 格式）
+  const openCaseInCrm=(wfId,caseId)=>window.open('waferlock_crm.html#crm/'+wfId+'/'+caseId,'_blank');
 
   const convs = db.conversations || [];
   const filtered = convs.filter(c=>filter==='all'||c.platform===filter);
   const totalUnread = convs.reduce((s,c)=>s+(c.unread||0),0);
 
   useEffect(()=>{ endRef.current?.scrollIntoView({behavior:'smooth'}); },[active?.msgs]);
+  useEffect(()=>{ setCaseListOpen(false); },[active?.wfId]);
 
   // Refresh active conv when DB changes
   useEffect(()=>{
@@ -1109,6 +1121,13 @@ function AgentPage(){
         const p=pctWarranty(c.installDate,c.warrantyMonths);
         const ch=CHANNELS[c.channel];
         const repairList=(c.repairIds||[]).map(rid=>db.repairs?.[rid]).filter(Boolean);
+        // 整合三種案件（維修/安裝/客訴），依日期新到舊排序，供「案件紀錄」統一顯示
+        const caseList=[
+          ...repairList.map(r=>({_type:'repair',_label:'維修',_color:'#0369A1',_bg:'#E0F2FE',id:r.id,date:r.date,title:r.faultModel||r.type||'維修',desc:r.issue,status:r.status,workerId:r.workerId,chargeTotal:r.chargeTotal})),
+          ...Object.values(db.installs||{}).filter(o=>o.wfId===c.wfId).map(o=>({_type:'install',_label:'安裝',_color:'#5B21B6',_bg:'#EDE9FE',id:o.id,date:o.createdDate,title:PRODUCTS[o.productId]?.name||o.productId||'安裝',desc:null,status:o.status,workerId:o.workerId,chargeTotal:o.chargeTotal})),
+          ...(c.complaintIds||[]).map(cid=>db.complaints?.[cid]).filter(Boolean).map(ct=>({_type:'complaint',_label:'客訴',_color:'#B45309',_bg:'#FEF3C7',id:ct.id,date:ct.date,title:ct.cat1||'客訴',desc:ct.cat2,status:ct.status,workerId:null,chargeTotal:null})),
+        ].sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
+        const caseListShown = caseListOpen ? caseList : caseList.slice(0,2);
         return(
           <div className="apmeta">
             <h5>客戶資訊</h5>
@@ -1126,14 +1145,36 @@ function AgentPage(){
               <div className="wbar"><div className={`wfill ${p>50?'ok':p>20?'warn':'bad'}`} style={{width:`${p}%`}}/></div>
               <span style={{fontSize:10.5,color:p>0?'var(--ok)':'var(--err)'}}>{p>0?`✅ 至${c.warrantyEnd}`:'❌ 已到期'}</span>
             </div>
-            {repairList.length>0&&(
-              <div className="meta-row"><strong>報修紀錄 ({repairList.length})</strong>
-                {repairList.slice(0,2).map(r=>(
-                  <div key={r.id} style={{background:'var(--g50)',borderRadius:4,padding:'4px 6px',marginTop:3,fontSize:10.5}}>
-                    <div style={{fontWeight:600}}>{r.issue}</div>
-                    <div style={{color:'var(--g400)'}}>{r.date}</div>
+            {caseList.length>0&&(
+              <div className="meta-row">
+                <strong style={{cursor:caseList.length>2?'pointer':'default'}} onClick={()=>caseList.length>2&&setCaseListOpen(v=>!v)}>
+                  📁 案件紀錄 ({caseList.length}){caseList.length>2&&(caseListOpen?' ▲':' ▼')}
+                </strong>
+                {caseListShown.map(item=>(
+                  <div key={item._type+item.id} style={{background:'var(--g50)',borderRadius:4,padding:'5px 7px',marginTop:3,fontSize:10.5}}>
+                    <div style={{display:'flex',alignItems:'center',gap:4,marginBottom:2}}>
+                      <span style={{background:item._bg,color:item._color,fontSize:9,fontWeight:700,padding:'1px 5px',borderRadius:7,flexShrink:0}}>{item._label}</span>
+                      <span style={{fontSize:9.5,color:'var(--g500)'}}>{caseStatusLabel(item._type,item.status)}</span>
+                      <span style={{marginLeft:'auto',fontSize:9,color:'var(--g400)',fontFamily:'monospace'}}>{item.date||'—'}</span>
+                    </div>
+                    <div style={{fontWeight:600}}>{item.title}{item.desc?` — ${item.desc}`:''}</div>
+                    <div style={{display:'flex',gap:8,marginTop:2,color:'var(--g500)',fontSize:9.5}}>
+                      {item.workerId&&<span>👷 {WORKERS.find(w=>w.id===item.workerId)?.name||item.workerId}</span>}
+                      {item.chargeTotal>0&&<span>💳 ${item.chargeTotal}</span>}
+                    </div>
+                    <div style={{textAlign:'right',marginTop:3}}>
+                      <button onClick={()=>openCaseInCrm(c.wfId,item.id)}
+                        style={{background:'none',border:'none',color:'var(--accent)',fontSize:9.5,fontWeight:700,cursor:'pointer',padding:0}}>
+                        🔗 查看詳情 →
+                      </button>
+                    </div>
                   </div>
                 ))}
+                {caseList.length>2&&(
+                  <div onClick={()=>setCaseListOpen(v=>!v)} style={{textAlign:'center',fontSize:9.5,color:'var(--accent)',fontWeight:700,cursor:'pointer',marginTop:4}}>
+                    {caseListOpen?'收合':`展開全部 (${caseList.length})`}
+                  </div>
+                )}
               </div>
             )}
             <a className="crm-link" href="waferlock_crm.html" target="_blank">
