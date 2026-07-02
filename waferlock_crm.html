@@ -1119,6 +1119,8 @@ function CRMPage(){
   const [ctForm,setCtForm] = useState({callChannel:CALL_CHANNELS[0],department:COMPLAINT_DEPARTMENTS[0],cat1:'',cat2:'',cat3:'',process:'',status:'pending'});
   const [expandedCt,setExpandedCt] = useState(null); // 客訴展開
   const [showHist,setShowHist] = useState(null); // 展開中的異動紀錄案件 id（隱藏按鈕觸發）
+  const [viewingMedia,setViewingMedia] = useState(null); // 正在查看的照片/簽名 {photos,signature,caseId}（僅 admin 可開）
+  const isAdmin = currentUser?.role==='admin';
   const [followText,setFollowText] = useState('');
   const [followingCtId,setFollowingCtId] = useState(null);
   const [followModal,setFollowModal] = useState(null); // ctId when open
@@ -1590,6 +1592,24 @@ function CRMPage(){
       )}
     </div>
   );
+  // 收費品項明細（維修/安裝卡片共用）：逐筆品名×數量@單價=金額，贈品標示，結尾合計
+  const renderChargesDetail=charges=>{
+    const list=(charges||[]).filter(c=>c&&c.item);
+    if(!list.length) return null;
+    const total=list.reduce((s,c)=>s+(c.gift?0:(c.amount||0)),0);
+    return(
+      <div style={{marginTop:6,background:'#F8FAFC',border:'1px solid var(--g200)',borderRadius:6,padding:'8px 10px'}}>
+        <div style={{fontSize:10,color:'var(--g500)',fontWeight:700,marginBottom:4,letterSpacing:.5}}>🛒 收費品項</div>
+        {list.map((c,i)=>(
+          <div key={i} style={{display:'flex',justifyContent:'space-between',fontSize:11.5,padding:'3px 0',color:'var(--g700)'}}>
+            <span>{c.item} {c.gift?<b style={{color:'#10B981'}}>[贈]</b>:`×${c.qty}@$${c.price}`}</span>
+            <span style={{fontWeight:700}}>{c.gift?'贈品':`$${c.amount||0}`}</span>
+          </div>
+        ))}
+        <div style={{display:'flex',justifyContent:'flex-end',fontSize:12,fontWeight:800,color:'var(--brand)',marginTop:4,paddingTop:4,borderTop:'1px dashed var(--g200)'}}>合計 ${total}</div>
+      </div>
+    );
+  };
   const renderRepairCard=r=>(
     <div key={r.id} className={`rcard ${r.urgency==='urgent'?'urgent':r.status}`}>
       <div className="rch">
@@ -1618,6 +1638,7 @@ function CRMPage(){
         {r.note&&<div style={{gridColumn:'1/-1'}}><span>📝 備註</span><br/><strong style={{color:'var(--g700)'}}>{r.note}</strong></div>}
       </div>
       {r.paymentMethod&&<div style={{marginTop:6,fontSize:10.5,padding:'5px 9px',background:'#F0FDF4',borderRadius:5,color:'#065F46',fontWeight:700}}>💳 {PAY_LABEL[r.paymentMethod]||r.paymentMethod}{r.chargeTotal>0?` $${r.chargeTotal}`:''}{r.paymentMethod!=='free'?`　${r.paid?'✅ 已收款':'未收款'}`:''}{r.txnId?` · ${r.txnId}`:''}</div>}
+      {renderChargesDetail(r.charges)}
       {r.receiptNo&&<div style={{marginTop:6,fontSize:10.5,padding:'5px 9px',background:'#EFF6FF',borderRadius:5,color:'var(--accent)',fontWeight:700}}>📋 簽收單號：{r.receiptNo}</div>}
       {r.arrivalPushed&&<div style={{marginTop:6,fontSize:10.5,color:'var(--accent)',padding:'4px 8px',background:'#EFF6FF',borderRadius:4}}>✅ 師傅抵達通知已推播</div>}
       {r.rating!=null&&<div style={{marginTop:5,display:'flex',alignItems:'center',gap:4}}><div className="stars">{stars(r.rating)}</div><span style={{fontSize:10.5,color:'var(--g400)'}}>客戶評分 {r.rating}</span></div>}
@@ -1628,6 +1649,21 @@ function CRMPage(){
           <div>故障原因：{r.faultReasonMajor||'—'}{r.faultReasonDetail?` / ${r.faultReasonDetail}`:''}</div>
           <div>處理過程：{r.handlingResult||'—'}</div>
         </div>
+      )}
+      {r.status==='done'&&(r.warrantyJudgment||r.workNote||r.auditNote||r.completedDate)&&(
+        <div style={{marginTop:6,background:'#F8FAFC',border:'1px solid var(--g200)',borderRadius:6,padding:'8px 10px',fontSize:11.5,color:'var(--g700)',lineHeight:1.7}}>
+          <div style={{fontSize:10,color:'var(--g500)',fontWeight:700,marginBottom:3,letterSpacing:.5}}>🧾 結案紀錄</div>
+          {r.warrantyJudgment&&<div>保固判定：{{in:'保固內免費',out:'保固外收費',in_excluded:'保內不保固'}[r.warrantyJudgment]||r.warrantyJudgment}{r.warrantyJudgment==='in_excluded'&&r.excludeReason?`（${r.excludeReason}）`:''}</div>}
+          {r.workNote&&<div>工務備註：{r.workNote}</div>}
+          {r.auditNote&&<div>稽核備註：{r.auditNote}</div>}
+          {r.completedDate&&<div>結案日期：{r.completedDate}</div>}
+        </div>
+      )}
+      {isAdmin&&(r.photos?.length>0||r.signature)&&(
+        <button onClick={()=>setViewingMedia({photos:r.photos||[],signature:r.signature,caseId:r.id})}
+          style={{marginTop:6,background:'transparent',border:'1px dashed var(--g300)',borderRadius:4,cursor:'pointer',fontSize:10.5,color:'var(--g500)',padding:'4px 8px'}}>
+          📷 照片與簽名（{(r.photos||[]).length}）
+        </button>
       )}
       {r.status!=='done'&&<div style={{marginTop:8,display:'flex',gap:6,flexWrap:'wrap'}}>
         {r.status==='pending'&&<button onClick={()=>openRepairDispatch(r)} style={{padding:'5px 12px',background:'#EDE9FE',color:'#5B21B6',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>📅 排程派工</button>}
@@ -1667,8 +1703,26 @@ function CRMPage(){
         {o.schedDate&&<div><span>⏰ 預約</span><br/><strong>{o.schedDate} {String(o.schedStart||0).padStart(2,'0')}:00</strong></div>}
         {o.serialNo&&<div><span>📋 序號</span><br/><strong style={{fontFamily:'JetBrains Mono',fontSize:10}}>{o.serialNo}</strong></div>}
       </div>
+      {o.paymentMethod&&<div style={{marginTop:6,fontSize:10.5,padding:'5px 9px',background:'#F0FDF4',borderRadius:5,color:'#065F46',fontWeight:700}}>💳 {PAY_LABEL[o.paymentMethod]||o.paymentMethod}{o.chargeTotal>0?` $${o.chargeTotal}`:''}{o.paymentMethod!=='free'?`　${o.paid?'✅ 已收款':'未收款'}`:''}{o.txnId?` · ${o.txnId}`:''}</div>}
+      {renderChargesDetail(o.charges)}
       {o.status==='done'&&<div style={{fontSize:11,color:'var(--ok)',fontWeight:700,marginTop:4}}>✅ 完工 {o.completedDate}　·　保固至 {o.warrantyEnd}</div>}
       {o.status==='failed'&&<div style={{fontSize:11,color:'var(--err)',fontWeight:700,marginTop:4}}>❌ 已回報客服處理</div>}
+      {o.status==='done'&&(o.verify||o.taught!=null||o.workNote)&&(
+        <div style={{marginTop:6,background:'#F8FAFC',border:'1px solid var(--g200)',borderRadius:6,padding:'8px 10px',fontSize:11.5,color:'var(--g700)',lineHeight:1.7}}>
+          <div style={{fontSize:10,color:'var(--g500)',fontWeight:700,marginBottom:3,letterSpacing:.5}}>🔬 驗收與教學紀錄</div>
+          {o.verify&&[['s1','鎖舌對位正常'],['s2','自動上鎖正常'],['s3','各解鎖方式測試（指紋/卡/密碼/鑰匙/App）']].map(([k,l])=>(
+            <div key={k}>{o.verify[k]?'✅':'❌'} {l}</div>
+          ))}
+          {o.taught!=null&&<div>{o.taught?'✅':'❌'} 已完成現場操作教學</div>}
+          {o.workNote&&<div>工務備註：{o.workNote}</div>}
+        </div>
+      )}
+      {isAdmin&&(o.photos?.length>0||o.signature)&&(
+        <button onClick={()=>setViewingMedia({photos:o.photos||[],signature:o.signature,caseId:o.id})}
+          style={{marginTop:6,background:'transparent',border:'1px dashed var(--g300)',borderRadius:4,cursor:'pointer',fontSize:10.5,color:'var(--g500)',padding:'4px 8px'}}>
+          📷 照片與簽名（{(o.photos||[]).length}）
+        </button>
+      )}
       {o.status!=='done'&&o.status!=='failed'&&(
         <div style={{marginTop:8,display:'flex',gap:6,flexWrap:'wrap'}}>
           {(o.status==='pending'||o.status==='arrived')&&<button onClick={()=>openInstallSchedule(o)} style={{padding:'5px 12px',background:o.workerId?'#FEF3C7':'#EDE9FE',color:o.workerId?'#92400E':'#5B21B6',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>{o.workerId?'🔁 轉單／改排程':'📅 排程派工'}</button>}
@@ -1676,6 +1730,22 @@ function CRMPage(){
           {o.status==='arrived'&&<button onClick={()=>installedDone(o)} style={{padding:'5px 12px',background:'var(--ok)',color:'#fff',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>🔧 施工完成</button>}
           {o.status==='installed'&&<button onClick={()=>setVerifyInstall(o)} style={{padding:'5px 12px',background:'var(--ok)',color:'#fff',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>🔬 完工驗收 + 保固登錄</button>}
           {(o.status==='pending'||o.status==='arrived')&&<button onClick={()=>failInstall(o)} style={{padding:'5px 12px',background:'#FEE2E2',color:'var(--err)',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>無法安裝</button>}
+        </div>
+      )}
+      {(o.history||[]).length>0&&(
+        <div style={{marginTop:8}}>
+          <button onClick={()=>setShowHist(v=>v===o.id?null:o.id)} title="異動紀錄" style={{background:'transparent',border:'none',cursor:'pointer',fontSize:11,color:'var(--g400)',padding:'2px 0'}}>🕓 異動紀錄（{(o.history||[]).length}）</button>
+          {showHist===o.id&&(
+            <div style={{marginTop:4,background:'#F8FAFC',borderRadius:6,padding:'8px 10px'}}>
+              {(o.history||[]).slice().reverse().map((h,i)=>(
+                <div key={i} style={{display:'flex',gap:8,fontSize:11,padding:'4px 0',borderBottom:i<o.history.length-1?'1px dashed var(--g200)':'none'}}>
+                  <span style={{color:'var(--g400)',whiteSpace:'nowrap'}}>{h.ts?new Date(Number(h.ts)).toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):'—'}</span>
+                  <span style={{flex:1,color:'var(--g700)'}}>{h.action||'—'}</span>
+                  <span style={{color:'var(--brand)',fontWeight:600,whiteSpace:'nowrap'}}>{h.by||'—'}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -2103,6 +2173,46 @@ function CRMPage(){
         onClose={()=>setVerifyInstall(null)}
         onSubmit={d=>finishInstallVerify(verifyInstall,d)}/>}
 
+      {/* ── 照片與簽名查看（僅 admin，由卡片上的隱藏按鈕觸發） ── */}
+      {viewingMedia&&<PhotoSignatureModal data={viewingMedia} onClose={()=>setViewingMedia(null)}/>}
+
+    </div>
+  );
+}
+
+// ─── 照片與簽名查看 modal（admin 專用，縮圖可點擊放大）───
+function PhotoSignatureModal({data,onClose}){
+  const [zoomed,setZoomed] = useState(null);
+  const {photos,signature,caseId} = data;
+  return(
+    <div className="mo" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="mob" style={{maxWidth:520}}>
+        <h3>📷 照片與簽名 — {caseId}</h3>
+        {photos.length>0?(
+          <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8,marginTop:10}}>
+            {photos.map((url,i)=>(
+              <img key={i} src={url} onClick={()=>setZoomed(url)}
+                style={{width:'100%',aspectRatio:'1',objectFit:'cover',borderRadius:6,cursor:'pointer',border:'1px solid var(--g200)'}}/>
+            ))}
+          </div>
+        ):<div style={{color:'var(--g400)',fontSize:12,marginTop:10}}>無現場照片</div>}
+        {signature&&(
+          <div style={{marginTop:16}}>
+            <div style={{fontSize:10,color:'var(--g500)',fontWeight:700,marginBottom:6,letterSpacing:.5}}>客戶簽名</div>
+            <img src={signature} onClick={()=>setZoomed(signature)}
+              style={{width:'100%',border:'1px solid var(--g200)',borderRadius:6,cursor:'pointer',background:'#F8FAFC'}}/>
+          </div>
+        )}
+        <div style={{textAlign:'right',marginTop:16}}>
+          <button onClick={onClose} style={{padding:'7px 16px',background:'var(--g100)',color:'var(--g600)',border:'none',borderRadius:6,fontSize:12,fontWeight:700,cursor:'pointer'}}>關閉</button>
+        </div>
+      </div>
+      {zoomed&&(
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.85)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',cursor:'zoom-out'}}
+          onClick={e=>{e.stopPropagation();setZoomed(null);}}>
+          <img src={zoomed} style={{maxWidth:'92vw',maxHeight:'92vh',objectFit:'contain'}}/>
+        </div>
+      )}
     </div>
   );
 }
