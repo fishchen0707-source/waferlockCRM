@@ -1147,6 +1147,7 @@ function CRMPage(){
   const [dispHiRisk,setDispHiRisk] = useState(false);
   const [dispHardJob,setDispHardJob] = useState(false);
   const [dispBomber,setDispBomber] = useState(false);
+  const [dispReason,setDispReason] = useState(''); // 轉單原因（已指派師傅時才用）
   const hlRef = useRef(null);
 
   const customers = db.customers||[];
@@ -1217,8 +1218,9 @@ function CRMPage(){
   // ── 維修派工 ──
   const openRepairDispatch=r=>{
     setDispatchRepair(r); setHighlightedOrderId(r.id);
-    setDispSw(''); setDispStart(null); setDispChargeRows([]);
-    setDispRegion('central'); setDispSd(todayISO());
+    setDispSw(''); setDispStart(null);
+    setDispChargeRows((r.charges||[]).map(c=>({item:c.item,qty:c.qty,price:c.price,gift:c.gift}))); // 轉單時保留既有預估品項
+    setDispRegion('central'); setDispSd(todayISO()); setDispReason('');
     setDispHiRisk(false); setDispHardJob(false); setDispBomber(!!r.flagBomber);
   };
   const doRepairDispatch=async()=>{
@@ -1228,12 +1230,23 @@ function CRMPage(){
     const workers=db.workers||[];
     const w=workers.find(x=>x.id===dispSw)||WORKERS.find(x=>x.id===dispSw);
     const span=Math.max(1,Math.ceil(Number(dispatchRepair.workHours)||1));
+    await releaseSlots(dispatchRepair.id); // 先釋放舊時段（轉單改派時避免孤兒佔格）
     const ok=await bookSlots(dispSw,dispSd,dispStart,span,'repair',dispatchRepair.id);
     if(!ok){ toast('時段衝突','該師傅此時段已被預約，請改其他時段','err'); return; }
     const cu=(db.customers||[]).find(c=>c.wfId===dispatchRepair.wfId);
     const uid=cu?.lineUid;
     const charges=normCharges(dispChargeRows); const ctotal=chargesTotal(dispChargeRows);
     const slotTxt=`${dispSd} ${String(dispStart).padStart(2,'0')}:00-${String(dispStart+span).padStart(2,'0')}:00`;
+    // 異動紀錄：依「首次派工／轉單改派／同師傅改期」給不同描述
+    const prevWk=dispatchRepair.workerId;
+    const oldName=(db.workers||[]).find(x=>x.id===prevWk)?.name||WORKERS.find(x=>x.id===prevWk)?.name||'原師傅';
+    const chargeSuffix=ctotal>0?`｜品項異動：${charges.map(c=>c.item).join('、')} 合計$${ctotal}`:'';
+    const reasonSuffix=dispReason.trim()?`｜原因：${dispReason.trim()}`:'';
+    const histAction=!prevWk
+      ? `派工：${w?.name}｜${slotTxt}${chargeSuffix}`
+      : (prevWk!==dispSw
+          ? `🔁 轉單：原 ${oldName} → ${w?.name}｜${slotTxt}${reasonSuffix}${chargeSuffix}`
+          : `🔁 改期：${w?.name}｜${slotTxt}${reasonSuffix}${chargeSuffix}`);
     const pushMsg={id:'p'+Date.now(),from:'bot',
       text:`🚗 派工通知\n\n師傅：${w?.name}\n預約：${slotTxt}\n師傅出發前將再次通知 📱`,time:now()};
     updateDB(prev=>{
@@ -1241,7 +1254,7 @@ function CRMPage(){
       const nr={...prev.repairs,[dispatchRepair.id]:pushHist({...cur,status:'dispatched',workerId:dispSw,scheduledDate:slotTxt,
         schedDate:dispSd,schedStart:dispStart,schedSpan:span,arrivalPushed:true,charges,chargeTotal:ctotal,
         slaLevel:dispHiRisk?'high':cur.slaLevel,flagBomber:dispBomber,
-        note:[cur.note,dispHiRisk?'⚠️高風險維修':'',dispHardJob?'困難施工':'',dispBomber?'💣轟炸戶':''].filter(Boolean).join(' / ')},currentUser?.name,`派工：${w?.name}｜${slotTxt}${ctotal>0?`｜品項異動：${charges.map(c=>c.item).join('、')} 合計$${ctotal}`:''}`)};
+        note:[cur.note,dispHiRisk?'⚠️高風險維修':'',dispHardJob?'困難施工':'',dispBomber?'💣轟炸戶':''].filter(Boolean).join(' / ')},currentUser?.name,histAction)};
       const nc=(prev.conversations||[]).map(c=>(uid&&c.id===uid)
         ?{...c,msgs:[...(c.msgs||[]),pushMsg],lastMsg:'師傅通知已送出',lastTime:now()}:c);
       return {...prev,repairs:nr,conversations:nc};
@@ -1276,7 +1289,7 @@ function CRMPage(){
 
   // ── 安裝排程 ──
   const openInstallSchedule=o=>{
-    setSchedInstall(o); setHighlightedOrderId(o.id); setDispRegion('central'); setDispSw(''); setDispSd(todayISO()); setDispStart(null);
+    setSchedInstall(o); setHighlightedOrderId(o.id); setDispRegion('central'); setDispSw(''); setDispSd(todayISO()); setDispStart(null); setDispReason('');
   };
   const doInstallSchedule=async()=>{
     if(!dispSw){ toast('請選擇師傅','先選區域與師傅','warn'); return; }
@@ -1288,9 +1301,18 @@ function CRMPage(){
     const ok=await bookSlots(dispSw,dispSd,dispStart,span,'install',schedInstall.id);
     if(!ok){ toast('時段衝突',`該師傅此 ${span} 小時已被佔用，請改時段`,'err'); return; }
     const slotTxt=`${dispSd} ${String(dispStart).padStart(2,'0')}:00-${String(dispStart+span).padStart(2,'0')}:00`;
+    // 異動紀錄：首次排程／轉單改派／同師傅改期
+    const prevWk=schedInstall.workerId;
+    const oldName=(db.workers||[]).find(x=>x.id===prevWk)?.name||WORKERS.find(x=>x.id===prevWk)?.name||'原師傅';
+    const reasonSuffix=dispReason.trim()?`｜原因：${dispReason.trim()}`:'';
+    const histAction=!prevWk
+      ? `排程：${w?.name}｜${slotTxt}`
+      : (prevWk!==dispSw
+          ? `🔁 轉單：原 ${oldName} → ${w?.name}｜${slotTxt}${reasonSuffix}`
+          : `🔁 改期：${w?.name}｜${slotTxt}${reasonSuffix}`);
     updateDB(prev=>{
       let next={...prev.installs[schedInstall.id],workerId:dispSw,schedDate:dispSd,schedStart:dispStart,schedSpan:span};
-      next=pushHist(next,currentUser?.name,`排程：${w?.name}｜${slotTxt}`);
+      next=pushHist(next,currentUser?.name,histAction);
       return {...prev,installs:{...prev.installs,[schedInstall.id]:next}};
     });
     const uid=lineUidByPhone(schedInstall.phone);
@@ -1609,6 +1631,7 @@ function CRMPage(){
       )}
       {r.status!=='done'&&<div style={{marginTop:8,display:'flex',gap:6,flexWrap:'wrap'}}>
         {r.status==='pending'&&<button onClick={()=>openRepairDispatch(r)} style={{padding:'5px 12px',background:'#EDE9FE',color:'#5B21B6',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>📅 排程派工</button>}
+        {r.status==='dispatched'&&<button onClick={()=>openRepairDispatch(r)} style={{padding:'5px 12px',background:'#FEF3C7',color:'#92400E',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>🔁 轉單改派</button>}
         {r.status==='dispatched'&&<button onClick={()=>setClosingRepair(r)} style={{padding:'5px 12px',background:'var(--ok)',color:'#fff',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>✅ 完工結案</button>}
       </div>}
       {(r.history||[]).length>0&&(
@@ -1648,7 +1671,7 @@ function CRMPage(){
       {o.status==='failed'&&<div style={{fontSize:11,color:'var(--err)',fontWeight:700,marginTop:4}}>❌ 已回報客服處理</div>}
       {o.status!=='done'&&o.status!=='failed'&&(
         <div style={{marginTop:8,display:'flex',gap:6,flexWrap:'wrap'}}>
-          {(o.status==='pending'||o.status==='arrived')&&<button onClick={()=>openInstallSchedule(o)} style={{padding:'5px 12px',background:'#EDE9FE',color:'#5B21B6',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>📅 {o.schedDate?'改排程':'排程派工'}</button>}
+          {(o.status==='pending'||o.status==='arrived')&&<button onClick={()=>openInstallSchedule(o)} style={{padding:'5px 12px',background:o.workerId?'#FEF3C7':'#EDE9FE',color:o.workerId?'#92400E':'#5B21B6',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>{o.workerId?'🔁 轉單／改排程':'📅 排程派工'}</button>}
           {o.status==='pending'&&<button onClick={()=>arriveInstall(o)} style={{padding:'5px 12px',background:'var(--accent)',color:'var(--brand)',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>📍 標記到場</button>}
           {o.status==='arrived'&&<button onClick={()=>installedDone(o)} style={{padding:'5px 12px',background:'var(--ok)',color:'#fff',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>🔧 施工完成</button>}
           {o.status==='installed'&&<button onClick={()=>setVerifyInstall(o)} style={{padding:'5px 12px',background:'var(--ok)',color:'#fff',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>🔬 完工驗收 + 保固登錄</button>}
@@ -2007,6 +2030,12 @@ function CRMPage(){
             <SlotPicker workers={db.workers||[]} bookings={db.bookings} region={dispRegion} setRegion={setDispRegion}
               workerId={dispSw} setWorkerId={setDispSw} date={dispSd} setDate={setDispSd} start={dispStart} setStart={setDispStart}
               span={Math.max(1,Math.ceil(Number(dispatchRepair.workHours)||1))}/>
+            {dispatchRepair.workerId&&(
+              <div className="fs-card"><h4>🔁 轉單原因</h4>
+                <div style={{fontSize:12,color:'var(--g500)',marginBottom:6}}>目前指派：<b>{(db.workers||[]).find(w=>w.id===dispatchRepair.workerId)?.name||WORKERS.find(w=>w.id===dispatchRepair.workerId)?.name||'—'}</b>　→ 選新師傅完成轉單</div>
+                <input value={dispReason} onChange={e=>setDispReason(e.target.value)} placeholder="例：原師傅臨時無法前往，改派他人" style={{width:'100%',padding:'8px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:13}}/>
+              </div>
+            )}
             <div className="fs-card"><h4>施工註記</h4>
               <div className="chk-row">
                 <label><input type="checkbox" checked={dispHiRisk} onChange={e=>setDispHiRisk(e.target.checked)}/>⚠️ 高風險維修</label>
@@ -2046,6 +2075,12 @@ function CRMPage(){
             <SlotPicker workers={db.workers||[]} bookings={db.bookings} region={dispRegion} setRegion={setDispRegion}
               workerId={dispSw} setWorkerId={setDispSw} date={dispSd} setDate={setDispSd} start={dispStart} setStart={setDispStart}
               span={Math.max(1,Math.ceil(Number(schedInstall.workHours)||2))}/>
+            {schedInstall.workerId&&(
+              <div className="fs-card"><h4>🔁 轉單原因</h4>
+                <div style={{fontSize:12,color:'var(--g500)',marginBottom:6}}>目前指派：<b>{(db.workers||[]).find(w=>w.id===schedInstall.workerId)?.name||WORKERS.find(w=>w.id===schedInstall.workerId)?.name||'—'}</b>　→ 選新師傅完成轉單</div>
+                <input value={dispReason} onChange={e=>setDispReason(e.target.value)} placeholder="例：原師傅臨時無法前往，改派他人" style={{width:'100%',padding:'8px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:13}}/>
+              </div>
+            )}
             <div style={{display:'flex',gap:8,justifyContent:'flex-end',padding:'16px 0 8px'}}>
               <button className="cancel" style={{padding:'8px 18px',borderRadius:6,border:'none',cursor:'pointer',background:'var(--g100)',color:'var(--g600)',fontWeight:600}} onClick={()=>setSchedInstall(null)}>取消</button>
               <button className="confirm" style={{padding:'8px 20px',borderRadius:6,border:'none',cursor:'pointer',background:'var(--accent)',color:'var(--brand)',fontWeight:700}} onClick={doInstallSchedule}>確認排程</button>
