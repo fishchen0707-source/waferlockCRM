@@ -2944,6 +2944,147 @@ function WorkerReportPage(){
   );
 }
 
+// 計畫書2 §3.2「QC 品質報表」＋「派工使用率」——資料已在收（QC三階段分類、bookings），只差呈現，不依賴金流/報表基礎建設
+function QcReportPage(){
+  const {db}=useContext(Ctx);
+  const workers=(db.workers&&db.workers.length)?db.workers:WORKERS;
+  const [ym,setYm]=useState(new Date().toISOString().slice(0,7));
+  const repairs=Object.values(db.repairs||{});
+  // completedDate 可能仍殘留舊格式資料，沿用師傅報表已驗證過的 Date 物件解析比對月份（不用字串範圍比較）
+  const inMonth=(dateStr,ymStr)=>{
+    if(!dateStr) return false;
+    const d=new Date(dateStr); if(isNaN(d)) return false;
+    const [y,m]=ymStr.split('-').map(Number);
+    return d.getFullYear()===y && (d.getMonth()+1)===m;
+  };
+  const doneRows=repairs.filter(r=>r.status==='done'&&inMonth(r.completedDate,ym));
+
+  // 型號 × 故障原因大類 交叉統計
+  const matrix={}; const majorSet=new Set();
+  doneRows.forEach(r=>{
+    const model=r.faultModel||'未分類型號', major=r.faultReasonMajor||'未分類原因';
+    majorSet.add(major);
+    matrix[model]=matrix[model]||{};
+    matrix[model][major]=(matrix[model][major]||0)+1;
+  });
+  const majorList=[...majorSet];
+  const modelList=Object.keys(matrix).sort((a,b)=>
+    Object.values(matrix[b]).reduce((s,n)=>s+n,0)-Object.values(matrix[a]).reduce((s,n)=>s+n,0));
+
+  // 近 6 個月趨勢（含當月）
+  const monthList=[...Array(6)].map((_,i)=>{
+    const [y,m]=ym.split('-').map(Number);
+    const d=new Date(y,m-1-(5-i),1);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  });
+  const trend=monthList.map(m=>({m,count:repairs.filter(r=>r.status==='done'&&inMonth(r.completedDate,m)).length}));
+  const maxTrend=Math.max(1,...trend.map(t=>t.count));
+
+  // Top 故障原因排行（不分型號）
+  const majorCount={};
+  doneRows.forEach(r=>{ const m=r.faultReasonMajor||'未分類原因'; majorCount[m]=(majorCount[m]||0)+1; });
+  const majorRank=Object.entries(majorCount).sort((a,b)=>b[1]-a[1]);
+
+  // 派工使用率：本月各師傅已排 bookings 格數 / 可用總格數（13格 × 當月天數）
+  const bookings=(db.bookings||[]).filter(b=>b.date&&b.date.slice(0,7)===ym);
+  const [by,bm]=ym.split('-').map(Number);
+  const daysInMonth=new Date(by,bm,0).getDate();
+  const totalSlots=SLOT_HOURS.length*daysInMonth;
+  const workerUtil=workers.map(w=>{
+    const used=bookings.filter(b=>b.workerId===w.id).length;
+    return {...w,used,pct:totalSlots?Math.round(used/totalSlots*1000)/10:0};
+  }).sort((a,b)=>b.used-a.used);
+
+  // 區域負載
+  const regionLoad={};
+  bookings.forEach(b=>{
+    const w=workers.find(x=>x.id===b.workerId);
+    const region=w?.region||'未知';
+    regionLoad[region]=(regionLoad[region]||0)+1;
+  });
+  const regionRows=REGIONS.map(([key,label])=>({key,label,count:regionLoad[key]||0}));
+
+  const cardStyle={background:'#fff',borderRadius:10,padding:'14px 10px',textAlign:'center',boxShadow:'0 1px 3px rgba(0,0,0,.06)'};
+  const rowStyle={display:'flex',justifyContent:'space-between',background:'#fff',borderRadius:7,padding:'7px 12px',marginBottom:5,fontSize:12.5};
+  return(
+    <div style={{padding:'20px 28px',maxWidth:1000,margin:'0 auto'}}>
+      <h2 style={{fontSize:18,fontWeight:800,color:'var(--brand)',marginBottom:16}}>📊 品質與派工報表</h2>
+      <div style={{marginBottom:16}}>
+        <input type="month" value={ym} onChange={e=>setYm(e.target.value)} style={{border:'1px solid var(--g200)',borderRadius:7,padding:'8px 12px',fontSize:13}}/>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10,marginBottom:20}}>
+        <div style={cardStyle}><div style={{fontSize:20,fontWeight:800,color:'var(--brand)'}}>{doneRows.length}</div><div style={{fontSize:10.5,color:'var(--g400)',marginTop:2}}>本月已結案（全師傅）</div></div>
+        <div style={cardStyle}><div style={{fontSize:20,fontWeight:800,color:'var(--brand)'}}>{modelList.length}</div><div style={{fontSize:10.5,color:'var(--g400)',marginTop:2}}>涉及型號數</div></div>
+        <div style={cardStyle}><div style={{fontSize:20,fontWeight:800,color:'var(--brand)'}}>{bookings.length}/{totalSlots}</div><div style={{fontSize:10.5,color:'var(--g400)',marginTop:2}}>本月已排格數/總格數</div></div>
+      </div>
+
+      <div style={{fontSize:13,fontWeight:700,color:'var(--brand)',margin:'20px 0 8px'}}>🔍 型號 × 故障原因大類 交叉統計</div>
+      {modelList.length?(
+        <div style={{overflowX:'auto',background:'#fff',borderRadius:8,boxShadow:'0 1px 3px rgba(0,0,0,.06)'}}>
+          <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+            <thead><tr>
+              <th style={{textAlign:'left',padding:'8px 10px',borderBottom:'1px solid var(--g100)'}}>型號</th>
+              {majorList.map(m=><th key={m} style={{textAlign:'center',padding:'8px 10px',borderBottom:'1px solid var(--g100)'}}>{m}</th>)}
+              <th style={{textAlign:'center',padding:'8px 10px',borderBottom:'1px solid var(--g100)'}}>合計</th>
+            </tr></thead>
+            <tbody>{modelList.map(model=>{
+              const total=Object.values(matrix[model]).reduce((s,n)=>s+n,0);
+              return(<tr key={model}>
+                <td style={{padding:'7px 10px',borderBottom:'1px solid var(--g100)',fontWeight:700}}>{model}</td>
+                {majorList.map(m=><td key={m} style={{textAlign:'center',padding:'7px 10px',borderBottom:'1px solid var(--g100)'}}>{matrix[model][m]||'—'}</td>)}
+                <td style={{textAlign:'center',padding:'7px 10px',borderBottom:'1px solid var(--g100)',fontWeight:700}}>{total}</td>
+              </tr>);
+            })}</tbody>
+          </table>
+        </div>
+      ):<div style={{color:'var(--g400)',fontSize:12}}>本月無已結案資料</div>}
+
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20,marginTop:20}}>
+        <div>
+          <div style={{fontSize:13,fontWeight:700,color:'var(--brand)',marginBottom:8}}>📈 近 6 個月故障件數趨勢</div>
+          {trend.map(t=>(
+            <div key={t.m} style={{display:'flex',alignItems:'center',gap:8,marginBottom:5}}>
+              <span style={{fontSize:11,color:'var(--g500)',width:52,flexShrink:0}}>{t.m}</span>
+              <div style={{flex:1,background:'var(--g100)',borderRadius:4,height:14,position:'relative'}}>
+                <div style={{width:`${t.count/maxTrend*100}%`,background:'var(--accent)',height:'100%',borderRadius:4}}/>
+              </div>
+              <span style={{fontSize:11,fontWeight:700,width:24,textAlign:'right'}}>{t.count}</span>
+            </div>
+          ))}
+        </div>
+        <div>
+          <div style={{fontSize:13,fontWeight:700,color:'var(--brand)',marginBottom:8}}>🏆 Top 故障原因排行（不分型號）</div>
+          {majorRank.length?majorRank.map(([m,n])=>(
+            <div key={m} style={rowStyle}><span>{m}</span><span style={{fontWeight:700}}>{n} 件</span></div>
+          )):<div style={{color:'var(--g400)',fontSize:12}}>本月無資料</div>}
+        </div>
+      </div>
+
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20,marginTop:20}}>
+        <div>
+          <div style={{fontSize:13,fontWeight:700,color:'var(--brand)',marginBottom:8}}>👷 師傅時段利用率</div>
+          {workerUtil.map(w=>(
+            <div key={w.id} style={{marginBottom:8}}>
+              <div style={{display:'flex',justifyContent:'space-between',fontSize:12,marginBottom:3}}>
+                <span>{w.name}</span><span style={{color:'var(--g500)'}}>{w.used}/{totalSlots}格（{w.pct}%）</span>
+              </div>
+              <div style={{background:'var(--g100)',borderRadius:4,height:8}}>
+                <div style={{width:`${Math.min(100,w.pct)}%`,background:'var(--accent)',height:'100%',borderRadius:4}}/>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div>
+          <div style={{fontSize:13,fontWeight:700,color:'var(--brand)',marginBottom:8}}>🗺️ 區域負載（本月已排班次）</div>
+          {regionRows.map(r=>(
+            <div key={r.key} style={rowStyle}><span>{r.label}</span><span style={{fontWeight:700}}>{r.count} 格</span></div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function GroupProjectPage(){
   const {db,setPage,setCrmTarget}=useContext(Ctx);
   const [selGroup,setSelGroup]=useState(null);
@@ -3250,6 +3391,7 @@ function App(){
         <button className={`nbtn ${page==='schedule'?'on':''}`} onClick={()=>{setPage('schedule');window.history.replaceState(null,'',location.pathname+location.search);}}>📅 工務時刻表</button>
         <button className={`nbtn ${page==='groups'?'on':''}`} onClick={()=>{setPage('groups');window.history.replaceState(null,'',location.pathname+location.search);}}>🏢 集團/建案</button>
         <button className={`nbtn ${page==='workerReport'?'on':''}`} onClick={()=>{setPage('workerReport');window.history.replaceState(null,'',location.pathname+location.search);}}>👷 師傅報表</button>
+        <button className={`nbtn ${page==='qcReport'?'on':''}`} onClick={()=>{setPage('qcReport');window.history.replaceState(null,'',location.pathname+location.search);}}>📊 品質與派工報表</button>
         <div className="sync-area">
           {isAdmin
             ? <select value={adminView} onChange={e=>setAdminView(e.target.value)} style={{fontSize:11,padding:'2px 4px',borderRadius:4,marginRight:10}}>
@@ -3289,6 +3431,7 @@ function App(){
         {page==='schedule'&&<SchedulePage/>}
         {page==='groups'&&<GroupProjectPage/>}
         {page==='workerReport'&&<WorkerReportPage/>}
+        {page==='qcReport'&&<QcReportPage/>}
       </div>
       <Toasts items={toasts}/>
     </Ctx.Provider>
