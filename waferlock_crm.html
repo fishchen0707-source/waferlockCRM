@@ -3093,10 +3093,10 @@ function App(){
     });
   },[]);
 
-  // Hash deep link：登入後 + db 載入後解析一次，導向對應工單/客戶
-  useEffect(()=>{
-    if(!currentUser||!(db.customers&&db.customers.length)||hashApplied.current) return;
-    hashApplied.current=true;
+  // Hash deep link：登入後 + db 載入後解析一次，導向對應工單/客戶；並監聽 hashchange，
+  // 讓頁面開著時再點一個新的深連結（例如 0800 來電彈屏）也能導航，不用整頁重載。
+  const applyHash=useCallback(()=>{
+    if(!currentUser||!(db.customers&&db.customers.length)) return;
     const hash=window.location.hash.slice(1);
     if(!hash) return;
     const [type,a,b]=hash.split('/');
@@ -3110,7 +3110,18 @@ function App(){
       const o=Object.values(db.installs||{}).find(x=>x.id===a);
       if(o?.wfId){ setCrmTarget(o.wfId); setHighlightedOrderId(a); setPage('crm'); }
     }
-  },[currentUser,db.customers]);
+  },[currentUser,db.customers,db.repairs,db.installs]);
+  useEffect(()=>{
+    if(hashApplied.current) return;
+    if(!currentUser||!(db.customers&&db.customers.length)) return;
+    hashApplied.current=true;
+    applyHash();
+  },[currentUser,db.customers,applyHash]);
+  useEffect(()=>{
+    const onHashChange=()=>applyHash();
+    window.addEventListener('hashchange',onHashChange);
+    return ()=>window.removeEventListener('hashchange',onHashChange);
+  },[applyHash]);
 
   const updateDB = useCallback(updater=>{
     setDB(prev=>{
