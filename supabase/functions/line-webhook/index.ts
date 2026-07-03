@@ -21,6 +21,12 @@ const hhmm = () =>
   new Date().toLocaleTimeString("zh-TW", {
     hour: "2-digit", minute: "2-digit", timeZone: "Asia/Taipei",
   });
+// 完整時間戳（YYYY-MM-DD HH:MM）供客服績效報表算跨日回覆時效用，hhmm() 只給聊天泡泡顯示，不動它的格式
+const fullTs = () => {
+  const d = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Taipei" }));
+  const p2 = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
+};
 
 // 驗證 LINE 簽章：Base64(HMAC-SHA256(channelSecret, rawBody))
 async function verifySignature(body: string, signature: string | null) {
@@ -71,7 +77,7 @@ async function handleMessage(ev: any) {
   }
   if (!name) name = (await getDisplayName(userId)) ?? "LINE 用戶";
 
-  const msg = { id: "u" + Date.now(), from: "user", text, time: hhmm() };
+  const msg = { id: "u" + Date.now(), from: "user", text, time: hhmm(), ts: fullTs() };
   const { data: conv } = await sb.from("conversations").select("*").eq("id", convId).maybeSingle();
 
   let isNew = false, takeover = false;
