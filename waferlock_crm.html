@@ -3085,6 +3085,94 @@ function QcReportPage(){
   );
 }
 
+// 計畫書2 §3.3「客服績效報表」——先做資料已就緒的客訴類指標（建單量/結案率/追蹤逾期）；
+// 訊息回覆時效與0800座席統計待 conversations.msgs 回覆者欄位、0800 ACW 結構化補齊後再做（見計畫書2缺口1/2）
+function CsPerfReportPage(){
+  const {db}=useContext(Ctx);
+  const [ym,setYm]=useState(new Date().toISOString().slice(0,7));
+  const inMonth=(dateStr,ymStr)=>{
+    if(!dateStr) return false;
+    const d=new Date(dateStr); if(isNaN(d)) return false;
+    const [y,m]=ymStr.split('-').map(Number);
+    return d.getFullYear()===y && (d.getMonth()+1)===m;
+  };
+  const repairs=Object.values(db.repairs||{});
+  const complaints=Object.values(db.complaints||{});
+
+  // 建單量：本月建立的維修單＋客訴單，依建立者分組
+  const buildCount={};
+  repairs.filter(r=>inMonth(r.date,ym)).forEach(r=>{
+    const who=r.createdBy||'未紀錄';
+    buildCount[who]=buildCount[who]||{repair:0,complaint:0};
+    buildCount[who].repair++;
+  });
+  complaints.filter(c=>inMonth(c.date,ym)).forEach(c=>{
+    const who=c.createdBy||'未紀錄';
+    buildCount[who]=buildCount[who]||{repair:0,complaint:0};
+    buildCount[who].complaint++;
+  });
+  const buildRows=Object.entries(buildCount).map(([who,v])=>({who,...v,total:v.repair+v.complaint})).sort((a,b)=>b.total-a.total);
+
+  // 客訴結案率＋平均結案天數
+  const ctInMonth=complaints.filter(c=>inMonth(c.date,ym));
+  const ctClosed=ctInMonth.filter(c=>c.status==='closed');
+  const closeRate=ctInMonth.length?Math.round(ctClosed.length/ctInMonth.length*1000)/10:0;
+  const closeDurs=ctClosed.map(c=>{
+    if(!c.date||!c.closedDate) return null;
+    const d1=new Date(c.date), d2=new Date(c.closedDate);
+    if(isNaN(d1)||isNaN(d2)) return null;
+    return (d2-d1)/86400000;
+  }).filter(x=>x!=null&&x>=0);
+  const avgCloseDays=closeDurs.length?(closeDurs.reduce((s,x)=>s+x,0)/closeDurs.length).toFixed(1):'—';
+
+  // 追蹤逾期：即時快照（不受月份篩選）——未結案且最新一筆 schedule 追蹤紀錄的 followUpDate 已過期
+  const overdue=complaints.filter(c=>{
+    if(c.status==='closed') return false;
+    const sched=[...(c.timeline||[])].reverse().find(t=>t.type==='schedule');
+    return sched?.followUpDate && sched.followUpDate.slice(0,10)<today();
+  });
+
+  const cardStyle={background:'#fff',borderRadius:10,padding:'14px 10px',textAlign:'center',boxShadow:'0 1px 3px rgba(0,0,0,.06)'};
+  const rowStyle={display:'flex',justifyContent:'space-between',background:'#fff',borderRadius:7,padding:'7px 12px',marginBottom:5,fontSize:12.5};
+  return(
+    <div style={{padding:'20px 28px',maxWidth:900,margin:'0 auto'}}>
+      <h2 style={{fontSize:18,fontWeight:800,color:'var(--brand)',marginBottom:16}}>🎧 客服績效報表</h2>
+      <div style={{marginBottom:16}}>
+        <input type="month" value={ym} onChange={e=>setYm(e.target.value)} style={{border:'1px solid var(--g200)',borderRadius:7,padding:'8px 12px',fontSize:13}}/>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,marginBottom:20}}>
+        <div style={cardStyle}><div style={{fontSize:20,fontWeight:800,color:'var(--brand)'}}>{ctInMonth.length}</div><div style={{fontSize:10.5,color:'var(--g400)',marginTop:2}}>本月客訴建單數</div></div>
+        <div style={cardStyle}><div style={{fontSize:20,fontWeight:800,color:'#10B981'}}>{closeRate}%</div><div style={{fontSize:10.5,color:'var(--g400)',marginTop:2}}>客訴結案率</div></div>
+        <div style={cardStyle}><div style={{fontSize:20,fontWeight:800,color:'var(--brand)'}}>{avgCloseDays}{avgCloseDays!=='—'?' 天':''}</div><div style={{fontSize:10.5,color:'var(--g400)',marginTop:2}}>平均結案天數</div></div>
+        <div style={cardStyle}><div style={{fontSize:20,fontWeight:800,color:'#EF4444'}}>{overdue.length}</div><div style={{fontSize:10.5,color:'var(--g400)',marginTop:2}}>追蹤逾期件數（即時）</div></div>
+      </div>
+
+      <div style={{fontSize:13,fontWeight:700,color:'var(--brand)',marginBottom:8}}>📋 建單量排行（本月，維修＋客訴）</div>
+      {buildRows.length?buildRows.map(r=>(
+        <div key={r.who} style={rowStyle}>
+          <span>{r.who}</span>
+          <span style={{fontWeight:700}}>{r.total} 件　<span style={{color:'var(--g400)',fontWeight:400,fontSize:11}}>（維修{r.repair}／客訴{r.complaint}）</span></span>
+        </div>
+      )):<div style={{color:'var(--g400)',fontSize:12}}>本月無建單資料</div>}
+
+      <div style={{fontSize:13,fontWeight:700,color:'var(--brand)',margin:'20px 0 8px'}}>⏰ 追蹤逾期清單</div>
+      {overdue.length?overdue.map(c=>{
+        const sched=[...(c.timeline||[])].reverse().find(t=>t.type==='schedule');
+        return(
+          <div key={c.id} style={rowStyle}>
+            <span>{c.id}｜{c.name}</span>
+            <span style={{fontWeight:700,color:'#EF4444'}}>應追蹤：{sched?.followUpDate?.slice(0,10)}</span>
+          </div>
+        );
+      }):<div style={{color:'var(--g400)',fontSize:12}}>目前無逾期追蹤案件</div>}
+
+      <div style={{marginTop:20,padding:'10px 14px',background:'#FFFBEB',borderRadius:8,fontSize:11.5,color:'#92400E'}}>
+        ⚠️ 訊息回覆時效與 0800 座席統計尚未納入——需先補 <code>conversations.msgs</code> 回覆者欄位與 0800 ACW 結構化欄位（見計畫書2 §3.3 資料缺口 1/2）。
+      </div>
+    </div>
+  );
+}
+
 function GroupProjectPage(){
   const {db,setPage,setCrmTarget}=useContext(Ctx);
   const [selGroup,setSelGroup]=useState(null);
@@ -3392,6 +3480,7 @@ function App(){
         <button className={`nbtn ${page==='groups'?'on':''}`} onClick={()=>{setPage('groups');window.history.replaceState(null,'',location.pathname+location.search);}}>🏢 集團/建案</button>
         <button className={`nbtn ${page==='workerReport'?'on':''}`} onClick={()=>{setPage('workerReport');window.history.replaceState(null,'',location.pathname+location.search);}}>👷 師傅報表</button>
         <button className={`nbtn ${page==='qcReport'?'on':''}`} onClick={()=>{setPage('qcReport');window.history.replaceState(null,'',location.pathname+location.search);}}>📊 品質與派工報表</button>
+        <button className={`nbtn ${page==='csPerfReport'?'on':''}`} onClick={()=>{setPage('csPerfReport');window.history.replaceState(null,'',location.pathname+location.search);}}>🎧 客服績效報表</button>
         <div className="sync-area">
           {isAdmin
             ? <select value={adminView} onChange={e=>setAdminView(e.target.value)} style={{fontSize:11,padding:'2px 4px',borderRadius:4,marginRight:10}}>
@@ -3432,6 +3521,7 @@ function App(){
         {page==='groups'&&<GroupProjectPage/>}
         {page==='workerReport'&&<WorkerReportPage/>}
         {page==='qcReport'&&<QcReportPage/>}
+        {page==='csPerfReport'&&<CsPerfReportPage/>}
       </div>
       <Toasts items={toasts}/>
     </Ctx.Provider>
