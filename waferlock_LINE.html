@@ -189,6 +189,42 @@ input,select,textarea{font-family:inherit}
 .mact .cancel{background:var(--g100);color:var(--g600)}
 .mact .ok{background:var(--accent);color:var(--brand)}
 .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:200px;color:var(--g400)}
+
+/* ── 0800 值機桌面（Agent Desktop）── */
+.cc-wrap{display:flex;flex-direction:column;height:calc(100vh - 48px)}
+.cc-topbar{background:var(--brand);color:#fff;padding:8px 14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;border-bottom:1px solid rgba(255,255,255,.1)}
+.cc-status-group{display:flex;gap:4px}
+.cc-status-btn{padding:5px 10px;border-radius:5px;font-size:11px;font-weight:700;border:1px solid rgba(255,255,255,.2);background:transparent;color:rgba(255,255,255,.65);cursor:pointer;transition:all .12s}
+.cc-status-btn.on{background:var(--accent);color:var(--brand);border-color:var(--accent)}
+.cc-status-btn:hover:not(.on){background:rgba(255,255,255,.1);color:#fff}
+.cc-queue{font-size:11px;color:rgba(255,255,255,.6)}
+.cc-callctl{display:flex;align-items:center;gap:6px;margin-left:auto}
+.cc-timer{font-size:12px;font-weight:700;font-family:monospace;color:var(--accent);margin-right:4px}
+.cc-ctlbtn{padding:5px 10px;border-radius:5px;font-size:11px;font-weight:700;border:none;background:rgba(255,255,255,.12);color:#fff;cursor:pointer}
+.cc-ctlbtn.on{background:var(--warn);color:#fff}
+.cc-ctlbtn.hangup{background:var(--err)}
+.cc-body{flex:1;display:flex;overflow:hidden}
+.cc-nav{width:260px;background:#fff;border-right:1px solid var(--g200);display:flex;flex-direction:column;flex-shrink:0}
+.cc-nav-hdr{padding:10px 12px;font-size:13px;font-weight:700;border-bottom:1px solid var(--g200)}
+.cc-simcall{padding:10px 12px;border-bottom:1px solid var(--g200);background:var(--g50)}
+.cc-simcall input{width:100%;border:1px solid var(--g200);border-radius:5px;padding:6px 8px;font-size:12px;outline:none;margin-bottom:6px}
+.cc-simcall button{width:100%;padding:7px;border-radius:5px;border:none;background:var(--accent);color:var(--brand);font-size:12px;font-weight:700;cursor:pointer}
+.cc-simcall button:disabled{opacity:.4;cursor:not-allowed}
+.cc-calllist{flex:1;overflow-y:auto}
+.cc-callitem{padding:9px 12px;border-bottom:1px solid var(--g100)}
+.cc-main{flex:1;display:flex;align-items:center;justify-content:center;background:var(--g50)}
+.cc-ringcard,.cc-activecard{background:#fff;border-radius:12px;padding:24px 40px;text-align:center;box-shadow:0 2px 10px rgba(0,0,0,.08)}
+.cc-answer{padding:9px 20px;border-radius:6px;border:none;background:var(--ok);color:#fff;font-weight:700;font-size:13px;cursor:pointer}
+.cc-reject{padding:9px 20px;border-radius:6px;border:none;background:var(--err);color:#fff;font-weight:700;font-size:13px;cursor:pointer}
+.cc-cust{width:240px;background:#fff;border-left:1px solid var(--g200);overflow-y:auto;flex-shrink:0}
+.cc-candidate{padding:8px 10px;border:1px solid var(--g200);border-radius:6px;margin-bottom:6px;cursor:pointer;transition:background .12s}
+.cc-candidate:hover{background:var(--g50);border-color:var(--accent)}
+.cc-acw{background:#fff;border-top:2px solid var(--warn);padding:10px 16px}
+.cc-acw-hdr{font-size:12px;font-weight:700;color:var(--g700);margin-bottom:8px}
+.cc-acw-body{display:flex;gap:8px;align-items:flex-start}
+.cc-acw-body textarea{flex:2;border:1px solid var(--g200);border-radius:6px;padding:7px 10px;font-size:12px;outline:none;resize:none;font-family:inherit}
+.cc-acw-body select{flex:1;border:1px solid var(--g200);border-radius:6px;padding:7px 10px;font-size:12px;outline:none}
+.cc-acw-body button{padding:7px 16px;border-radius:6px;border:none;background:var(--ok);color:#fff;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -868,6 +904,299 @@ function CustomerPage(){
   );
 }
 
+// ACW（話後處理）狀態碼：與客訴分類概念呼應，供電話進線與客訴單合併統計
+const ACW_CODES = ['諮詢','報修','客訴','查保固','轉接工務','騷擾/測試','打錯電話','其他'];
+const AGENT_STATUS_LABEL = {online:'🟢 值勤中',away:'🟡 離開',lunch:'🍱 用餐',meeting:'📅 會議中',offline:'⚪ 離線'};
+
+// ═══════════════════════════════════════════════
+// PAGE 3: 0800 客服值勤平台（值機桌面 Agent Desktop）
+// ── 原型階段：話務（振鈴/接聽/保留/轉接/掛斷）全部模擬（mock），
+//    不連接真實電信/CCaaS。之後串接真實 CCaaS SDK（Genesys Embeddable
+//    Framework / Amazon Connect Streams）時，只需替換 simulateIncomingCall
+//    / answerCall / hangup 等函式內部實作，UI 與資料落地邏輯不必更動——
+//    比照 mockPayment 之於金流的做法。
+// ═══════════════════════════════════════════════
+function EightZeroZeroPage(){
+  const {db, updateDB, toast} = useContext(Ctx);
+  const [agentStatus, setAgentStatus] = useState('offline');
+  const [callState, setCallState] = useState(null); // {phase:'ringing'|'active'|'hold', phone, wfId, candidates, startedAt}
+  const [muted, setMuted] = useState(false);
+  const [simPhone, setSimPhone] = useState('');
+  const [acwPending, setAcwPending] = useState(null); // {phone, wfId, duration, startedAt}
+  const [acwNote, setAcwNote] = useState('');
+  const [acwCode, setAcwCode] = useState('');
+  const [nowTick, setNowTick] = useState(Date.now()); // 通話計時器用
+
+  useEffect(()=>{
+    if(!callState || callState.phase==='ringing') return;
+    const t = setInterval(()=>setNowTick(Date.now()), 1000);
+    return ()=>clearInterval(t);
+  },[callState?.phase]);
+
+  const phoneConvs = (db.conversations||[]).filter(c=>c.platform==='phone').sort((a,b)=>(b.lastTime||'').localeCompare(a.lastTime||''));
+
+  // ── 話務控制（mock）──
+  const simulateIncomingCall = ()=>{
+    const phone = simPhone.trim();
+    if(!phone){ toast('請輸入來電號碼','用來模擬進線＋螢幕彈屏查詢','warn'); return; }
+    if(callState){ toast('目前忙線中','請先結束目前通話','warn'); return; }
+    const candidates = (db.customers||[]).filter(c=>c.phone===phone);
+    setCallState({
+      phase:'ringing', phone,
+      wfId: candidates.length===1 ? candidates[0].wfId : null,
+      candidates,
+    });
+  };
+  const answerCall = ()=>{
+    if(!callState) return;
+    setCallState(p=>({...p, phase:'active', startedAt:Date.now()}));
+  };
+  const rejectCall = ()=>{ setCallState(null); };
+  const toggleHold = ()=>{
+    setCallState(p=>p && ({...p, phase: p.phase==='hold' ? 'active' : 'hold'}));
+  };
+  const toggleMute = ()=> setMuted(m=>!m);
+  const transferCall = ()=>{
+    toast('🔁 轉接（模擬）','實際串接 CCaaS 後可選擇座席/技能組轉接','ok');
+  };
+  const selectCandidate = (wfId)=>{ setCallState(p=>p && ({...p, wfId})); };
+  const hangup = ()=>{
+    if(!callState) return;
+    const duration = callState.startedAt ? Math.round((Date.now()-callState.startedAt)/1000) : 0;
+    setAcwPending({phone:callState.phone, wfId:callState.wfId, duration});
+    setCallState(null);
+    setMuted(false);
+  };
+
+  // ── 掛斷後話後處理（ACW）：寫入 conversations（platform:'phone'）──
+  const submitACW = ()=>{
+    if(!acwCode){ toast('請選擇處理狀態碼','完成分類才能接下一通','warn'); return; }
+    const {phone, wfId, duration} = acwPending;
+    const cust = wfId ? db.customers?.find(c=>c.wfId===wfId) : null;
+    const convId = 'phone_' + phone.replace(/\D/g,'');
+    const mm = String(Math.floor(duration/60)).padStart(2,'0'), ss = String(duration%60).padStart(2,'0');
+    const summary = `📞 來電通話｜時長 ${mm}:${ss}｜分類：${acwCode}${acwNote.trim()?`｜備註：${acwNote.trim()}`:''}`;
+    const msg = {id:'a'+Date.now(), from:'agent', text:summary, time:now()};
+    updateDB(prev=>{
+      const convs = prev.conversations||[];
+      const exist = convs.find(c=>c.id===convId);
+      const nextConvs = exist
+        ? convs.map(c=>c.id===convId ? {...c, wfId:wfId||c.wfId, name:cust?cust.name:c.name, msgs:[...(c.msgs||[]),msg], lastMsg:summary, lastTime:now()} : c)
+        : [...convs, {id:convId, wfId:wfId||null, name:cust?cust.name:`未知來電（${phone}）`, platform:'phone', av:cust?(cust.name||'?')[0]:'📞', unread:0, lastMsg:summary, lastTime:now(), msgs:[msg], agentTakeover:true, needCase:false}];
+      return {...prev, conversations:nextConvs};
+    });
+    toast('✅ 話後處理完成',`${acwCode}｜通話 ${mm}:${ss}`,'ok');
+    setAcwPending(null); setAcwNote(''); setAcwCode('');
+  };
+
+  const elapsed = callState?.startedAt ? Math.max(0, Math.round((nowTick-callState.startedAt)/1000)) : 0;
+  const fmtElapsed = `${String(Math.floor(elapsed/60)).padStart(2,'0')}:${String(elapsed%60).padStart(2,'0')}`;
+
+  return(
+    <div className="cc-wrap">
+      {/* ① 頂部狀態列：座席狀態／佇列狀態／通話控制 */}
+      <div className="cc-topbar">
+        <div className="cc-status-group">
+          {Object.entries(AGENT_STATUS_LABEL).map(([k,l])=>(
+            <button key={k} className={`cc-status-btn ${agentStatus===k?'on':''}`} onClick={()=>setAgentStatus(k)}>{l}</button>
+          ))}
+        </div>
+        <div className="cc-queue">佇列等待：{callState?.phase==='ringing'?1:0} 通</div>
+        {callState&&callState.phase!=='ringing'&&(
+          <div className="cc-callctl">
+            <span className="cc-timer">⏱ {fmtElapsed}</span>
+            <button className={`cc-ctlbtn ${muted?'on':''}`} onClick={toggleMute}>{muted?'🔇 已靜音':'🎤 靜音'}</button>
+            <button className={`cc-ctlbtn ${callState.phase==='hold'?'on':''}`} onClick={toggleHold}>{callState.phase==='hold'?'▶️ 恢復':'⏸ 保留'}</button>
+            <button className="cc-ctlbtn" onClick={transferCall}>🔁 轉接</button>
+            <button className="cc-ctlbtn hangup" onClick={hangup}>📴 掛斷</button>
+          </div>
+        )}
+      </div>
+
+      <div className="cc-body">
+        {/* ② 左側導覽列：通話紀錄（收件匣）＋ 模擬來電（測試用進線入口） */}
+        <div className="cc-nav">
+          <div className="cc-nav-hdr">📋 通話紀錄</div>
+          <div className="cc-simcall">
+            <div style={{fontSize:10.5,color:'var(--g500)',marginBottom:4,fontWeight:700}}>🧪 模擬來電（測試用）</div>
+            <input placeholder="輸入來電號碼，如 0985688563" value={simPhone} onChange={e=>setSimPhone(e.target.value)}/>
+            <button onClick={simulateIncomingCall} disabled={!!callState||!!acwPending}>📞 模擬進線</button>
+          </div>
+          <div className="cc-calllist">
+            {phoneConvs.length===0&&<div style={{padding:'16px 10px',textAlign:'center',color:'var(--g400)',fontSize:11.5}}>尚無通話紀錄</div>}
+            {phoneConvs.map(c=>(
+              <div key={c.id} className="cc-callitem">
+                <div style={{fontWeight:700,fontSize:12}}>{c.name}</div>
+                <div style={{fontSize:10.5,color:'var(--g500)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.lastMsg}</div>
+                <div style={{fontSize:9.5,color:'var(--g400)'}}>{c.lastTime}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ③ 中間互動面板：來電/通話狀態卡 */}
+        <div className="cc-main">
+          {!callState&&!acwPending&&(
+            <div className="empty"><div style={{fontSize:40,opacity:.3}}>📞</div><div style={{fontSize:13,marginTop:10}}>等待來電...</div><div style={{fontSize:11,color:'var(--g400)',marginTop:5}}>左側「模擬來電」可測試進線與螢幕彈屏（screen-pop）</div></div>
+          )}
+          {callState&&callState.phase==='ringing'&&(
+            <div className="cc-ringcard">
+              <div style={{fontSize:30}}>☎️</div>
+              <div style={{fontSize:16,fontWeight:800,marginTop:6}}>{callState.phone}</div>
+              <div style={{fontSize:12,color:'var(--g500)',marginTop:2}}>來電進線中…</div>
+              <div style={{display:'flex',gap:10,marginTop:16}}>
+                <button className="cc-answer" onClick={answerCall}>✅ 接聽</button>
+                <button className="cc-reject" onClick={rejectCall}>❌ 拒接</button>
+              </div>
+            </div>
+          )}
+          {callState&&callState.phase!=='ringing'&&(
+            <div className="cc-activecard">
+              <div style={{fontSize:13,color:'var(--g500)'}}>{callState.phase==='hold'?'⏸ 通話保留中':'🟢 通話中'}</div>
+              <div style={{fontSize:20,fontWeight:800,marginTop:4}}>{callState.phone}</div>
+              <div style={{fontSize:12,color:'var(--g500)',marginTop:2}}>{callState.wfId?db.customers?.find(c=>c.wfId===callState.wfId)?.name:'查無對應客戶'}</div>
+            </div>
+          )}
+          {acwPending&&<div className="empty"><div style={{fontSize:30,opacity:.4}}>📝</div><div style={{fontSize:12,marginTop:8,color:'var(--g500)'}}>通話已結束，請於下方完成話後處理</div></div>}
+        </div>
+
+        {/* ④ 右側客戶關聯資訊區：候選清單 or 客戶 360 視圖（共用 CustomerInfoPanel） */}
+        <div className="cc-cust">
+          {callState&&!callState.wfId&&callState.candidates?.length>1&&(
+            <div className="apmeta">
+              <h5>找到多筆客戶（同號多住所）</h5>
+              {callState.candidates.map(c=>(
+                <div key={c.wfId} className="cc-candidate" onClick={()=>selectCandidate(c.wfId)}>
+                  <div style={{fontWeight:700,fontSize:12}}>{c.name}</div>
+                  <div style={{fontSize:10.5,color:'var(--g500)'}}>{c.address||c.district||'—'}</div>
+                </div>
+              ))}
+            </div>
+          )}
+          {callState&&!callState.wfId&&(!callState.candidates||callState.candidates.length===0)&&(
+            <div className="apmeta">
+              <h5>客戶資訊</h5>
+              <div style={{padding:'16px 0',textAlign:'center',color:'var(--g400)',fontSize:12}}>查無對應客戶<br/>可能是新客戶或尚未登錄保固</div>
+              <a className="crm-link" href="waferlock_crm.html" target="_blank">🔗 到 CRM 建立客戶主檔</a>
+            </div>
+          )}
+          {callState?.wfId&&<CustomerInfoPanel wfId={callState.wfId}/>}
+          {!callState&&acwPending?.wfId&&<CustomerInfoPanel wfId={acwPending.wfId}/>}
+        </div>
+      </div>
+
+      {/* ⑤ 底部互動摘要區：通話筆記 ＋ ACW 話後處理狀態碼 */}
+      {acwPending&&(
+        <div className="cc-acw">
+          <div className="cc-acw-hdr">📝 話後處理（ACW）— {acwPending.phone}｜通話 {String(Math.floor(acwPending.duration/60)).padStart(2,'0')}:{String(acwPending.duration%60).padStart(2,'0')}</div>
+          <div className="cc-acw-body">
+            <textarea placeholder="通話筆記（選填）" value={acwNote} onChange={e=>setAcwNote(e.target.value)} rows={2}/>
+            <select value={acwCode} onChange={e=>setAcwCode(e.target.value)}>
+              <option value="">— 選擇處理分類 —</option>
+              {ACW_CODES.map(code=><option key={code} value={code}>{code}</option>)}
+            </select>
+            <button onClick={submitACW}>完成並接下一通</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════
+// 共用：案件狀態徽章、CRM 深連結（AgentPage、0800 值機桌面共用）
+// ═══════════════════════════════════════════════
+const CASE_STATUS_LABEL = {
+  repair:{pending:'⏳ 待處理',dispatched:'🚗 已派工',done:'✅ 已完成'},
+  install:{pending:'⏳ 待到場',arrived:'📍 已到場',installed:'🔧 待驗收',done:'✅ 已完成',failed:'❌ 無法安裝'},
+  complaint:{pending:'⏳ 待處理',following:'🔍 追蹤中',dispatched:'🚗 已派工',closed:'✅ 已結案'},
+};
+const caseStatusLabel=(type,status)=>CASE_STATUS_LABEL[type]?.[status]||status||'—';
+// 開新分頁看 CRM 該筆案件完整資料（沿用 CRM 既有 hash deep link 格式）
+const openCaseInCrm=(wfId,caseId)=>window.open('waferlock_crm.html#crm/'+wfId+'/'+caseId,'_blank');
+
+// 客戶 360 度資訊面板（Genesys「④ 右側客戶關聯資訊區」）：
+// 帳戶/保固/購買通路 + 案件紀錄縮影（維修/安裝/客訴合併）。
+// AgentPage（LINE/FB/IG 客服台）與 EightZeroZeroPage（0800 值機桌面）共用同一份，
+// 避免兩處各自維護一份查詢/顯示邏輯而漂移（呼應計畫書1健檢報告的教訓）。
+function CustomerInfoPanel({wfId}){
+  const {db} = useContext(Ctx);
+  const [caseListOpen,setCaseListOpen] = useState(false);
+  useEffect(()=>{ setCaseListOpen(false); },[wfId]);
+
+  const c = db.customers?.find(x=>x.wfId===wfId);
+  if(!c) return (
+    <div className="apmeta">
+      <h5>客戶資訊</h5>
+      <div style={{padding:'20px 0',textAlign:'center',color:'var(--g400)',fontSize:12}}>查無客戶資料</div>
+    </div>
+  );
+  const p = pctWarranty(c.installDate,c.warrantyMonths);
+  const ch = CHANNELS[c.channel];
+  const repairList = (c.repairIds||[]).map(rid=>db.repairs?.[rid]).filter(Boolean);
+  const caseList = [
+    ...repairList.map(r=>({_type:'repair',_label:'維修',_color:'#0369A1',_bg:'#E0F2FE',id:r.id,date:r.date,title:r.faultModel||r.type||'維修',desc:r.issue,status:r.status,workerId:r.workerId,chargeTotal:r.chargeTotal})),
+    ...Object.values(db.installs||{}).filter(o=>o.wfId===c.wfId).map(o=>({_type:'install',_label:'安裝',_color:'#5B21B6',_bg:'#EDE9FE',id:o.id,date:o.createdDate,title:PRODUCTS[o.productId]?.name||o.productId||'安裝',desc:null,status:o.status,workerId:o.workerId,chargeTotal:o.chargeTotal})),
+    ...(c.complaintIds||[]).map(cid=>db.complaints?.[cid]).filter(Boolean).map(ct=>({_type:'complaint',_label:'客訴',_color:'#B45309',_bg:'#FEF3C7',id:ct.id,date:ct.date,title:ct.cat1||'客訴',desc:ct.cat2,status:ct.status,workerId:null,chargeTotal:null})),
+  ].sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
+  const caseListShown = caseListOpen ? caseList : caseList.slice(0,2);
+
+  return(
+    <div className="apmeta">
+      <h5>客戶資訊</h5>
+      <div className="meta-row"><strong>帳戶編號</strong><code style={{fontSize:10,fontFamily:'monospace',background:'var(--g100)',padding:'1px 4px',borderRadius:3}}>{c.wfId}</code></div>
+      <div className="meta-row"><strong>姓名</strong>{c.name}</div>
+      <div className="meta-row"><strong>電話</strong>{c.phone}</div>
+      <div className="meta-row"><strong>產品</strong>{PRODUCTS[c.productId]?.name||c.productId}</div>
+      <div className="meta-row"><strong>序號</strong><span style={{fontSize:10,fontFamily:'monospace'}}>{c.serialNo}</span></div>
+      <div className="meta-row"><strong>購買通路</strong>
+        <span style={{display:'inline-flex',alignItems:'center',gap:3,background:'var(--g100)',padding:'1px 6px',borderRadius:8,fontSize:10.5,fontWeight:700}}>
+          {ch?.icon} {ch?.label}
+        </span>
+      </div>
+      <div className="meta-row"><strong>保固狀態</strong>
+        <div className="wbar"><div className={`wfill ${p>50?'ok':p>20?'warn':'bad'}`} style={{width:`${p}%`}}/></div>
+        <span style={{fontSize:10.5,color:p>0?'var(--ok)':'var(--err)'}}>{p>0?`✅ 至${c.warrantyEnd}`:'❌ 已到期'}</span>
+      </div>
+      {caseList.length>0&&(
+        <div className="meta-row">
+          <strong style={{cursor:caseList.length>2?'pointer':'default'}} onClick={()=>caseList.length>2&&setCaseListOpen(v=>!v)}>
+            📁 案件紀錄 ({caseList.length}){caseList.length>2&&(caseListOpen?' ▲':' ▼')}
+          </strong>
+          {caseListShown.map(item=>(
+            <div key={item._type+item.id} style={{background:'var(--g50)',borderRadius:4,padding:'5px 7px',marginTop:3,fontSize:10.5}}>
+              <div style={{display:'flex',alignItems:'center',gap:4,marginBottom:2}}>
+                <span style={{background:item._bg,color:item._color,fontSize:9,fontWeight:700,padding:'1px 5px',borderRadius:7,flexShrink:0}}>{item._label}</span>
+                <span style={{fontSize:9.5,color:'var(--g500)'}}>{caseStatusLabel(item._type,item.status)}</span>
+                <span style={{marginLeft:'auto',fontSize:9,color:'var(--g400)',fontFamily:'monospace'}}>{item.date||'—'}</span>
+              </div>
+              <div style={{fontWeight:600}}>{item.title}{item.desc?` — ${item.desc}`:''}</div>
+              <div style={{display:'flex',gap:8,marginTop:2,color:'var(--g500)',fontSize:9.5}}>
+                {item.workerId&&<span>👷 {(db.workers&&db.workers.length?db.workers:WORKERS).find(w=>w.id===item.workerId)?.name||item.workerId}</span>}
+                {item.chargeTotal>0&&<span>💳 ${item.chargeTotal}</span>}
+              </div>
+              <div style={{textAlign:'right',marginTop:3}}>
+                <button onClick={()=>openCaseInCrm(c.wfId,item.id)}
+                  style={{background:'none',border:'none',color:'var(--accent)',fontSize:9.5,fontWeight:700,cursor:'pointer',padding:0}}>
+                  🔗 查看詳情 →
+                </button>
+              </div>
+            </div>
+          ))}
+          {caseList.length>2&&(
+            <div onClick={()=>setCaseListOpen(v=>!v)} style={{textAlign:'center',fontSize:9.5,color:'var(--accent)',fontWeight:700,cursor:'pointer',marginTop:4}}>
+              {caseListOpen?'收合':`展開全部 (${caseList.length})`}
+            </div>
+          )}
+        </div>
+      )}
+      <a className="crm-link" href="waferlock_crm.html" target="_blank">
+        🔗 開啟 CRM 查看完整資料
+      </a>
+    </div>
+  );
+}
+
 // ═══════════════════════════════════════════════
 // PAGE 2: 客服整合平台
 // ═══════════════════════════════════════════════
@@ -884,25 +1213,13 @@ function AgentPage(){
   const [selTime,setSelTime] = useState('上午');
   const [caseModal,setCaseModal] = useState(false);
   const [caseForm,setCaseForm] = useState({type:'電子鎖',issue:'',space:'大門',urgency:'normal',scheduledDate:'',desc:''});
-  const [caseListOpen,setCaseListOpen] = useState(false); // 客戶資訊「案件紀錄」展開/收合
   const endRef = useRef();
-
-  // 案件狀態徽章（維修/安裝/客訴共用查表）
-  const CASE_STATUS_LABEL = {
-    repair:{pending:'⏳ 待處理',dispatched:'🚗 已派工',done:'✅ 已完成'},
-    install:{pending:'⏳ 待到場',arrived:'📍 已到場',installed:'🔧 待驗收',done:'✅ 已完成',failed:'❌ 無法安裝'},
-    complaint:{pending:'⏳ 待處理',following:'🔍 追蹤中',dispatched:'🚗 已派工',closed:'✅ 已結案'},
-  };
-  const caseStatusLabel=(type,status)=>CASE_STATUS_LABEL[type]?.[status]||status||'—';
-  // 開新分頁看 CRM 該筆案件完整資料（沿用 CRM 既有 hash deep link 格式）
-  const openCaseInCrm=(wfId,caseId)=>window.open('waferlock_crm.html#crm/'+wfId+'/'+caseId,'_blank');
 
   const convs = db.conversations || [];
   const filtered = convs.filter(c=>filter==='all'||c.platform===filter);
   const totalUnread = convs.reduce((s,c)=>s+(c.unread||0),0);
 
   useEffect(()=>{ endRef.current?.scrollIntoView({behavior:'smooth'}); },[active?.msgs]);
-  useEffect(()=>{ setCaseListOpen(false); },[active?.wfId]);
 
   // Refresh active conv when DB changes
   useEffect(()=>{
@@ -1118,73 +1435,7 @@ function AgentPage(){
         ):<div className="empty"><div style={{fontSize:40,opacity:.3}}>💬</div><div style={{fontSize:13,marginTop:10}}>選擇左側對話開始回覆</div><div style={{fontSize:11,color:'var(--g400)',marginTop:5}}>先在 LINE 頁面進行對話，訊息會即時出現在這裡</div></div>}
       </div>
 
-      {active&&(()=>{
-        const c=getCust(active.wfId); if(!c) return null;
-        const p=pctWarranty(c.installDate,c.warrantyMonths);
-        const ch=CHANNELS[c.channel];
-        const repairList=(c.repairIds||[]).map(rid=>db.repairs?.[rid]).filter(Boolean);
-        // 整合三種案件（維修/安裝/客訴），依日期新到舊排序，供「案件紀錄」統一顯示
-        const caseList=[
-          ...repairList.map(r=>({_type:'repair',_label:'維修',_color:'#0369A1',_bg:'#E0F2FE',id:r.id,date:r.date,title:r.faultModel||r.type||'維修',desc:r.issue,status:r.status,workerId:r.workerId,chargeTotal:r.chargeTotal})),
-          ...Object.values(db.installs||{}).filter(o=>o.wfId===c.wfId).map(o=>({_type:'install',_label:'安裝',_color:'#5B21B6',_bg:'#EDE9FE',id:o.id,date:o.createdDate,title:PRODUCTS[o.productId]?.name||o.productId||'安裝',desc:null,status:o.status,workerId:o.workerId,chargeTotal:o.chargeTotal})),
-          ...(c.complaintIds||[]).map(cid=>db.complaints?.[cid]).filter(Boolean).map(ct=>({_type:'complaint',_label:'客訴',_color:'#B45309',_bg:'#FEF3C7',id:ct.id,date:ct.date,title:ct.cat1||'客訴',desc:ct.cat2,status:ct.status,workerId:null,chargeTotal:null})),
-        ].sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
-        const caseListShown = caseListOpen ? caseList : caseList.slice(0,2);
-        return(
-          <div className="apmeta">
-            <h5>客戶資訊</h5>
-            <div className="meta-row"><strong>帳戶編號</strong><code style={{fontSize:10,fontFamily:'monospace',background:'var(--g100)',padding:'1px 4px',borderRadius:3}}>{c.wfId}</code></div>
-            <div className="meta-row"><strong>姓名</strong>{c.name}</div>
-            <div className="meta-row"><strong>電話</strong>{c.phone}</div>
-            <div className="meta-row"><strong>產品</strong>{PRODUCTS[c.productId]?.name||c.productId}</div>
-            <div className="meta-row"><strong>序號</strong><span style={{fontSize:10,fontFamily:'monospace'}}>{c.serialNo}</span></div>
-            <div className="meta-row"><strong>購買通路</strong>
-              <span style={{display:'inline-flex',alignItems:'center',gap:3,background:'var(--g100)',padding:'1px 6px',borderRadius:8,fontSize:10.5,fontWeight:700}}>
-                {ch?.icon} {ch?.label}
-              </span>
-            </div>
-            <div className="meta-row"><strong>保固狀態</strong>
-              <div className="wbar"><div className={`wfill ${p>50?'ok':p>20?'warn':'bad'}`} style={{width:`${p}%`}}/></div>
-              <span style={{fontSize:10.5,color:p>0?'var(--ok)':'var(--err)'}}>{p>0?`✅ 至${c.warrantyEnd}`:'❌ 已到期'}</span>
-            </div>
-            {caseList.length>0&&(
-              <div className="meta-row">
-                <strong style={{cursor:caseList.length>2?'pointer':'default'}} onClick={()=>caseList.length>2&&setCaseListOpen(v=>!v)}>
-                  📁 案件紀錄 ({caseList.length}){caseList.length>2&&(caseListOpen?' ▲':' ▼')}
-                </strong>
-                {caseListShown.map(item=>(
-                  <div key={item._type+item.id} style={{background:'var(--g50)',borderRadius:4,padding:'5px 7px',marginTop:3,fontSize:10.5}}>
-                    <div style={{display:'flex',alignItems:'center',gap:4,marginBottom:2}}>
-                      <span style={{background:item._bg,color:item._color,fontSize:9,fontWeight:700,padding:'1px 5px',borderRadius:7,flexShrink:0}}>{item._label}</span>
-                      <span style={{fontSize:9.5,color:'var(--g500)'}}>{caseStatusLabel(item._type,item.status)}</span>
-                      <span style={{marginLeft:'auto',fontSize:9,color:'var(--g400)',fontFamily:'monospace'}}>{item.date||'—'}</span>
-                    </div>
-                    <div style={{fontWeight:600}}>{item.title}{item.desc?` — ${item.desc}`:''}</div>
-                    <div style={{display:'flex',gap:8,marginTop:2,color:'var(--g500)',fontSize:9.5}}>
-                      {item.workerId&&<span>👷 {(db.workers&&db.workers.length?db.workers:WORKERS).find(w=>w.id===item.workerId)?.name||item.workerId}</span>}
-                      {item.chargeTotal>0&&<span>💳 ${item.chargeTotal}</span>}
-                    </div>
-                    <div style={{textAlign:'right',marginTop:3}}>
-                      <button onClick={()=>openCaseInCrm(c.wfId,item.id)}
-                        style={{background:'none',border:'none',color:'var(--accent)',fontSize:9.5,fontWeight:700,cursor:'pointer',padding:0}}>
-                        🔗 查看詳情 →
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                {caseList.length>2&&(
-                  <div onClick={()=>setCaseListOpen(v=>!v)} style={{textAlign:'center',fontSize:9.5,color:'var(--accent)',fontWeight:700,cursor:'pointer',marginTop:4}}>
-                    {caseListOpen?'收合':`展開全部 (${caseList.length})`}
-                  </div>
-                )}
-              </div>
-            )}
-            <a className="crm-link" href="waferlock_crm.html" target="_blank">
-              🔗 開啟 CRM 查看完整資料
-            </a>
-          </div>
-        );
-      })()}
+      {active?.wfId&&<CustomerInfoPanel wfId={active.wfId}/>}
 
       {dispModal&&(
         <div className="mo" onClick={e=>e.target===e.currentTarget&&setDispModal(null)}>
@@ -1428,6 +1679,9 @@ function App(){
           💬 客服整合平台
           {totalUnread>0&&<span className="nbadge">{totalUnread}</span>}
         </button>
+        <button className={`nbtn ${page==='0800'?'on':''}`} onClick={()=>setPage('0800')}>
+          📞 0800 客服
+        </button>
         <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:8,fontSize:11,color:'rgba(255,255,255,.5)'}}>
           <div className={`sync-dot ${synced?'live':'off'}`}/>
           {synced?'即時同步中':'離線模式'}
@@ -1445,6 +1699,7 @@ function App(){
       <div className="page">
         {page==='line'&&<CustomerPage/>}
         {page==='agent'&&<AgentPage/>}
+        {page==='0800'&&<EightZeroZeroPage/>}
       </div>
       <Toasts items={toastItems}/>
       {showApiPanel&&(
