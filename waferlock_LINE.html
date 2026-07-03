@@ -208,12 +208,12 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── DB 欄位轉換（camelCase <-> snake_case） ──
 const custToDb = c => ({wf_id:c.wfId,name:c.name,phone:c.phone,email:c.email,address:c.address,district:c.district,area:c.area,channel:c.channel,product_id:c.productId,serial_no:c.serialNo,install_date:c.installDate,warranty_months:c.warrantyMonths,warranty_end:c.warrantyEnd,tags:c.tags||[],reg_type:c.regType,reg_date:c.regDate,line_uid:c.lineUid,fb_id:c.fbId,ig_id:c.igId,repair_ids:c.repairIds||[],complaint_ids:c.complaintIds||[],site:c.site,unit:c.unit,order_no:c.orderNo});
 const dbToCust = r => ({wfId:r.wf_id,name:r.name,phone:r.phone,email:r.email,address:r.address,district:r.district,area:r.area,channel:r.channel,productId:r.product_id,serialNo:r.serial_no,installDate:r.install_date,warrantyMonths:r.warranty_months,warrantyEnd:r.warranty_end,tags:r.tags||[],regType:r.reg_type,regDate:r.reg_date,lineUid:r.line_uid,fbId:r.fb_id,igId:r.ig_id,repairIds:r.repair_ids||[],complaintIds:r.complaint_ids||[],site:r.site,unit:r.unit,orderNo:r.order_no});
-const repairToDb = r => ({id:r.id,wf_id:r.wfId,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,worker_id:r.workerId,scheduled_date:r.scheduledDate,desc:r.desc,contact_name:r.contactName,contact_phone:r.contactPhone,site:r.site,unit:r.unit,handling_unit:r.handlingUnit,note:r.note,warranty_in:r.warrantyIn,created_by:r.createdBy,created_at:r.createdAt,unread:r.unread,arrival_pushed:r.arrivalPushed,rating:r.rating,receipt_no:r.receiptNo,audit_note:r.auditNote,completed_date:r.completedDate,charges:r.charges||[],charge_total:r.chargeTotal,payment_method:r.paymentMethod,paid:r.paid,fault_model:r.faultModel});
-const dbToRepair = r => ({id:r.id,wfId:r.wf_id,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,workerId:r.worker_id,scheduledDate:r.scheduled_date,desc:r.desc,contactName:r.contact_name,contactPhone:r.contact_phone,site:r.site,unit:r.unit,handlingUnit:r.handling_unit,note:r.note,warrantyIn:r.warranty_in,createdBy:r.created_by,createdAt:r.created_at,unread:r.unread,arrivalPushed:r.arrival_pushed,rating:r.rating,receiptNo:r.receipt_no,auditNote:r.audit_note,completedDate:r.completed_date,charges:r.charges||[],chargeTotal:r.charge_total,paymentMethod:r.payment_method,paid:r.paid,faultModel:r.fault_model});
+const repairToDb = r => ({id:r.id,wf_id:r.wfId,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,worker_id:r.workerId,scheduled_date:r.scheduledDate,desc:r.desc,contact_name:r.contactName,contact_phone:r.contactPhone,site:r.site,unit:r.unit,handling_unit:r.handlingUnit,note:r.note,warranty_in:r.warrantyIn,created_by:r.createdBy,created_at:r.createdAt,unread:r.unread,arrival_pushed:r.arrivalPushed,rating:r.rating,receipt_no:r.receiptNo,audit_note:r.auditNote,completed_date:r.completedDate,sched_date:r.schedDate,sched_start:r.schedStart,sched_span:r.schedSpan,charges:r.charges||[],charge_total:r.chargeTotal,payment_method:r.paymentMethod,paid:r.paid,txn_id:r.txnId,paid_at:r.paidAt,work_note:r.workNote,warranty_judgment:r.warrantyJudgment,exclude_reason:r.excludeReason,photos:r.photos||[],signature:r.signature,sla_level:r.slaLevel,tenant_type:r.tenantType,landlord_confirmed:r.landlordConfirmed,source_channel:r.sourceChannel,community_note:r.communityNote,zip:r.zip,category2:r.category2,time_range:r.timeRange,qty:r.qty,work_hours:r.workHours,flag_bomber:r.flagBomber,eta_at:r.etaAt,eta_text:r.etaText,accepted_at:r.acceptedAt,arrived_at:r.arrivedAt,est_distance_km:r.estDistanceKm,eta_source:r.etaSource,history:r.history||[],fault_model:r.faultModel,fault_reason_major:r.faultReasonMajor,fault_reason_detail:r.faultReasonDetail,handling_result:r.handlingResult});
+const dbToRepair = r => ({id:r.id,wfId:r.wf_id,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,workerId:r.worker_id,scheduledDate:r.scheduled_date,desc:r.desc,contactName:r.contact_name,contactPhone:r.contact_phone,site:r.site,unit:r.unit,handlingUnit:r.handling_unit,note:r.note,warrantyIn:r.warranty_in,createdBy:r.created_by,createdAt:r.created_at,unread:r.unread,arrivalPushed:r.arrival_pushed,rating:r.rating,receiptNo:r.receipt_no,auditNote:r.audit_note,completedDate:r.completed_date,schedDate:r.sched_date,schedStart:r.sched_start,schedSpan:r.sched_span,charges:r.charges||[],chargeTotal:r.charge_total,paymentMethod:r.payment_method,paid:r.paid,txnId:r.txn_id,paidAt:r.paid_at,workNote:r.work_note,warrantyJudgment:r.warranty_judgment,excludeReason:r.exclude_reason,photos:r.photos||[],signature:r.signature,slaLevel:r.sla_level,tenantType:r.tenant_type,landlordConfirmed:r.landlord_confirmed,sourceChannel:r.source_channel,communityNote:r.community_note,zip:r.zip,category2:r.category2,timeRange:r.time_range,qty:r.qty,workHours:r.work_hours,flagBomber:r.flag_bomber,etaAt:r.eta_at,etaText:r.eta_text,acceptedAt:r.accepted_at,arrivedAt:r.arrived_at,estDistanceKm:r.est_distance_km,etaSource:r.eta_source,history:r.history||[],faultModel:r.fault_model,faultReasonMajor:r.fault_reason_major,faultReasonDetail:r.fault_reason_detail,handlingResult:r.handling_result});
 const ctToDb = c => ({id:c.id,wf_id:c.wfId,name:c.name,phone:c.phone,date:c.date,created_at:c.createdAt,created_by:c.createdBy,call_channel:c.callChannel,department:c.department,cat1:c.cat1,cat2:c.cat2,cat3:c.cat3,process:c.process,status:c.status,closed_date:c.closedDate,timeline:c.timeline||[]});
 const dbToCt = r => ({id:r.id,wfId:r.wf_id,name:r.name,phone:r.phone,date:r.date,createdAt:r.created_at,createdBy:r.created_by,callChannel:r.call_channel,department:r.department,cat1:r.cat1,cat2:r.cat2,cat3:r.cat3,process:r.process,status:r.status,closedDate:r.closed_date,timeline:r.timeline||[]});
-const installToDb = o => ({id:o.id,name:o.name,phone:o.phone,address:o.address,channel:o.channel,product_id:o.productId,serial_no:o.serialNo,locksmith_id:o.locksmithId,status:o.status,created_date:o.createdDate,created_ts:o.createdTs,arrival_pushed:o.arrivalPushed,photos:o.photos||[],signature:o.signature,verify:o.verify||{},taught:o.taught||{},work_note:o.workNote,completed_date:o.completedDate,wf_id:o.wfId,warranty_end:o.warrantyEnd,worker_id:o.workerId,charges:o.charges||[],charge_total:o.chargeTotal,payment_method:o.paymentMethod,paid:o.paid});
-const dbToInstall = r => ({id:r.id,name:r.name,phone:r.phone,address:r.address,channel:r.channel,productId:r.product_id,serialNo:r.serial_no,locksmithId:r.locksmith_id,status:r.status,createdDate:r.created_date,createdTs:r.created_ts?parseInt(r.created_ts):null,arrivalPushed:r.arrival_pushed,photos:r.photos||[],signature:r.signature,verify:r.verify||{},taught:r.taught||{},workNote:r.work_note,completedDate:r.completed_date,wfId:r.wf_id,warrantyEnd:r.warranty_end,workerId:r.worker_id,charges:r.charges||[],chargeTotal:r.charge_total,paymentMethod:r.payment_method,paid:r.paid});
+const installToDb = o => ({id:o.id,name:o.name,phone:o.phone,address:o.address,channel:o.channel,note:o.note,product_id:o.productId,serial_no:o.serialNo,locksmith_id:o.locksmithId,status:o.status,created_date:o.createdDate,created_ts:o.createdTs,arrival_pushed:o.arrivalPushed,photos:o.photos||[],signature:o.signature,verify:o.verify||{},taught:o.taught||{},work_note:o.workNote,completed_date:o.completedDate,wf_id:o.wfId,warranty_end:o.warrantyEnd,worker_id:o.workerId,sched_date:o.schedDate,sched_start:o.schedStart,sched_span:o.schedSpan,charges:o.charges||[],charge_total:o.chargeTotal,payment_method:o.paymentMethod,paid:o.paid,txn_id:o.txnId,paid_at:o.paidAt,tenant_type:o.tenantType,landlord_confirmed:o.landlordConfirmed,source_channel:o.sourceChannel,community_note:o.communityNote,zip:o.zip,category2:o.category2,time_range:o.timeRange,qty:o.qty,work_hours:o.workHours,flag_bomber:o.flagBomber,history:o.history||[]});
+const dbToInstall = r => ({id:r.id,name:r.name,phone:r.phone,address:r.address,channel:r.channel,note:r.note,productId:r.product_id,serialNo:r.serial_no,locksmithId:r.locksmith_id,status:r.status,createdDate:r.created_date,createdTs:r.created_ts?parseInt(r.created_ts):null,arrivalPushed:r.arrival_pushed,photos:r.photos||[],signature:r.signature,verify:r.verify||{},taught:r.taught||{},workNote:r.work_note,completedDate:r.completed_date,wfId:r.wf_id,warrantyEnd:r.warranty_end,workerId:r.worker_id,schedDate:r.sched_date,schedStart:r.sched_start,schedSpan:r.sched_span,charges:r.charges||[],chargeTotal:r.charge_total,paymentMethod:r.payment_method,paid:r.paid,txnId:r.txn_id,paidAt:r.paid_at,tenantType:r.tenant_type,landlordConfirmed:r.landlord_confirmed,sourceChannel:r.source_channel,communityNote:r.community_note,zip:r.zip,category2:r.category2,timeRange:r.time_range,qty:r.qty,workHours:r.work_hours,flagBomber:r.flag_bomber,history:r.history||[]});
 const convToDb = c => ({id:c.id,wf_id:c.wfId,name:c.name,platform:c.platform,av:c.av,unread:c.unread||0,last_msg:c.lastMsg,last_time:c.lastTime,msgs:c.msgs||[],agent_takeover:c.agentTakeover||false,need_case:c.needCase||false,biz_inquiry:c.bizInquiry||false});
 const dbToConv = r => ({id:r.id,wfId:r.wf_id,name:r.name,platform:r.platform,av:r.av,unread:r.unread||0,lastMsg:r.last_msg,lastTime:r.last_time,msgs:r.msgs||[],agentTakeover:r.agent_takeover||false,needCase:r.need_case||false,bizInquiry:r.biz_inquiry||false});
 
@@ -590,14 +590,14 @@ function CustomerPage(){
     if(!aiPaused) callAI(t);
   };
 
-  const submitBind=()=>{
+  const submitBind=async()=>{
     const phone=bindData.phone.trim();
     const addr=bindData.address.trim();
     if(!phone){ toast('請輸入電話','綁定需要聯絡電話','warn'); return; }
     const custs=db.customers||[];
     let match=custs.find(c=>c.phone&&c.phone.replace(/\s/g,'')===phone);
     if(!match&&addr) match=custs.find(c=>c.address&&c.address!=='待填寫'&&c.address.includes(addr));
-    const wfId = match ? match.wfId : mkWF((db.wfCounter||1)+1);
+    const wfId = match ? match.wfId : (await sb.rpc('next_wf_id')).data;
     const name = match ? match.name : 'LINE會員';
     const okText = match
       ? `🔗 綁定成功！\n\n已連結您的帳戶：${wfId}\n姓名：${name}\n現在可查詢保固與報修紀錄 ✅`
@@ -617,7 +617,7 @@ function CustomerPage(){
       const idx=convs.findIndex(c=>c.id==='conv_live');
       if(idx<0){ convs.push({id:'conv_live',wfId,name:`${name}（LINE）`,platform:'line',av:'住',unread:0,lastMsg:'已完成綁定',lastTime:now(),msgs:[botMsg]}); }
       else { convs[idx]={...convs[idx],wfId,name:`${name}（LINE）`,msgs:[...convs[idx].msgs,botMsg],lastMsg:'已完成綁定',lastTime:now()}; }
-      return {...prev,customers:cs,conversations:convs,...(match?{}:{wfCounter:(prev.wfCounter||1)+1})};
+      return {...prev,customers:cs,conversations:convs};
     });
     setMemberWf(wfId);
     try{ localStorage.setItem('waferlock_line_bind',wfId); }catch(e){}
@@ -1388,26 +1388,6 @@ function App(){
           <div style={{width:7,height:7,borderRadius:'50%',background:srvOnline?(geminiReady?'#4ade80':'#facc15'):'#f87171',flexShrink:0}}/>
           {srvOnline?(geminiReady?'RAG+AI 就緒':'RAG 就緒'):'伺服器離線'}
         </button>
-        <button style={{padding:'4px 10px',background:'rgba(239,68,68,.2)',border:'1px solid rgba(239,68,68,.4)',borderRadius:4,color:'#FCA5A5',fontSize:10.5,cursor:'pointer',marginLeft:8}}
-          onClick={async ()=>{
-            if(confirm('確定要清除所有資料並重置為示範狀態嗎？(此動作將清空 Supabase 雲端資料並重新載入範例資料)')){
-              setLoading(true);
-              localStorage.removeItem('waferlock_line_chat');
-              localStorage.removeItem('waferlock_line_bind');
-              try {
-                await Promise.all([
-                  sb.from('customers').delete().neq('wf_id', ''),
-                  sb.from('repairs').delete().neq('id', ''),
-                  sb.from('complaints').delete().neq('id', ''),
-                  sb.from('installs').delete().neq('id', ''),
-                  sb.from('conversations').delete().neq('id', ''),
-                  sb.from('config').delete().neq('key', ''),
-                ]);
-              } catch(e) { console.error(e); }
-              toast('已重置','資料庫已清除並重置','warn');
-              setTimeout(()=>location.reload(),500);
-            }
-          }}>重置DB</button>
       </nav>
       <div className="page">
         {page==='line'&&<CustomerPage/>}

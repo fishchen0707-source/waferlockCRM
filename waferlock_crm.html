@@ -584,20 +584,15 @@ function WorkOrderModal({mode,record,warrantyIn,onClose,onSubmit}){
   const [pay,setPay]=useState(warrantyIn?'free':'cash');
   const chargeable = wj!=='in';
   const total=chargesTotal(chargeRows);
-  const genReceiptNo=()=>{
-    const d=new Date();
-    const ds=`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
-    const rnd=Math.floor(1000+Math.random()*9000);
-    return `SR-${ds}-${rnd}`;
-  };
-  const submit=()=>{
+  const submit=async()=>{
     if(!sig){alert('請完成客戶簽名');return;}
     if(photos.length===0){alert('請至少上傳一張現場照片');return;}
     if(mode==='repair'&&wj==='in_excluded'&&!excl.trim()){alert('「保內但不保固」需填寫原因');return;}
     if(mode==='repair'&&chargeable&&normCharges(chargeRows).length===0){alert('需收費案件請填寫收費品項');return;}
     if(mode==='install'&&!(v.s1&&v.s2&&v.s3)){alert('請完成三項驗收確認');return;}
     if(mode==='install'&&!taught){alert('請確認已完成現場操作教學');return;}
-    const rno=genReceiptNo();
+    let rno=null;
+    try{ const {data}=await sb.rpc('next_case_no',{p_prefix:'SR'}); rno=data; }catch(e){ rno='SR'+Date.now(); }
     setReceiptNo(rno);
     const payMethod=(mode==='repair'&&wj==='in')?'free':pay;
     const txn=mockPayment(payMethod, total);
@@ -884,7 +879,7 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
     const bk=await tryBook('install',id); if(!bk.ok) return;
     const key=custKey(f.name,f.address);
     const exist=(db.customers||[]).find(c=>custKey(c.name,c.address)===key);
-    const wfId=exist?exist.wfId:'WF'+String(Date.now()).slice(-8);
+    const wfId=exist?exist.wfId:(await sb.rpc('next_wf_id')).data;
     const isNew=!exist;
     updateDB(prev=>{
       let customers=prev.customers||[];
@@ -909,7 +904,7 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
     const bk=await tryBook('repair',rid); if(!bk.ok) return;
     const key=custKey(f.name,f.address);
     const exist=lc || (db.customers||[]).find(c=>custKey(c.name,c.address)===key);
-    const wfId=exist?exist.wfId:'WF'+String(Date.now()).slice(-8);
+    const wfId=exist?exist.wfId:(await sb.rpc('next_wf_id')).data;
     const isNew=!exist;
     const wIn2=exist?isInWar(exist):false;
     const newRepair=pushHist({id:rid,wfId,name:f.name,phone:f.phone,
@@ -2437,7 +2432,7 @@ function CreateCustomerModal({onClose}){
       toast('客戶已存在',`${exist.name}（${exist.wfId}）已在系統中，將為您開啟詳情`,'warn');
       setCrmTarget(exist.wfId); setPage('crm'); onClose(); return;
     }
-    const wfId='WF'+String(Date.now()).slice(-8);
+    const wfId=(await sb.rpc('next_wf_id')).data;
     const newCust={wfId,name:name.trim(),phone:phone.trim(),address,zip,channel,
       groupId:groupId||null,projectId:projectId||null,
       regType:'manual',regDate:today(),
@@ -2581,27 +2576,27 @@ function HomePage(){
   };
   const orphanCnt=installs.filter(needFix).length+repairs.filter(needFix).length+complaints.filter(needFix).length;
   // 依「地址+姓名」重新歸戶（冪等）：歸到既有同 key 客編，無則新建；最後清掉無案件引用的待整理孤兒客編
-  const runBackfill=()=>{
+  const runBackfill=async()=>{
     let customers=[...custList];
     const keyMap={}; customers.forEach(c=>{const k=custKey(c.name,c.address); if(k&&!keyMap[k])keyMap[k]=c.wfId;});
-    let seq=0,created=0,fixed=0;
-    const resolve=(name,address,phone)=>{
+    let created=0,fixed=0;
+    const resolve=async(name,address,phone)=>{
       const k=custKey(name,address);
       if(k&&keyMap[k])return keyMap[k];
-      const wfId='WF'+String(Date.now()).slice(-6)+String(seq++).padStart(2,'0');
+      const wfId=(await sb.rpc('next_wf_id')).data;
       customers.push({wfId,name:name||'(未具名)',phone:phone||'',address:address||'',regType:'backfill',regDate:today(),
         installDate:null,warrantyMonths:null,warrantyEnd:null,tags:['待整理'],repairIds:[],complaintIds:[]});
       if(k)keyMap[k]=wfId; created++; return wfId;
     };
-    const fix=coll=>{const out={...coll};Object.values(out).forEach(x=>{
+    const fix=async coll=>{const out={...coll}; for(const x of Object.values(out)){
       if(needFix(x)){
-        const wf=resolve(x.name||x.contactName,caseAddr(x),x.phone||x.contactPhone);
+        const wf=await resolve(x.name||x.contactName,caseAddr(x),x.phone||x.contactPhone);
         if(wf!==x.wfId)fixed++;
         out[x.id]={...x,wfId:wf};
-      }});return out;};
-    const repairsN=fix(db.repairs||{});
-    const installsN=fix(db.installs||{});
-    const complaintsN=fix(db.complaints||{});
+      }} return out;};
+    const repairsN=await fix(db.repairs||{});
+    const installsN=await fix(db.installs||{});
+    const complaintsN=await fix(db.complaints||{});
     if(created===0&&fixed===0){toast('✅ 已全部歸戶','沒有需要整理的案件','ok');return;}
     // 清理無任何案件引用的待整理孤兒客編（正式客戶即使無案件也保留）
     const used=new Set();
@@ -3247,8 +3242,8 @@ function App(){
           <span>{synced?'即時同步中':'離線模式'}</span>
           <span style={{fontSize:9,marginLeft:2}}>v{db.version||0}</span>
         </div>
-        <button onClick={async ()=>{
-          if(confirm('確定清除所有資料嗎？(此動作將清空 Supabase 雲端資料)')){
+        {isAdmin&&<button onClick={async ()=>{
+          if(prompt('此動作將永久清空 Supabase 雲端全部客戶資料，且無備份機制。\n確定要繼續請輸入「清空資料庫」：')==='清空資料庫'){
             setLoading(true);
             try {
               await Promise.all([
@@ -3265,7 +3260,7 @@ function App(){
         }}
           style={{padding:'3px 8px',background:'rgba(239,68,68,.15)',border:'1px solid rgba(239,68,68,.3)',borderRadius:4,color:'#FCA5A5',fontSize:10,cursor:'pointer',marginLeft:6}}>
           重置
-        </button>
+        </button>}
       </nav>
       <div className="page">
         {page==='home'&&<HomePage/>}

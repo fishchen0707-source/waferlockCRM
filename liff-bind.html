@@ -177,8 +177,7 @@ async function doBind(){
       const tags=Array.from(new Set([...(match.tags||[]),'會員']));
       await sb.from('customers').update({line_uid:profile.userId,tags}).eq('wf_id',wfId);
     }else{
-      const { count }=await sb.from('customers').select('*',{count:'exact',head:true});
-      wfId=`WF-${new Date().getFullYear()}-${String((count||0)+1).padStart(5,'0')}`; isNew=true;
+      wfId=(await sb.rpc('next_wf_id')).data; isNew=true;
       await sb.from('customers').insert({wf_id:wfId,name:profile.displayName||'LINE會員',phone,address:address||'待填寫',
         line_uid:profile.userId,reg_type:'line_bind',reg_date:todayStr(),tags:['會員','待安裝'],repair_ids:[],product_id:null});
     }
