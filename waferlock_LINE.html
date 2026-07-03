@@ -381,6 +381,9 @@ const DEMO_CONVS = [
 
 const now = ()=>new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'});
 const today = ()=>{ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+// now() 是 zh-TW 12小時制（含「上午/下午」），只給聊天泡泡顯示用，new Date() 解析不了；
+// ts 欄位（訊息回覆時效等報表要拿來做時間差計算）改用這支 24小時制、可被 new Date() 正確解析
+const tsNow = ()=>{ const d=new Date(); return `${today()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
 const isUrg = t=>/(門打不開|鎖壞了|打不開|緊急|被鎖在|出不去|進不去|無法開門)/i.test(t||'');
 const isBattery = t=>/(電池|沒電|耗電)/i.test(t||'');
 
@@ -485,7 +488,7 @@ function CustomerPage(){
       const bound = memberWf ? (prev.customers||[]).find(c=>c.wfId===memberWf) : null;
       const cname = bound ? `${bound.name}（LINE）` : '住戶（LINE）';
       let idx = convs.findIndex(c=>c.id==='conv_live');
-      const newMsg = {id:'s'+Date.now(),from,text,time:now(),ts:today()+' '+now(),urgent};
+      const newMsg = {id:'s'+Date.now(),from,text,time:now(),ts:tsNow(),urgent};
       if(idx<0){
         convs.push({id:'conv_live',wfId:memberWf||'',name:cname,platform:'line',av:'住',
           unread:from==='user'?1:0,lastMsg:text,lastTime:now(),msgs:[newMsg]});
@@ -1031,7 +1034,7 @@ function EightZeroZeroPage(){
     const catPath = [acwCat1,acwCat2,acwCat3].filter(Boolean).join(' › ');
     const summary = `📞 來電通話｜時長 ${mm}:${ss}｜分類：${catPath}${(note||'').trim()?`｜備註：${note.trim()}`:''}`;
     // acw 物件保留結構化欄位供客服績效報表統計用（座席/分類三階/秒數），text 仍是人看的摘要，不影響既有顯示
-    const msg = {id:'a'+Date.now(), from:'agent', text:summary, time:now(), ts:today()+' '+now(), by:agentName||null,
+    const msg = {id:'a'+Date.now(), from:'agent', text:summary, time:now(), ts:tsNow(), by:agentName||null,
       type:'acw', acw:{agent:agentName||null, cat1:acwCat1, cat2:acwCat2, cat3:acwCat3, durationSec:duration}};
     updateDB(prev=>{
       const convs = prev.conversations||[];
@@ -1340,7 +1343,7 @@ function AgentPage(){
   const sendMsg=()=>{
     if(!input.trim()||!active) return;
     const t=input.trim(); setInput('');
-    const m={id:'a'+Date.now(),from:'agent',text:t,time:now(),ts:today()+' '+now(),by:agentName||null};
+    const m={id:'a'+Date.now(),from:'agent',text:t,time:now(),ts:tsNow(),by:agentName||null};
     updateDB(prev=>({...prev,conversations:prev.conversations.map(c=>c.id===active.id
       ?{...c,msgs:[...(c.msgs||[]),m],lastMsg:t,lastTime:now(),agentTakeover:true}:c)}));
     setActive(p=>({...p,msgs:[...(p.msgs||[]),m],agentTakeover:true}));
