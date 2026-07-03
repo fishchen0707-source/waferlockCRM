@@ -504,7 +504,7 @@ const TW_ZIP3 = {
 
 
 
-const today = ()=>new Date().toLocaleDateString('zh-TW');
+const today = todayISO;
 const now = ()=>new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'});
 const pctW = (install,months)=>{
   if(!install) return 0;
@@ -2532,23 +2532,33 @@ function HomePage(){
       ...complaints.filter(t=>(c.wfId&&t.wfId===c.wfId)||(c.phone&&t.phone===c.phone)),
     ].length;
     // 1. 已登錄客戶（模糊比對 姓名/電話/編號/序號/地址）
-    const matched=customers.filter(c=>
+    const custByWf={}; customers.forEach(c=>{custByWf[c.wfId]=c;});
+    const matchedMap={};
+    customers.filter(c=>
       (c.name||'').toLowerCase().includes(lo)||(c.phone||'').includes(term)||
       (c.wfId||'').toLowerCase().includes(lo)||(c.serialNo||'').toLowerCase().includes(lo)||
       (c.address||'').includes(term)
-    ).map(c=>({...c,_registered:true,_caseCount:cntCases(c)}));
-    // 2. 未登錄但有案件的電話（去重，建立候選）
-    const known=new Set(matched.map(c=>c.phone));
+    ).forEach(c=>{matchedMap[c.wfId]={...c,_registered:true,_caseCount:cntCases(c)};});
     const allRaw=[
       ...installs.map(o=>({...o,_type:'install'})),
       ...repairs.map(r=>({...r,_type:'repair'})),
       ...complaints.map(t=>({...t,_type:'complaint'})),
     ];
+    // 2. 案號比對到已登錄客戶（原本案號只會落到未登錄分支，客服拿單號查客戶開不到主檔）
+    allRaw.forEach(c=>{
+      if(!(c.id||'').toLowerCase().includes(lo))return;
+      const cust=c.wfId&&custByWf[c.wfId];
+      if(cust&&!matchedMap[cust.wfId]) matchedMap[cust.wfId]={...cust,_registered:true,_caseCount:cntCases(cust)};
+    });
+    const matched=Object.values(matchedMap);
+    // 3. 未登錄但有案件的電話（去重，建立候選）
+    const known=new Set(matched.map(c=>c.phone));
     const extra={};
     allRaw.forEach(c=>{
       const hit=(c.phone||'').includes(term)||(c.name||'').includes(term)||
         (c.id||'').toLowerCase().includes(lo)||(c.address||'').includes(term)||(c.building||'').includes(term);
       if(!hit)return;
+      if(c.wfId&&custByWf[c.wfId])return; // 已在已登錄分支處理
       const key=c.phone||c.id;
       if(known.has(c.phone))return;
       if(!extra[key]) extra[key]={wfId:null,name:c.name,phone:c.phone,address:c.address||c.building||c.district,_registered:false,_caseCount:0,_anchor:c};

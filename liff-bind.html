@@ -96,7 +96,7 @@ const PAGE = new URLSearchParams(location.search).get('p') || 'bind';
 
 let profile = null, member = null;
 const $ = id => document.getElementById(id);
-const todayStr = () => new Date().toLocaleDateString('zh-TW');
+const todayStr = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 const show = (id,disp='block') => { $(id).style.display = disp; };
 
 function pctWarranty(install, months){

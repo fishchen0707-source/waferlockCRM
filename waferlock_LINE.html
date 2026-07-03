@@ -217,17 +217,18 @@ const dbToInstall = r => ({id:r.id,name:r.name,phone:r.phone,address:r.address,c
 const convToDb = c => ({id:c.id,wf_id:c.wfId,name:c.name,platform:c.platform,av:c.av,unread:c.unread||0,last_msg:c.lastMsg,last_time:c.lastTime,msgs:c.msgs||[],agent_takeover:c.agentTakeover||false,need_case:c.needCase||false,biz_inquiry:c.bizInquiry||false});
 const dbToConv = r => ({id:r.id,wfId:r.wf_id,name:r.name,platform:r.platform,av:r.av,unread:r.unread||0,lastMsg:r.last_msg,lastTime:r.last_time,msgs:r.msgs||[],agentTakeover:r.agent_takeover||false,needCase:r.need_case||false,bizInquiry:r.biz_inquiry||false});
 
-const EMPTY_DB = {customers:[],repairs:{},complaints:{},installs:{},conversations:[],wfCounter:0,version:0};
+const EMPTY_DB = {customers:[],repairs:{},complaints:{},installs:{},conversations:[],workers:[],wfCounter:0,version:0};
 
 async function loadFromSupabase(){
   try{
-    const [custsRes,repairsRes,ctRes,installRes,convRes,cfgRes] = await Promise.all([
+    const [custsRes,repairsRes,ctRes,installRes,convRes,cfgRes,workersRes] = await Promise.all([
       sb.from('customers').select('*'),
       sb.from('repairs').select('*'),
       sb.from('complaints').select('*'),
       sb.from('installs').select('*'),
       sb.from('conversations').select('*'),
       sb.from('config').select('*'),
+      sb.from('workers').select('*'),
     ]);
     const customers = (custsRes.data||[]).map(dbToCust);
     const repairs = Object.fromEntries((repairsRes.data||[]).map(r=>[r.id,dbToRepair(r)]));
@@ -235,7 +236,8 @@ async function loadFromSupabase(){
     const installs = Object.fromEntries((installRes.data||[]).map(r=>[r.id,dbToInstall(r)]));
     const conversations = (convRes.data||[]).map(dbToConv);
     const wfCounter = parseInt((cfgRes.data||[]).find(c=>c.key==='wf_counter')?.value||'0');
-    return {customers,repairs,complaints,installs,conversations,wfCounter,version:0};
+    const workers = workersRes.data||[];
+    return {customers,repairs,complaints,installs,conversations,workers,wfCounter,version:0};
   }catch(e){ console.error('loadFromSupabase error:',e); return EMPTY_DB; }
 }
 
@@ -336,7 +338,7 @@ const DEMO_CONVS = [
 
 
 const now = ()=>new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'});
-const today = ()=>new Date().toLocaleDateString('zh-TW');
+const today = ()=>{ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 const isUrg = t=>/(門打不開|鎖壞了|打不開|緊急|被鎖在|出不去|進不去|無法開門)/i.test(t||'');
 const isBattery = t=>/(電池|沒電|耗電)/i.test(t||'');
 
@@ -656,7 +658,7 @@ function CustomerPage(){
   const triggerBroadcast=()=>{
     if(!member){ setView('chat'); escalateToAgent('🚨 緊急：門無法開啟，請立即協助',true,true); return; }
     setBroadcasting(true);
-    setBcWorkers(WORKERS.filter(w=>w.district==='台中市'));
+    setBcWorkers((db.workers&&db.workers.length?db.workers:WORKERS).filter(w=>w.district==='台中市'));
     setBcTimer(30);
     let t=30;
     const timer=setInterval(()=>{ t--; setBcTimer(t); if(t<=0){clearInterval(timer); toast('⚠️ 無人接單','30秒無工班回應，請客服立即介入','err');}},1000);
@@ -968,7 +970,7 @@ function AgentPage(){
   };
 
   const doDispatch=()=>{
-    const w=WORKERS.find(x=>x.id===selWorker);
+    const w=(db.workers&&db.workers.length?db.workers:WORKERS).find(x=>x.id===selWorker);
     if(!dispModal||!w) return;
     const repairId = dispModal.id;
     const pushMsg = {id:'p'+Date.now(),from:'bot',
@@ -1159,7 +1161,7 @@ function AgentPage(){
                     </div>
                     <div style={{fontWeight:600}}>{item.title}{item.desc?` — ${item.desc}`:''}</div>
                     <div style={{display:'flex',gap:8,marginTop:2,color:'var(--g500)',fontSize:9.5}}>
-                      {item.workerId&&<span>👷 {WORKERS.find(w=>w.id===item.workerId)?.name||item.workerId}</span>}
+                      {item.workerId&&<span>👷 {(db.workers&&db.workers.length?db.workers:WORKERS).find(w=>w.id===item.workerId)?.name||item.workerId}</span>}
                       {item.chargeTotal>0&&<span>💳 ${item.chargeTotal}</span>}
                     </div>
                     <div style={{textAlign:'right',marginTop:3}}>
@@ -1194,7 +1196,7 @@ function AgentPage(){
             </div>
             <div className="mf"><label>選擇工班</label>
               <select value={selWorker} onChange={e=>setSelWorker(e.target.value)}>
-                {WORKERS.map(w=><option key={w.id} value={w.id}>{w.name}（★{w.rating}）</option>)}
+                {(db.workers&&db.workers.length?db.workers:WORKERS).map(w=><option key={w.id} value={w.id}>{w.name}（★{w.rating}）</option>)}
               </select>
             </div>
             <div className="mf-row">
@@ -1341,15 +1343,66 @@ function App(){
     });
   },[]);
 
-  // Supabase Realtime 跨分頁與跨裝置同步
+  // Supabase Realtime 跨分頁與跨裝置同步（增量更新，比照 CRM 端已修方案，不再任何一張表變動就整顆重拉）
   useEffect(()=>{
+    const applyPayload=(prev,table,eventType,nr,or)=>{
+      let next=prev;
+      if(table==='customers'){
+        if(eventType==='INSERT'){
+          const c=dbToCust(nr);
+          if(!(prev.customers||[]).find(x=>x.wfId===c.wfId)) next={...prev,customers:[...(prev.customers||[]),c]};
+        } else if(eventType==='UPDATE'){
+          next={...prev,customers:(prev.customers||[]).map(c=>c.wfId===nr.wf_id?dbToCust(nr):c)};
+        } else if(eventType==='DELETE'){
+          next={...prev,customers:(prev.customers||[]).filter(c=>c.wfId!==or.wf_id)};
+        }
+      } else if(table==='repairs'){
+        if(eventType==='INSERT'||eventType==='UPDATE'){
+          next={...prev,repairs:{...prev.repairs,[nr.id]:dbToRepair(nr)}};
+        } else if(eventType==='DELETE'){
+          const {[or.id]:_,...rest}=prev.repairs||{};
+          next={...prev,repairs:rest};
+        }
+      } else if(table==='installs'){
+        if(eventType==='INSERT'||eventType==='UPDATE'){
+          next={...prev,installs:{...prev.installs,[nr.id]:dbToInstall(nr)}};
+        } else if(eventType==='DELETE'){
+          const {[or.id]:_,...rest}=prev.installs||{};
+          next={...prev,installs:rest};
+        }
+      } else if(table==='complaints'){
+        if(eventType==='INSERT'||eventType==='UPDATE'){
+          next={...prev,complaints:{...prev.complaints,[nr.id]:dbToCt(nr)}};
+        } else if(eventType==='DELETE'){
+          const {[or.id]:_,...rest}=prev.complaints||{};
+          next={...prev,complaints:rest};
+        }
+      } else if(table==='conversations'){
+        if(eventType==='INSERT'||eventType==='UPDATE'){
+          const convs=(prev.conversations||[]).filter(c=>c.id!==nr.id);
+          next={...prev,conversations:[...convs,dbToConv(nr)]};
+        } else if(eventType==='DELETE'){
+          next={...prev,conversations:(prev.conversations||[]).filter(c=>c.id!==or.id)};
+        }
+      } else if(table==='workers'){
+        if(eventType==='INSERT'||eventType==='UPDATE'){
+          next={...prev,workers:[...(prev.workers||[]).filter(w=>w.id!==nr.id),nr]};
+        } else if(eventType==='DELETE'){
+          next={...prev,workers:(prev.workers||[]).filter(w=>w.id!==or.id)};
+        }
+      } else if(table==='config'){
+        if((eventType==='INSERT'||eventType==='UPDATE')&&nr.key==='wf_counter'){
+          next={...prev,wfCounter:parseInt(nr.value||'0')};
+        }
+      }
+      prevDbRef.current=next;
+      return next;
+    };
     const channel = sb.channel('db-realtime')
-      .on('postgres_changes',{event:'*',schema:'public'},()=>{
-        loadFromSupabase().then(data=>{
-          setDB(data);
-          prevDbRef.current = data;
-          setSynced(true);
-        });
+      .on('postgres_changes',{event:'*',schema:'public'},(payload)=>{
+        const {table,eventType,new:nr={},old:or={}}=payload;
+        setDB(prev=>applyPayload(prev,table,eventType,nr,or));
+        setSynced(true);
       })
       .subscribe(status=>setSynced(status==='SUBSCRIBED'));
     return ()=>sb.removeChannel(channel);

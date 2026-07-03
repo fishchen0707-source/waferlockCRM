@@ -57,18 +57,30 @@ input:focus,select:focus,textarea:focus{border-color:#38BDF8}
 .rp-l{font-size:10.5px;color:#94A3B8;margin-top:2px}
 .rp-row{display:flex;justify-content:space-between;background:#fff;border-radius:8px;padding:8px 12px;margin-bottom:5px;font-size:12.5px}
 .rp-detail{background:#fff;border-radius:9px;padding:10px 12px;margin-bottom:8px;font-size:12.5px;border-left:3px solid #38BDF8}
+.tst-wrap{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:80;display:flex;flex-direction:column;gap:6px;width:calc(100% - 24px);max-width:536px}
+.tst{background:#0F2744;color:#fff;border-radius:9px;padding:10px 14px;font-size:13px;box-shadow:0 4px 12px rgba(0,0,0,.25);animation:tstIn .2s ease-out}
+@keyframes tstIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
 </style>
 </head>
 <body>
 <div id="root"></div>
+<div id="tstwrap" class="tst-wrap"></div>
 <script>
 const SUPABASE_URL='https://nkyanyjgfrmovjoqevro.supabase.co';
 const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5reWFueWpnZnJtb3Zqb3FldnJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2ODIxMTMsImV4cCI6MjA5NzI1ODExM30.LPnQyceYS7Z1-rlqUtXm3B8dGBOqnmnavTV-PAOSPZ8';
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 const $=s=>document.querySelector(s);
-const today=()=>new Date().toLocaleDateString('zh-TW');
+const today=()=>{ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 let worker=JSON.parse(localStorage.getItem('wl_tech')||'null');
 let tab='avail', cases={avail:[],mine:[],done:[],installs:[],doneInstalls:[]}, custMap={}, rep=null;
+let prevMineIds=null; // 新單提示：null=尚未做過第一次比對（避免首次載入誤報全部為新單）
+function notify(msg){
+  const el=document.createElement('div');
+  el.className='tst'; el.textContent=msg;
+  $('#tstwrap').appendChild(el);
+  if(navigator.vibrate) navigator.vibrate(200);
+  setTimeout(()=>el.remove(),5000);
+}
 const PRODUCT_NAMES={L376:'L376 智能電子鎖',L396:'L396 進階電子鎖',L600:'L600 人臉辨識旗艦',L901:'L901 掌靜脈頂規',L900:'L900 旗艦款'};
 const INSTALL_STATUS={pending:'待到場',arrived:'已到場',installed:'施工完成(待驗收)',done:'已完成',failed:'無法安裝'};
 
@@ -355,6 +367,10 @@ async function loadCases(){
   cases={avail:a.data||[],mine:m.data||[],done:d.data||[],installs:mi.data||[],doneInstalls:di.data||[]};
   const wfIds=[...new Set([...cases.avail,...cases.mine,...cases.done].map(r=>r.wf_id).filter(Boolean))];
   if(wfIds.length){ const {data}=await sb.from('customers').select('wf_id,name,phone,address,line_uid,product_id,install_date,warranty_months,warranty_end,lat,lng').in('wf_id',wfIds); (data||[]).forEach(c=>custMap[c.wf_id]=c); }
+  // 新單提示：偵測「派給我」的維修/安裝案件是否有新出現的（客服改派工單後，即使師傅停在列表頁不操作也會提醒）
+  const mineNow=[...cases.mine.map(r=>r.id),...cases.installs.map(o=>o.id)];
+  if(prevMineIds){ mineNow.filter(id=>!prevMineIds.has(id)).forEach(()=>notify('📋 有新的派工案件，請查看「進行中」')); }
+  prevMineIds=new Set(mineNow);
   renderApp();
 }
 
