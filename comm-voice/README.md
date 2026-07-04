@@ -3,60 +3,58 @@
 逆向自 `https://waferlock-comm-cloud.onrender.com` 的真人語音通話功能，前後端自建重寫。
 瀏覽器原生 WebRTC P2P 語音：客服撥號、顧客點連結接聽，聲音點對點傳輸（不經電信商）。
 
-## 目錄
+## 架構：B 路（掛在既有 Supabase，不用養常駐伺服器）
+
+前端三支靜態檔可直接放 **GitHub Pages**；後端能力全掛在專案既有的 **Supabase**：
+- **信令**：Supabase Realtime broadcast（頻道 `rtc-<room>`），非自建 WebSocket。
+- **TURN 憑證**：Supabase Edge Function `rtc-config`（藏 Cloudflare 金鑰、產時效憑證）。
+- **錄音／待回電**（階段3）：Edge Function `rtc-recording` / `rtc-callback-request`。
+
+> `server.js` 是「A 路」（自建 Node 信令伺服器放 Render）的替代方案，**B 路不會用到它**，保留供參考。
+
 ```
 comm-voice/
-├─ server.js              # Node 後端：信令中繼 + ICE 設定 + 錄音/回電端點
-├─ package.json           # express + ws（+ 選配 multer）
-├─ ice-config-sample.json # 原站 /api/rtc/config 的活樣本（格式對照用）
-├─ test-signal.js         # 信令協定自動測試（node test-signal.js）
-└─ public/
-   ├─ agent-call.html     # 客服端（開啟即自動撥號）
-   ├─ call.html           # 顧客端（點「接聽」才連；50 秒無人接→留言回電）
-   ├─ js/rtc-client.js    # 客服/顧客共用 WebRTC 客戶端
-   └─ img/waferlock.svg   # logo
+├─ public/                    # ← 這個資料夾整包丟 GitHub Pages 即可
+│  ├─ agent-call.html         # 客服端（開啟即自動撥號）
+│  ├─ call.html               # 顧客端（點「接聽」才連；50 秒無人接→留言回電）
+│  ├─ js/rtc-client.js        # 共用 WebRTC 客戶端（信令走 Supabase Realtime）
+│  └─ img/waferlock.svg       # logo
+├─ test-signal-supabase.js    # 對真實 Supabase Realtime 的信令測試（node test-signal-supabase.js）
+├─ server.js / test-signal.js # A 路（Node 自建信令）替代方案，B 路用不到
+└─ ice-config-sample.json     # 原站 /api/rtc/config 活樣本（格式對照）
 ```
 
-## 本機啟動
+## 訊令協定（rtc-client.js ⇄ Supabase Realtime）
+
+- 頻道名 `rtc-<room>`，broadcast event `sig`，訊息型別：`hello`／`offer`／`answer`／`ice`／`bye`。
+- **探索用 hello 心跳**：SUBSCRIBED 後每秒送一次 `hello`，agent 收到對端 hello 就發 offer 並「重送直到收到 answer」（容忍剛訂閱首則走 REST 而遺失）。
+- **掛斷**：優雅掛斷送 `bye`；非優雅斷線靠 WebRTC `connectionState` 轉 failed/disconnected。
+- ⚠️ **room 名稱務必用 ASCII**（如 `call_h7jhe8zy`）。頻道 topic 含中文等非 ASCII 會導致 Realtime WebSocket join 失敗、send 退回 REST 而對端收不到——這在測試時實際踩過。
+
+## 部署步驟
+
+### ① 前端 → GitHub Pages
+把 `public/` 內容放進你 Pages 站台（例如 repo 的 `/comm-voice/` 路徑）。麥克風權限要求 https，Pages 天生是 https，跨網路即可用。
+- 客服：`https://<你的pages網域>/comm-voice/agent-call.html?room=call_xxx&name=專員小美&conv=案件ID`
+- 顧客：`https://<你的pages網域>/comm-voice/call.html?room=call_xxx`（同一 room 才接通）
+
+### ② Edge Function `rtc-config` → Supabase
 ```bash
-cd comm-voice
-npm install
-npm start          # 預設 http://localhost:3000
+supabase functions deploy rtc-config
+# 設 Cloudflare TURN 金鑰（Supabase → Edge Functions → Secrets，或 CLI）：
+supabase secrets set CF_TURN_KEY_ID=<Turn Token ID> CF_TURN_API_TOKEN=<API Token>
 ```
-- 客服：`http://localhost:3000/agent-call.html?room=abc&name=專員小美&conv=案件ID`
-- 顧客：`http://localhost:3000/call.html?room=abc`
-- 兩邊用同一個 `room` 才會接通。
+> 沒設金鑰時只回 STUN（同區網可通、跨網路不行）；設了才有 Cloudflare TURN 跨網路中繼。
 
-## API 端點（對照原站合約）
-| 端點 | 說明 | 狀態 |
-|------|------|------|
-| `GET /api/rtc/config` | 回 ICE servers（STUN；設環境變數後含 TURN） | ✅ 可用 |
-| `WS /api/rtc/signal` | 房間信令中繼（join/offer/answer/ice/bye） | ✅ 可用（test-signal.js 全通過） |
-| `POST /api/rtc/recording` | 收通話錄音（webm/wav） | 🟡 階段1 僅接收；階段3 才存 Supabase+Gemini |
-| `POST /api/rtc/callback-request` | 無人接聽的待回電 | 🟡 階段1 僅接收；階段3 才寫 Supabase |
-
-## TURN（跨網路必須，階段2）
-不設 TURN 時**只有同一 NAT/區網內能通**（自我測試 OK，正式對外不夠）。跨網路需 TURN 中繼，二選一設環境變數：
-
-**① Cloudflare Calls TURN（原站用的，有免費額度）**
+## 本機測試
+```bash
+cd comm-voice && npm install
+node test-signal-supabase.js   # 對真實 Supabase Realtime 驗證信令（兩種進場順序，含 offer/answer/ice/bye）
 ```
-CF_TURN_KEY_ID=<你的 key id>
-CF_TURN_API_TOKEN=<你的 api token>
-```
-**② 任意靜態 TURN（如 metered.ca / 自架 coturn）**
-```
-TURN_URLS=turn:xxx:3478?transport=udp,turn:xxx:3478?transport=tcp
-TURN_USERNAME=<user>
-TURN_CREDENTIAL=<pass>
-```
-
-## 部署（Render，同原站模式）
-- New Web Service → 指到本 repo 的 `comm-voice/` 目錄
-- Build: `npm install`　Start: `npm start`
-- 環境變數：上面的 TURN 設定；階段3 再加 `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` / `GEMINI_API_KEY`
-- 前端與後端同源（都在這支服務下），`rtc-client.js` 用 `location.host` 自動指向，零改動。
+本機開兩個瀏覽器分頁測 UI：可用任意靜態伺服器（如專案的 `啟動伺服器.bat`）開 `public/`，
+agent-call 與 call 帶同一 `room`。同機/同區網不需 TURN 即可通；跨網路需先部署 `rtc-config` 並設 TURN 金鑰。
 
 ## 尚未完成（見專案根 `版本紀錄.md`）
-- 階段2：TURN 供應商申請 + 跨網路實測
-- 階段3：錄音存 Supabase Storage、Gemini 摘要、待回電落 DB
-- 階段4：接進 `waferlock_LINE.html` 的 0800 值機桌面，取代「模擬來電」
+- **真機跨網路實測**：需部署 + 手機 4G vs 電腦 Wi-Fi 各開一端對講（需實體麥克風，無頭環境測不了）。
+- **階段3**：`rtc-recording`（錄音存 Supabase Storage + Gemini 摘要）、`rtc-callback-request`（待回電落 DB）兩支 Edge Function。前端已改指這兩個位址，Function 未建前會 404（前端有 try/catch，不影響通話）。
+- **階段4**：接進 `waferlock_LINE.html` 的 0800 值機桌面，取代「模擬來電」。

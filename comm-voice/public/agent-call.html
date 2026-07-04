@@ -35,9 +35,14 @@
     <div class="hint">顧客需點開您發送的接聽連結並允許麥克風，才會接通。建議戴耳機避免回音。</div>
     <div class="hint">📝 通話中請確認顧客的<b>姓名與聯絡電話</b>；如需後續跟進，記得回收件匣的「顧客資料」補登並開立工單。</div>
   </div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="/js/rtc-client.js"></script>
   <script>
   (function () {
+    // 信令與 TURN 憑證都掛在既有 Supabase（anon key 前端公開，與專案其餘頁面一致）
+    var SUPABASE_URL = 'https://nkyanyjgfrmovjoqevro.supabase.co';
+    var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5reWFueWpnZnJtb3Zqb3FldnJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2ODIxMTMsImV4cCI6MjA5NzI1ODExM30.LPnQyceYS7Z1-rlqUtXm3B8dGBOqnmnavTV-PAOSPZ8';
+    var FN = SUPABASE_URL + '/functions/v1/';
     var qs = new URLSearchParams(location.search);
     var room = qs.get('room') || '', name = qs.get('name') || '', conv = qs.get('conv') || '';
     var stateEl = document.getElementById('state'), orb = document.getElementById('orb'), controls = document.getElementById('controls');
@@ -86,13 +91,13 @@
         fd.append('audio', blob, 'call.webm');
         if (wav) fd.append('wav', wav, 'call.wav');
         fd.append('conv', conv); fd.append('name', name); fd.append('durationSec', String(durationSec || 0));
-        await fetch('/api/rtc/recording', { method: 'POST', body: fd });
+        await fetch(FN + 'rtc-recording', { method: 'POST', headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY }, body: fd }); // 階段3 才部署此 Edge Function
       } catch (e) {}
     }
     function dial() {
       inCallUI(); setState('連線中…');
-      fetch('/api/rtc/config').then(function (r) { return r.json(); }).catch(function () { return {}; }).then(function (cfg) {
-        call = WLCall({ room: room, role: 'agent', iceServers: cfg.iceServers, onStatus: onStatus, record: true, onRecording: onRec });
+      fetch(FN + 'rtc-config', { headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY } }).then(function (r) { return r.json(); }).catch(function () { return {}; }).then(function (cfg) {
+        call = WLCall({ room: room, role: 'agent', iceServers: cfg.iceServers, onStatus: onStatus, record: true, onRecording: onRec, supabaseUrl: SUPABASE_URL, supabaseKey: SUPABASE_KEY });
         call.start();
       });
     }
