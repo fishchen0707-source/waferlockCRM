@@ -25,7 +25,8 @@ app.get('/api/rtc/config', async (_req, res) => {
   const iceServers = [{ urls: 'stun:stun.l.google.com:19302' }];
   try {
     const cf = await cloudflareTurn();
-    if (cf) iceServers.unshift(cf);
+    // generate-ice-servers 回的是陣列 [{stun},{turn}]，要攤平放進去（不能整包當一個元素，否則變巢狀陣列＝不合法）
+    if (cf) iceServers.unshift(...(Array.isArray(cf) ? cf : [cf]));
     else if (process.env.TURN_URLS) {
       iceServers.unshift({
         urls: process.env.TURN_URLS.split(',').map((s) => s.trim()),
@@ -42,13 +43,19 @@ app.get('/api/rtc/config', async (_req, res) => {
 async function cloudflareTurn() {
   const keyId = process.env.CF_TURN_KEY_ID, token = process.env.CF_TURN_API_TOKEN;
   if (!keyId || !token) return null;
-  const r = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${keyId}/credentials/generate-ice-servers`, {
+  const url = `https://rtc.live.cloudflare.com/v1/turn/keys/${keyId}/credentials/generate-ice-servers`;
+  const r = await fetch(url, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ ttl: 86400 }),
   });
-  if (!r.ok) return null;
-  const d = await r.json();
+  const bodyText = await r.text();
+  if (!r.ok) {
+    console.log(`[CF TURN 失敗] HTTP ${r.status} — keyId 長度=${keyId.length} — 回應：${bodyText.slice(0, 300)}`);
+    return null;
+  }
+  let d; try { d = JSON.parse(bodyText); } catch (e) { console.log('[CF TURN] 回應非 JSON：', bodyText.slice(0, 200)); return null; }
+  console.log('[CF TURN 成功] 已取得時效憑證');
   return d.iceServers || null; // 單一 {urls,username,credential} 物件，交給呼叫端 unshift 進陣列
 }
 
