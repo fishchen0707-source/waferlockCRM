@@ -1,0 +1,20 @@
+{
+  "name": "waferlock-comm-voice",
+  "version": "0.1.0",
+  "private": true,
+  "description": "WAFERLOCK 真人語音通話 自建後端（WebRTC 信令 + ICE 設定）",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "ws": "^8.18.0"
+  },
+  "optionalDependencies": {
+    "multer": "^2.0.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

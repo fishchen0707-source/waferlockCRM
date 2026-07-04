@@ -1,2 +1,8 @@
 # 照片遷移前的本機備份（含 base64，勿進版控）
 _photo_backup/
+
+# Node 相依（各子專案）
+node_modules/
+
+# 去識別化資料集（含個資，勿進版控）
+LINE DATA/
