@@ -9,7 +9,7 @@
     * { box-sizing:border-box; }
     body { margin:0; min-height:100vh; display:grid; place-items:center; font-family:-apple-system,"PingFang TC","Noto Sans TC",sans-serif; background:linear-gradient(160deg,#1c0330,#48086B); color:#fff; }
     .card { width:92%; max-width:380px; text-align:center; padding:30px 22px; }
-    .wl-wm { display:inline-block; height:20px; width:160px; max-width:74%; background:#fff; -webkit-mask:url(/img/waferlock.svg) no-repeat center/contain; mask:url(/img/waferlock.svg) no-repeat center/contain; }
+    .wl-wm { display:inline-block; height:20px; width:160px; max-width:74%; background:#fff; -webkit-mask:url(img/waferlock.svg) no-repeat center/contain; mask:url(img/waferlock.svg) no-repeat center/contain; }
     h1 { font-size:16px; margin:12px 0 2px; }
     .who { color:#d9c7ea; font-size:13px; margin-bottom:22px; }
     .orb { width:120px; height:120px; border-radius:50%; margin:0 auto 20px; background:radial-gradient(circle at 50% 40%,#b06bd8,#6a1597); box-shadow:0 0 0 0 rgba(176,107,216,.6); }
@@ -36,7 +36,7 @@
     <div class="hint">📝 通話中請確認顧客的<b>姓名與聯絡電話</b>；如需後續跟進，記得回收件匣的「顧客資料」補登並開立工單。</div>
   </div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="/js/rtc-client.js"></script>
+  <script src="js/rtc-client.js"></script>
   <script>
   (function () {
     // 信令與 TURN 憑證都掛在既有 Supabase（anon key 前端公開，與專案其餘頁面一致）
