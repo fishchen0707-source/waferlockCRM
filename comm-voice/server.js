@@ -37,18 +37,19 @@ app.get('/api/rtc/config', async (_req, res) => {
   res.json({ iceServers });
 });
 
-// Cloudflare Calls TURN：用 key id + token 換一組時效性 TURN 帳密（有免費額度）
+// Cloudflare Realtime（前身 Calls）TURN：用 key id + token 換一組時效性 TURN 帳密（有免費額度）
+// 現行端點 /credentials/generate-ice-servers 回傳 { iceServers: { urls:[...], username, credential } }（單一物件）
 async function cloudflareTurn() {
   const keyId = process.env.CF_TURN_KEY_ID, token = process.env.CF_TURN_API_TOKEN;
   if (!keyId || !token) return null;
-  const r = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${keyId}/credentials/generate`, {
+  const r = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${keyId}/credentials/generate-ice-servers`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ ttl: 86400 }),
   });
   if (!r.ok) return null;
   const d = await r.json();
-  return d.iceServers || null;
+  return d.iceServers || null; // 單一 {urls,username,credential} 物件，交給呼叫端 unshift 進陣列
 }
 
 // ── POST /api/rtc/recording：接錄音（階段3 才落地存 Supabase，先收下不報錯）──
