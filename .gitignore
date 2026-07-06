@@ -14,7 +14,11 @@ __pycache__/
 # 本機密鑰（勿進版控）
 secret.txt
 *.env.local
-stt-worker/_beep.wav
+
+# 本機測試錄音（可能含語音，勿進版控）
+stt-worker/*.wav
+stt-worker/*.m4a
+stt-worker/*.mp3
 
 # 去識別化資料集（含個資，勿進版控）
 LINE DATA/
