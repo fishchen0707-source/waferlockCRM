@@ -36,6 +36,8 @@ app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
 )
 
+_LAST_ASR_ERR = ""  # 最近一次 Riva 失敗訊息（除錯用，回應帶回）
+
 
 def _tsnow():
     d = datetime.datetime.now()
@@ -89,6 +91,8 @@ def riva_transcribe(wav_bytes: bytes) -> str:
                     parts.append(res.alternatives[0].transcript)
         return " ".join(p.strip() for p in parts if p).strip()
     except Exception as e:
+        global _LAST_ASR_ERR
+        _LAST_ASR_ERR = repr(e)
         print("[Riva ASR 失敗]", repr(e))
         return ""
 
@@ -205,4 +209,5 @@ async def stt(
     return {
         "ok": True, "path": path, "durationSec": duration,
         "transcript": transcript, "summary": summary, "attached": attached,
+        "asr_err": _LAST_ASR_ERR,  # 除錯：Riva 若失敗這裡會有原因
     }
