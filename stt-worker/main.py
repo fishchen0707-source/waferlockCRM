@@ -38,6 +38,7 @@ app.add_middleware(
 )
 
 _LAST_ASR_ERR = ""  # 最近一次 Riva 失敗訊息（除錯用，回應帶回）
+_LAST_LLM_ERR = ""  # 最近一次 LLM 失敗訊息（除錯用）
 
 
 def _tsnow():
@@ -117,11 +118,15 @@ def nvidia_summary(transcript: str) -> str:
             },
             timeout=60,
         )
+        global _LAST_LLM_ERR
         if not r.ok:
-            print("[NVIDIA LLM 失敗]", r.status_code, r.text[:200])
+            _LAST_LLM_ERR = f"HTTP {r.status_code}: {r.text[:200]}"
+            print("[NVIDIA LLM 失敗]", _LAST_LLM_ERR)
             return ""
+        _LAST_LLM_ERR = ""
         return r.json()["choices"][0]["message"]["content"].strip()
     except Exception as e:
+        _LAST_LLM_ERR = repr(e)
         print("[NVIDIA LLM 例外]", repr(e))
         return ""
 
@@ -211,4 +216,5 @@ async def stt(
         "ok": True, "path": path, "durationSec": duration,
         "transcript": transcript, "summary": summary, "attached": attached,
         "asr_err": _LAST_ASR_ERR,  # 除錯：Riva 若失敗這裡會有原因
+        "llm_err": _LAST_LLM_ERR,  # 除錯：LLM 摘要若失敗這裡會有原因
     }
