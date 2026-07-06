@@ -1253,6 +1253,13 @@ function CustomerInfoPanel({wfId}){
     ...repairList.map(r=>({_type:'repair',_label:'維修',_color:'#0369A1',_bg:'#E0F2FE',id:r.id,date:r.date,title:r.faultModel||r.type||'維修',desc:r.issue,status:r.status,workerId:r.workerId,chargeTotal:r.chargeTotal})),
     ...Object.values(db.installs||{}).filter(o=>o.wfId===c.wfId).map(o=>({_type:'install',_label:'安裝',_color:'#5B21B6',_bg:'#EDE9FE',id:o.id,date:o.createdDate,title:PRODUCTS[o.productId]?.name||o.productId||'安裝',desc:null,status:o.status,workerId:o.workerId,chargeTotal:o.chargeTotal})),
     ...(c.complaintIds||[]).map(cid=>db.complaints?.[cid]).filter(Boolean).map(ct=>({_type:'complaint',_label:'客訴',_color:'#B45309',_bg:'#FEF3C7',id:ct.id,date:ct.date,title:ct.cat1||'客訴',desc:ct.cat2,status:ct.status,workerId:null,chargeTotal:null})),
+    // 0800 來電通話：ACW 完成寫入 conversations（platform=phone），撈出每則 acw 併入案件紀錄縮影，凡走過必留下痕跡
+    ...(db.conversations||[]).filter(cv=>cv.platform==='phone'&&cv.wfId===c.wfId)
+      .flatMap(cv=>(cv.msgs||[]).filter(m=>m.type==='acw').map(m=>({
+        _type:'call',_label:'來電',_color:'#15803D',_bg:'#DCFCE7',id:m.id,
+        date:(m.ts||'').slice(0,10),
+        title:'📞 '+([m.acw?.cat1,m.acw?.cat2,m.acw?.cat3].filter(Boolean).join(' › ')||'來電通話'),
+        desc:m.acw?.agent?('客服 '+m.acw.agent):null,status:null,workerId:null,chargeTotal:null}))),
   ].sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
   const caseListShown = caseListOpen ? caseList : caseList.slice(0,2);
 
@@ -1291,10 +1298,12 @@ function CustomerInfoPanel({wfId}){
                 {item.chargeTotal>0&&<span>💳 ${item.chargeTotal}</span>}
               </div>
               <div style={{textAlign:'right',marginTop:3}}>
-                <button onClick={()=>openCaseInCrm(c.wfId,item.id)}
-                  style={{background:'none',border:'none',color:'var(--accent)',fontSize:9.5,fontWeight:700,cursor:'pointer',padding:0}}>
-                  🔗 查看詳情 →
-                </button>
+                {item._type==='call'
+                  ? <span style={{color:'var(--g400)',fontSize:9.5}}>📞 通話紀錄</span>
+                  : <button onClick={()=>openCaseInCrm(c.wfId,item.id)}
+                      style={{background:'none',border:'none',color:'var(--accent)',fontSize:9.5,fontWeight:700,cursor:'pointer',padding:0}}>
+                      🔗 查看詳情 →
+                    </button>}
               </div>
             </div>
           ))}

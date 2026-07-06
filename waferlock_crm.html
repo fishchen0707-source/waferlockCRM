@@ -1528,6 +1528,13 @@ function CRMPage(){
   const STEPLABEL={pending:'待到場',arrived:'已到場',installed:'待驗收',done:'已完成',failed:'無法安裝'};
   const curInstalls=Object.values(db.installs||{}).filter(o=>o.wfId===cur.wfId).sort((a,b)=>(b.createdTs||0)-(a.createdTs||0));
   const curComplaints=(cur.complaintIds||[]).map(id=>(db.complaints||{})[id]).filter(Boolean).reverse();
+  // 0800 來電通話紀錄：ACW 完成時已寫進 conversations（platform=phone，帶 wfId），此處撈出每一則 acw 顯示在客戶歷史，落實「凡走過必留下痕跡」
+  const curCalls=(db.conversations||[]).filter(cv=>cv.platform==='phone'&&cv.wfId===cur.wfId)
+    .flatMap(cv=>(cv.msgs||[]).filter(m=>m.type==='acw').map(m=>({
+      _type:'call', id:m.id, date:(m.ts||'').slice(0,10)||cv.lastTime||'',
+      title:m.text||'來電通話', agent:m.acw?.agent||m.by||'—',
+      _ts:m.ts?(new Date(String(m.ts).replace(' ','T')).getTime()||0):0,
+    })));
 
   // 開啟該案件的獨立分頁（單張案件視圖）
   const openCaseTab=(wfId,caseId)=>window.open(location.origin+location.pathname+'#crm/'+wfId+'/'+caseId,'_blank');
@@ -1752,7 +1759,7 @@ function CRMPage(){
     (curInstalls.find(x=>x.id===highlightedOrderId)&&{...curInstalls.find(x=>x.id===highlightedOrderId),_type:'install'}) ||
     null
   );
-  const historyCount=curComplaints.length+repairs.length+curInstalls.length;
+  const historyCount=curComplaints.length+repairs.length+curInstalls.length+curCalls.length;
 
   return(
     <div className="crm-layer2" style={{position:'relative',zIndex:1}}>
@@ -1835,8 +1842,9 @@ function CRMPage(){
                 ...curComplaints.map(ct=>({_type:'complaint',id:ct.id,date:ct.date,title:`${ct.cat1||'客訴'}${ct.cat2?' › '+ct.cat2:''}`,_ts:new Date(ct.date||0).getTime()||0})),
                 ...repairs.map(r=>({_type:'repair',id:r.id,date:r.date,title:`${r.type||'維修'} — ${r.issue||''}`,_ts:new Date(r.date||0).getTime()||0})),
                 ...curInstalls.map(o=>({_type:'install',id:o.id,date:o.createdDate,title:`安裝 ${PRODUCTS[o.productId]?.name||o.productId||''}`,_ts:o.createdTs||0})),
+                ...curCalls,
               ].sort((a,b)=>b._ts-a._ts).map(item=>{
-                const lab={complaint:['客訴','#FEF3C7','#B45309'],repair:['維修','#E0F2FE','#0369A1'],install:['安裝','#EDE9FE','#5B21B6']}[item._type];
+                const lab={complaint:['客訴','#FEF3C7','#B45309'],repair:['維修','#E0F2FE','#0369A1'],install:['安裝','#EDE9FE','#5B21B6'],call:['通話','#DCFCE7','#15803D']}[item._type];
                 return(
                   <div key={item.id} style={{display:'flex',alignItems:'center',gap:10,padding:'9px 12px',background:'#fff',border:'1px solid var(--g200)',borderRadius:8}}>
                     <span style={{background:lab[1],color:lab[2],fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:9,flexShrink:0}}>{lab[0]}</span>
@@ -1844,7 +1852,9 @@ function CRMPage(){
                       <div style={{fontSize:12,fontWeight:600,color:'#1E293B',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.title}</div>
                       <div style={{fontSize:10.5,color:'var(--g400)',fontFamily:'monospace'}}>{item.id} · {item.date||'—'}</div>
                     </div>
-                    <button onClick={()=>openCaseTab(cur.wfId,item.id)} style={{padding:'5px 11px',background:'var(--brand)',color:'#fff',border:'none',borderRadius:5,fontSize:11,fontWeight:700,cursor:'pointer',flexShrink:0,whiteSpace:'nowrap'}}>🔗 開啟此案</button>
+                    {item._type==='call'
+                      ? <span style={{fontSize:10.5,color:'var(--g400)',flexShrink:0,whiteSpace:'nowrap'}}>👤 {item.agent}</span>
+                      : <button onClick={()=>openCaseTab(cur.wfId,item.id)} style={{padding:'5px 11px',background:'var(--brand)',color:'#fff',border:'none',borderRadius:5,fontSize:11,fontWeight:700,cursor:'pointer',flexShrink:0,whiteSpace:'nowrap'}}>🔗 開啟此案</button>}
                   </div>
                 );
               })}
