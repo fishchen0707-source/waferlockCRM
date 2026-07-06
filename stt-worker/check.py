@@ -62,6 +62,13 @@ def main():
             enable_automatic_punctuation=True, audio_channel_count=1,
             sample_rate_hertz=sr,
         )
+        # 加強詞（domain vocabulary）：中文要每個字之間空一格。冷門專有名詞才聽得準。
+        boost = ["電 子 鎖", "維 夫 拉 克", "門 鎖", "把 手", "面 板", "電 池", "感 應", "指 紋"]
+        try:
+            riva.client.add_word_boosting_to_config(cfg, boost, 25.0)
+            print("已加強詞：", " / ".join(b.replace(" ", "") for b in boost))
+        except Exception as be:
+            print("（加強詞設定略過：", str(be)[:80], "）")
         data = open(wav_path, "rb").read()
         # 先試 offline，失敗（模型可能只支援串流）就改試 streaming
         try:

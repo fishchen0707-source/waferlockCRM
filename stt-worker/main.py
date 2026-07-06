@@ -72,6 +72,14 @@ def riva_transcribe(wav_bytes: bytes) -> str:
             audio_channel_count=1,
             sample_rate_hertz=sr,
         )
+        # 加強詞：冷門專有名詞（電子鎖/維夫拉克/型號…）易被聽成常見詞（如電子書），
+        # 中文加強詞每字之間要空格。可用環境變數 BOOST_WORDS 覆寫（逗號分隔，不用空格，程式自動補）。
+        raw = os.environ.get("BOOST_WORDS", "電子鎖,維夫拉克,門鎖,把手,面板,電池,感應,指紋,型號")
+        boost = [" ".join(list(w.strip())) for w in raw.split(",") if w.strip()]
+        try:
+            riva.client.add_word_boosting_to_config(config, boost, 25.0)
+        except Exception as be:
+            print("[加強詞略過]", repr(be))
         scfg = riva.client.StreamingRecognitionConfig(config=config, interim_results=False)
         responses = asr.streaming_response_generator(audio_chunks=[wav_bytes], streaming_config=scfg)
         parts = []
