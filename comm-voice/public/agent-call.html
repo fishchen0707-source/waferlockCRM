@@ -43,6 +43,9 @@
     var SUPABASE_URL = 'https://nkyanyjgfrmovjoqevro.supabase.co';
     var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5reWFueWpnZnJtb3Zqb3FldnJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2ODIxMTMsImV4cCI6MjA5NzI1ODExM30.LPnQyceYS7Z1-rlqUtXm3B8dGBOqnmnavTV-PAOSPZ8';
     var FN = SUPABASE_URL + '/functions/v1/';
+    // 通話錄音 STT 去處：設了 STT_WORKER_URL（NVIDIA Riva 的 Python 服務）就走它，
+    // 沒設就回退到 Supabase Edge Function rtc-recording（Gemini 路線）。改這一行即可切換供應商。
+    var STT_WORKER_URL = ''; // 例：'https://waferlock-stt.onrender.com/stt'
     var qs = new URLSearchParams(location.search);
     var room = qs.get('room') || '', name = qs.get('name') || '', conv = qs.get('conv') || '';
     var stateEl = document.getElementById('state'), orb = document.getElementById('orb'), controls = document.getElementById('controls');
@@ -91,7 +94,11 @@
         fd.append('audio', blob, 'call.webm');
         if (wav) fd.append('wav', wav, 'call.wav');
         fd.append('conv', conv); fd.append('name', name); fd.append('durationSec', String(durationSec || 0));
-        await fetch(FN + 'rtc-recording', { method: 'POST', headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY }, body: fd }); // 階段3 才部署此 Edge Function
+        if (STT_WORKER_URL) {
+          await fetch(STT_WORKER_URL, { method: 'POST', body: fd }); // NVIDIA Riva Python 服務（含存檔+STT+摘要）
+        } else {
+          await fetch(FN + 'rtc-recording', { method: 'POST', headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY }, body: fd }); // 回退：Gemini Edge Function
+        }
       } catch (e) {}
     }
     function dial() {
