@@ -22,9 +22,11 @@ const nowText = () => { const d = new Date(); return `${pad(d.getHours())}:${pad
 const tsNow = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...cors, "Content-Type": "application/json" } });
 
-// 選配：把 wav 丟 Gemini 產一句話通話摘要（沒設金鑰或失敗都回空字串，不擋主流程）
-async function summarize(wav: Uint8Array): Promise<string> {
-  if (!GEMINI_KEY || !wav.length) return "";
+// 選配：把 wav 丟 Gemini 做 STT 逐字稿＋一句摘要（沒設金鑰或失敗都回空，不擋主流程）
+// 回 { transcript, summary }。Gemini 2.0 Flash 支援音訊輸入，可同時轉寫與摘要。
+async function analyze(wav: Uint8Array): Promise<{ transcript: string; summary: string }> {
+  const empty = { transcript: "", summary: "" };
+  if (!GEMINI_KEY || !wav.length) return empty;
   try {
     let bin = ""; for (let i = 0; i < wav.length; i++) bin += String.fromCharCode(wav[i]);
     const b64 = btoa(bin);
@@ -35,16 +37,22 @@ async function summarize(wav: Uint8Array): Promise<string> {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ parts: [
-            { text: "這是一通客服電話錄音，請用繁體中文一句話（40字內）摘要通話重點與後續待辦。" },
+            { text: "這是一通客服電話錄音。請用繁體中文輸出 JSON：transcript = 逐字稿（分辨客服／顧客，每句換行，如「客服：…」「顧客：…」），summary = 一句話（40字內）摘要重點與待辦。" },
             { inline_data: { mime_type: "audio/wav", data: b64 } },
           ] }],
+          generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: { type: "OBJECT", properties: { transcript: { type: "STRING" }, summary: { type: "STRING" } }, required: ["transcript", "summary"] },
+          },
         }),
       },
     );
-    if (!r.ok) return "";
+    if (!r.ok) { console.log("[Gemini STT 失敗]", r.status, (await r.text()).slice(0, 200)); return empty; }
     const d = await r.json();
-    return (d?.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
-  } catch (_) { return ""; }
+    const raw = d?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const parsed = JSON.parse(raw);
+    return { transcript: String(parsed.transcript || "").trim(), summary: String(parsed.summary || "").trim() };
+  } catch (e) { console.log("[Gemini STT 例外]", String(e)); return empty; }
 }
 
 Deno.serve(async (req) => {
@@ -72,8 +80,8 @@ Deno.serve(async (req) => {
     });
     if (!up.ok) return json({ ok: false, stage: "storage", status: up.status, error: await up.text() }, 502);
 
-    // 2) 選配 Gemini 摘要
-    const summary = wav ? await summarize(new Uint8Array(await wav.arrayBuffer())) : "";
+    // 2) 選配 Gemini STT 逐字稿 + 摘要
+    const { transcript, summary } = wav ? await analyze(new Uint8Array(await wav.arrayBuffer())) : { transcript: "", summary: "" };
 
     // 3) 若 conv 對得上既有 conversation（id 相同）就附一則錄音訊息，否則只存 Storage
     let attached = false;
@@ -86,8 +94,8 @@ Deno.serve(async (req) => {
         if (Array.isArray(rows) && rows.length) {
           const oldMsgs = Array.isArray(rows[0].msgs) ? rows[0].msgs : [];
           const mm = Math.floor(durationSec / 60), ss = durationSec % 60;
-          const text = `🎙️ 通話錄音（${mm}分${pad(ss)}秒）${summary ? `｜摘要：${summary}` : ""}`;
-          const msg = { id: "rec" + Date.now(), from: "agent", by: name, text, time: nowText(), ts: tsNow(), type: "recording", recording: { path, durationSec, summary } };
+          const text = `🎙️ 通話錄音（${mm}分${pad(ss)}秒）${summary ? `｜摘要：${summary}` : ""}${transcript ? "｜含逐字稿" : ""}`;
+          const msg = { id: "rec" + Date.now(), from: "agent", by: name, text, time: nowText(), ts: tsNow(), type: "recording", recording: { path, durationSec, summary, transcript } };
           await fetch(`${SUPABASE_URL}/rest/v1/conversations?id=eq.${encodeURIComponent(conv)}`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json", apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, Prefer: "return=minimal" },

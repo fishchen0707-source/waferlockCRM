@@ -203,6 +203,12 @@ input,select,textarea{font-family:inherit}
 .cc-ctlbtn{padding:5px 10px;border-radius:5px;font-size:11px;font-weight:700;border:none;background:rgba(255,255,255,.12);color:#fff;cursor:pointer}
 .cc-ctlbtn.on{background:var(--warn);color:#fff}
 .cc-ctlbtn.hangup{background:var(--err)}
+/* 通話卡片內的「開語音／複製連結」按鈕：卡片是白底，需要自己的高對比大按鈕（不能沿用白字的 cc-ctlbtn） */
+.cc-voicebtn{padding:11px 18px;border-radius:9px;font-size:13.5px;font-weight:800;cursor:pointer;display:inline-flex;align-items:center;gap:6px;line-height:1}
+.cc-voicebtn.primary{background:#7c3aed;color:#fff;border:none;box-shadow:0 2px 8px rgba(124,58,237,.35)}
+.cc-voicebtn.primary:hover{background:#6d28d9}
+.cc-voicebtn.ghost{background:#fff;color:#6d28d9;border:1.5px solid #c4b5fd}
+.cc-voicebtn.ghost:hover{background:#f5f3ff}
 .cc-body{flex:1;display:flex;overflow:hidden}
 .cc-nav{width:260px;background:#fff;border-right:1px solid var(--g200);display:flex;flex-direction:column;flex-shrink:0}
 .cc-nav-hdr{padding:10px 12px;font-size:13px;font-weight:700;border-bottom:1px solid var(--g200)}
@@ -1133,9 +1139,9 @@ function EightZeroZeroPage(){
               <div style={{fontSize:30}}>☎️</div>
               <div style={{fontSize:16,fontWeight:800,marginTop:6}}>{callState.phone}</div>
               <div style={{fontSize:12,color:'var(--g500)',marginTop:2}}>來電進線中…</div>
-              <div style={{display:'flex',gap:8,marginTop:12,flexWrap:'wrap',justifyContent:'center'}}>
-                <button className="cc-ctlbtn" onClick={startVoiceCall}>🎙️ 開客服端</button>
-                <button className="cc-ctlbtn" onClick={copyCustomerVoiceLink}>🔗 複製手機連結</button>
+              <div style={{display:'flex',gap:10,marginTop:14,flexWrap:'wrap',justifyContent:'center'}}>
+                <button className="cc-voicebtn primary" onClick={startVoiceCall}>🎙️ 開客服端語音</button>
+                <button className="cc-voicebtn ghost" onClick={copyCustomerVoiceLink}>🔗 複製手機連結</button>
               </div>
               {callState.voiceRoom&&<div style={{fontSize:10.5,color:'var(--g400)',marginTop:8,fontFamily:'monospace'}}>{callState.voiceRoom}</div>}
               <div style={{display:'flex',gap:10,marginTop:16}}>
@@ -1150,9 +1156,9 @@ function EightZeroZeroPage(){
                 <div style={{fontSize:13,color:'var(--g500)'}}>{callState.phase==='hold'?'⏸ 通話保留中':'🟢 通話中'}</div>
                 <div style={{fontSize:20,fontWeight:800,marginTop:4}}>{callState.phone}</div>
                 <div style={{fontSize:12,color:'var(--g500)',marginTop:2}}>{callState.wfId?db.customers?.find(c=>c.wfId===callState.wfId)?.name:'查無對應客戶'}</div>
-                <div style={{display:'flex',gap:8,justifyContent:'center',flexWrap:'wrap',marginTop:12}}>
-                  <button className="cc-ctlbtn" onClick={startVoiceCall}>🎙️ 開客服端語音</button>
-                  <button className="cc-ctlbtn" onClick={copyCustomerVoiceLink}>🔗 複製手機接聽連結</button>
+                <div style={{display:'flex',gap:10,justifyContent:'center',flexWrap:'wrap',marginTop:14}}>
+                  <button className="cc-voicebtn primary" onClick={startVoiceCall}>🎙️ 開客服端語音</button>
+                  <button className="cc-voicebtn ghost" onClick={copyCustomerVoiceLink}>🔗 複製手機接聽連結</button>
                 </div>
                 {callState.voiceRoom&&<div style={{fontSize:10.5,color:'var(--g400)',marginTop:6,fontFamily:'monospace'}}>{callState.voiceRoom}</div>}
               </div>
