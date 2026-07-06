@@ -18,6 +18,7 @@
 import os
 import time
 import io
+import wave
 import datetime
 import requests
 from fastapi import FastAPI, UploadFile, File, Form
