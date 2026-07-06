@@ -11,5 +11,10 @@ node_modules/
 __pycache__/
 *.pyc
 
+# 本機密鑰（勿進版控）
+secret.txt
+*.env.local
+stt-worker/_beep.wav
+
 # 去識別化資料集（含個資，勿進版控）
 LINE DATA/
