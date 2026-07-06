@@ -47,7 +47,7 @@
     // 沒設就回退到 Supabase Edge Function rtc-recording（Gemini 路線）。改這一行即可切換供應商。
     var STT_WORKER_URL = 'https://waferlock-stt.onrender.com/stt'; // NVIDIA Riva zh-TW STT 服務（留空則回退 Gemini）
     var qs = new URLSearchParams(location.search);
-    var room = qs.get('room') || '', name = qs.get('name') || '', conv = qs.get('conv') || '';
+    var room = qs.get('room') || '', name = qs.get('name') || '', conv = qs.get('conv') || '', wfId = qs.get('wfId') || '';
     var stateEl = document.getElementById('state'), orb = document.getElementById('orb'), controls = document.getElementById('controls');
     if (name) document.getElementById('who').textContent = name + ' ・ 與顧客通話';
     var call = null, muted = false;
@@ -93,7 +93,7 @@
         var fd = new FormData();
         fd.append('audio', blob, 'call.webm');
         if (wav) fd.append('wav', wav, 'call.wav');
-        fd.append('conv', conv); fd.append('name', name); fd.append('durationSec', String(durationSec || 0));
+        fd.append('conv', conv); fd.append('name', name); fd.append('durationSec', String(durationSec || 0)); fd.append('wfId', wfId);
         if (STT_WORKER_URL) {
           await fetch(STT_WORKER_URL, { method: 'POST', body: fd }); // NVIDIA Riva Python 服務（含存檔+STT+摘要）
         } else {

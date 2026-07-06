@@ -151,20 +151,20 @@ def upload_webm(conv: str, webm: bytes) -> str:
     return ""
 
 
-def attach_to_conversation(conv: str, name: str, duration: int, path: str, transcript: str, summary: str) -> bool:
-    """若 conv 對得上既有 conversation，附一則「通話錄音」訊息（含逐字稿/摘要）。"""
+def attach_to_conversation(conv: str, wf_id: str, name: str, duration: int, path: str, transcript: str, summary: str) -> bool:
+    """把「通話錄音」訊息 upsert 進電話對話（conv=phone_<digits>）。對話不存在就建立，
+    帶 platform='phone' 與 wf_id，讓它掛到正確客戶、出現在 CRM 通話紀錄。"""
     if not (SUPABASE_URL and SERVICE_KEY and conv):
         return False
     try:
         q = requests.get(
             f"{SUPABASE_URL}/rest/v1/conversations",
             headers={"apikey": SERVICE_KEY, "Authorization": f"Bearer {SERVICE_KEY}"},
-            params={"id": f"eq.{conv}", "select": "msgs"}, timeout=30,
+            params={"id": f"eq.{conv}", "select": "msgs,wf_id,name"}, timeout=30,
         )
         rows = q.json() if q.ok else []
-        if not (isinstance(rows, list) and rows):
-            return False
-        old = rows[0].get("msgs") or []
+        exist = rows[0] if (isinstance(rows, list) and rows) else None
+        old = (exist.get("msgs") if exist else None) or []
         mm, ss = duration // 60, duration % 60
         text = f"🎙️ 通話錄音（{mm}分{ss:02d}秒）"
         if summary:
@@ -177,14 +177,26 @@ def attach_to_conversation(conv: str, name: str, duration: int, path: str, trans
             "time": _hhmm(), "ts": _tsnow(), "type": "recording",
             "recording": {"path": path, "durationSec": duration, "summary": summary, "transcript": transcript},
         }
-        p = requests.patch(
+        row = {
+            "id": conv,
+            "wf_id": wf_id or (exist.get("wf_id") if exist else None),
+            "name": (exist.get("name") if exist else None) or (f"電話 {conv[6:]}" if conv.startswith("phone_") else conv),
+            "platform": "phone",
+            "av": "📞",
+            "unread": 0,
+            "last_msg": text,
+            "last_time": _hhmm(),
+            "msgs": old + [msg],
+        }
+        p = requests.post(
             f"{SUPABASE_URL}/rest/v1/conversations",
             headers={
                 "apikey": SERVICE_KEY, "Authorization": f"Bearer {SERVICE_KEY}",
-                "Content-Type": "application/json", "Prefer": "return=minimal",
+                "Content-Type": "application/json",
+                "Prefer": "resolution=merge-duplicates,return=minimal",
             },
-            params={"id": f"eq.{conv}"},
-            json={"msgs": old + [msg], "last_msg": text, "last_time": _hhmm()}, timeout=30,
+            params={"on_conflict": "id"},
+            json=row, timeout=30,
         )
         return p.ok
     except Exception as e:
@@ -202,6 +214,7 @@ async def stt(
     audio: UploadFile = File(...),                 # webm 原檔（存檔用）
     wav: UploadFile = File(None),                  # 16k 單聲道 wav（給 ASR）
     conv: str = Form(""), name: str = Form(""), durationSec: str = Form("0"),
+    wfId: str = Form(""),                          # 客戶客編（掛到 CRM 用）
 ):
     duration = int(durationSec) if str(durationSec).isdigit() else 0
     webm_bytes = await audio.read()
@@ -210,7 +223,7 @@ async def stt(
     path = upload_webm(conv, webm_bytes)
     transcript = riva_transcribe(wav_bytes)
     summary = nvidia_summary(transcript)
-    attached = attach_to_conversation(conv, name, duration, path, transcript, summary)
+    attached = attach_to_conversation(conv, wfId, name, duration, path, transcript, summary)
 
     return {
         "ok": True, "path": path, "durationSec": duration,
