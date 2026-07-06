@@ -2525,6 +2525,10 @@ function HomePage(){
   const [search,setSearch]=useState('');
   const [typeFilter,setTypeFilter]=useState('all');
   const [dept,setDept]=useState('all');
+  const [dateFrom,setDateFrom]=useState('');
+  const [dateTo,setDateTo]=useState('');
+  const [sortDir,setSortDir]=useState('desc');
+  const [pageNo,setPageNo]=useState(1);
   const [results,setResults]=useState(null); // null=案件池模式, array=客戶搜尋結果
   const [custModal,setCustModal]=useState(false);
   const installs=Object.values(db.installs||{});
@@ -2540,16 +2544,35 @@ function HomePage(){
   const followingComplaints=complaints.filter(ct=>ct.status==='following')
     .map(ct=>({...ct,_type:'complaint',_date:new Date(ct.date||0).getTime()||0}))
     .sort((a,b)=>b._date-a._date);
-  const filtered=(typeFilter==='following_complaint'
+  const inDateRange=c=>{
+    const d=c._date||new Date(c.date||c.createdDate||0).getTime()||0;
+    if(dateFrom&&d<new Date(dateFrom+'T00:00:00').getTime())return false;
+    if(dateTo&&d>new Date(dateTo+'T23:59:59').getTime())return false;
+    return true;
+  };
+  const filteredBase=(typeFilter==='following_complaint'
     ? followingComplaints.filter(c=>dept==='all'||c.department===dept)
     : allCases.filter(c=>{
         if(typeFilter!=='all'&&c._type!==typeFilter)return false;
         if(dept!=='all'&&c._type==='complaint'&&c.department!==dept)return false;
         return true;
       })
-  );
+  ).filter(inDateRange);
+  const filtered=[...filteredBase].sort((a,b)=>sortDir==='asc'?(a._date-b._date):(b._date-a._date));
+  const pageSize=30;
+  const totalPages=Math.max(1,Math.ceil(filtered.length/pageSize));
+  const pageCases=filtered.slice((Math.min(pageNo,totalPages)-1)*pageSize,Math.min(pageNo,totalPages)*pageSize);
+  useEffect(()=>{ setPageNo(1); },[typeFilter,dept,dateFrom,dateTo,sortDir,results]);
   const openCustomer=wfId=>{ setCrmTarget(wfId); setPage('crm'); };
-  const openCaseTab=(wfId,caseId)=>{ if(!wfId){ toast('此案件尚未歸戶','請先整理客編再開啟','warn'); return; } window.open(location.origin+location.pathname+'#crm/'+wfId+'/'+caseId,'_blank'); };
+  const caseUrl=(wfId,caseId)=>location.origin+location.pathname+'#crm/'+wfId+'/'+caseId;
+  const openCaseTab=(wfId,caseId)=>{ if(!wfId){ toast('此案件尚未歸戶','請先整理客編再開啟','warn'); return; } window.open(caseUrl(wfId,caseId),'_blank'); };
+  const copyCaseLink=async(e,wfId,caseId)=>{
+    e.stopPropagation();
+    if(!wfId){ toast('此案件尚未歸戶','請先整理客編再複製連結','warn'); return; }
+    const url=caseUrl(wfId,caseId);
+    try{ await navigator.clipboard.writeText(url); toast('🔗 已複製案件連結',caseId,'ok'); }
+    catch(err){ window.prompt('複製案件連結',url); }
+  };
   const doSearch=()=>{
     const term=search.trim();
     if(!term){ setResults(null); return; }
@@ -2758,6 +2781,20 @@ function HomePage(){
         <div style={{padding:'13px 20px',background:'#fff',borderBottom:'1px solid #E2E8F0',display:'flex',alignItems:'center',gap:12,flexShrink:0}}>
           <h2 style={{fontSize:16,fontWeight:700,color:'#0F2744',margin:0}}>📋 客訴單列表</h2>
           <span style={{fontSize:11.5,color:'#64748B',background:'#F1F5F9',padding:'2px 10px',borderRadius:9}}>{filtered.length} 筆</span>
+          <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+            <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}
+              style={{fontSize:11,padding:'5px 7px',border:'1px solid #CBD5E1',borderRadius:6}}/>
+            <span style={{fontSize:11,color:'#94A3B8'}}>至</span>
+            <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}
+              style={{fontSize:11,padding:'5px 7px',border:'1px solid #CBD5E1',borderRadius:6}}/>
+            <select value={sortDir} onChange={e=>setSortDir(e.target.value)}
+              style={{fontSize:11,padding:'5px 7px',border:'1px solid #CBD5E1',borderRadius:6}}>
+              <option value="desc">最新在前</option>
+              <option value="asc">最舊在前</option>
+            </select>
+            {(dateFrom||dateTo)&&<button onClick={()=>{setDateFrom('');setDateTo('');}}
+              style={{fontSize:11,padding:'5px 8px',border:'1px solid #CBD5E1',borderRadius:6,background:'#fff',cursor:'pointer'}}>清除日期</button>}
+          </div>
         </div>
         <div style={{padding:'12px 20px',flex:1}}>
           {typeFilter!=='complaint'&&filtered.length===0&&(
@@ -2769,7 +2806,7 @@ function HomePage(){
           {typeFilter==='complaint'&&(()=>{
             const pc=complaints.filter(ct=>ct.status==='pending'&&(dept==='all'||ct.department===dept))
               .map(ct=>({...ct,_type:'complaint'})).sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
-            const fc=followingComplaints.filter(c=>dept==='all'||c.department===dept);
+            const fc=followingComplaints.filter(c=>dept==='all'||c.department===dept).filter(inDateRange);
             const renderCard=c=>{
               const addr=c.address||c.building||c.district||'—';
               const s=ST[c.status]||{label:c.status||'—',bg:'#F1F5F9',fg:'#64748B'};
@@ -2794,6 +2831,8 @@ function HomePage(){
                   <div style={{fontSize:10.5,color:'#94A3B8',textAlign:'right',flexShrink:0}}>
                     <div style={{fontFamily:'monospace',fontSize:10,marginBottom:2}}>{c.id}</div>
                     <div>{c.date||'—'}</div>
+                    <button onClick={e=>copyCaseLink(e,c.wfId,c.id)}
+                      style={{marginTop:4,fontSize:10,border:'1px solid #CBD5E1',borderRadius:6,background:'#fff',color:'#475569',padding:'2px 6px',cursor:'pointer'}}>複製連結</button>
                   </div>
                   <span style={{background:s.bg,color:s.fg,fontSize:10,fontWeight:700,padding:'3px 9px',borderRadius:9,whiteSpace:'nowrap',flexShrink:0,minWidth:52,textAlign:'center'}}>{s.label}</span>
                 </div>
@@ -2812,7 +2851,7 @@ function HomePage(){
               {fc.map(renderCard)}
             </>);
           })()}
-          {typeFilter!=='complaint'&&filtered.map(c=>{
+          {typeFilter!=='complaint'&&pageCases.map(c=>{
             const addr=c.address||c.building||c.district||'—';
             const s=ST[c.status]||{label:c.status||'—',bg:'#F1F5F9',fg:'#64748B'};
             return(
@@ -2838,6 +2877,8 @@ function HomePage(){
                 <div style={{fontSize:10.5,color:'#94A3B8',textAlign:'right',flexShrink:0}}>
                   <div style={{fontFamily:'monospace',fontSize:10,marginBottom:2}}>{c.id}</div>
                   <div>{c.date||c.createdDate||'—'}</div>
+                  <button onClick={e=>copyCaseLink(e,c.wfId,c.id)}
+                    style={{marginTop:4,fontSize:10,border:'1px solid #CBD5E1',borderRadius:6,background:'#fff',color:'#475569',padding:'2px 6px',cursor:'pointer'}}>複製連結</button>
                   {c.urgency==='urgent'&&<div style={{color:'#EF4444',fontWeight:700}}>🚨</div>}
                 </div>
                 <span style={{background:s.bg,color:s.fg,fontSize:10,fontWeight:700,padding:'3px 9px',borderRadius:9,whiteSpace:'nowrap',flexShrink:0,textAlign:'center',minWidth:52}}>
@@ -2846,6 +2887,15 @@ function HomePage(){
               </div>
             );
           })}
+          {typeFilter!=='complaint'&&filtered.length>pageSize&&(
+            <div style={{display:'flex',justifyContent:'center',alignItems:'center',gap:10,padding:'12px 0 4px'}}>
+              <button onClick={()=>setPageNo(p=>Math.max(1,p-1))} disabled={pageNo<=1}
+                style={{fontSize:12,padding:'6px 12px',border:'1px solid #CBD5E1',borderRadius:7,background:pageNo<=1?'#F1F5F9':'#fff',cursor:pageNo<=1?'not-allowed':'pointer'}}>上一頁</button>
+              <span style={{fontSize:12,color:'#64748B'}}>第 {Math.min(pageNo,totalPages)} / {totalPages} 頁</span>
+              <button onClick={()=>setPageNo(p=>Math.min(totalPages,p+1))} disabled={pageNo>=totalPages}
+                style={{fontSize:12,padding:'6px 12px',border:'1px solid #CBD5E1',borderRadius:7,background:pageNo>=totalPages?'#F1F5F9':'#fff',cursor:pageNo>=totalPages?'not-allowed':'pointer'}}>下一頁</button>
+            </div>
+          )}
         </div>
           </>
         )}

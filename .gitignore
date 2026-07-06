@@ -1,6 +1,9 @@
 # 照片遷移前的本機備份（含 base64，勿進版控）
 _photo_backup/
 
+# 改檔前的本機備份（原檔名.backup_YYYYMMDD，勿進版控）
+*.backup_*
+
 # Node 相依（各子專案）
 node_modules/
 
