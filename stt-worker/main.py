@@ -47,11 +47,15 @@ def _hhmm():
 
 
 def riva_transcribe(wav_bytes: bytes) -> str:
-    """用 NVIDIA Riva(NVCF) 離線辨識 16k 單聲道 wav → 逐字稿。金鑰/function-id 缺就回空字串。"""
+    """用 NVIDIA Riva(NVCF) 辨識 16k 單聲道 wav → 逐字稿。
+    注意：parakeet-ctc-0.6b-zh-tw 只支援 streaming（不支援 offline_recognize）。
+    金鑰/function-id 缺就回空字串。"""
     if not (NVIDIA_API_KEY and RIVA_FUNCTION_ID and wav_bytes):
         return ""
     try:
         import riva.client  # nvidia-riva-client
+        with wave.open(io.BytesIO(wav_bytes), "rb") as w:
+            sr = w.getframerate()  # 讀真實取樣率，不能讓 Riva 收到 sample_rate=0
         auth = riva.client.Auth(
             uri="grpc.nvcf.nvidia.com:443",
             use_ssl=True,
@@ -66,12 +70,15 @@ def riva_transcribe(wav_bytes: bytes) -> str:
             max_alternatives=1,
             enable_automatic_punctuation=True,
             audio_channel_count=1,
+            sample_rate_hertz=sr,
         )
-        resp = asr.offline_recognize(wav_bytes, config)
+        scfg = riva.client.StreamingRecognitionConfig(config=config, interim_results=False)
+        responses = asr.streaming_response_generator(audio_chunks=[wav_bytes], streaming_config=scfg)
         parts = []
-        for r in resp.results:
-            if r.alternatives:
-                parts.append(r.alternatives[0].transcript)
+        for r in responses:
+            for res in r.results:
+                if res.alternatives:
+                    parts.append(res.alternatives[0].transcript)
         return " ".join(p.strip() for p in parts if p).strip()
     except Exception as e:
         print("[Riva ASR 失敗]", repr(e))

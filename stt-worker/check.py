@@ -5,6 +5,12 @@ import sys
 import wave
 import struct
 
+# Windows 主控台預設 cp950 會對 emoji 報 UnicodeEncodeError，強制 stdout 走 UTF-8
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+except Exception:
+    pass
+
 def load_secret():
     d = {}
     p = os.path.join(os.path.dirname(__file__), "secret.txt")
@@ -48,16 +54,34 @@ def main():
             metadata_args=[["function-id", fid], ["authorization", f"Bearer {key}"]],
         )
         asr = riva.client.ASRService(auth)
+        with wave.open(wav_path, "rb") as _w:
+            sr = _w.getframerate()  # 讀 wav 真實取樣率（不能讓 Riva 收到 sample_rate=0）
+        print("wav 取樣率 =", sr)
         cfg = riva.client.RecognitionConfig(
             language_code=lang, max_alternatives=1,
             enable_automatic_punctuation=True, audio_channel_count=1,
+            sample_rate_hertz=sr,
         )
         data = open(wav_path, "rb").read()
-        resp = asr.offline_recognize(data, cfg)
-        text = " ".join(r.alternatives[0].transcript for r in resp.results if r.alternatives).strip()
-        print("✅ 連線＋授權成功！Riva 有回應。")
-        print("辨識結果：", repr(text) if text else "（測試音無語音內容，空字串正常；換真人中文 wav 才有字）")
-        return 0
+        # 先試 offline，失敗（模型可能只支援串流）就改試 streaming
+        try:
+            resp = asr.offline_recognize(data, cfg)
+            text = " ".join(r.alternatives[0].transcript for r in resp.results if r.alternatives).strip()
+            print("[offline] 連線＋授權成功！")
+            print("辨識結果：", repr(text) if text else "（測試音無語音，空字串正常；要驗中文請丟真人中文 wav）")
+            return 0
+        except Exception as off_e:
+            print("[offline 不行，改試 streaming]", str(off_e)[:120])
+            scfg = riva.client.StreamingRecognitionConfig(config=cfg, interim_results=False)
+            responses = asr.streaming_response_generator(audio_chunks=[data], streaming_config=scfg)
+            got = []
+            for r in responses:
+                for res in r.results:
+                    if res.alternatives:
+                        got.append(res.alternatives[0].transcript)
+            print("[streaming] 連線＋授權成功！")
+            print("辨識結果：", repr(" ".join(got).strip()) if got else "（測試音無語音，空字串正常）")
+            return 0
     except Exception as e:
         print("❌ 呼叫 Riva 失敗：", repr(e))
         print("   常見原因：金鑰錯/過期、function-id 錯、或該模型未授權給此帳號")
