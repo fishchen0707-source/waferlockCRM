@@ -7,5 +7,9 @@ _photo_backup/
 # Node 相依（各子專案）
 node_modules/
 
+# Python 編譯快取
+__pycache__/
+*.pyc
+
 # 去識別化資料集（含個資，勿進版控）
 LINE DATA/
