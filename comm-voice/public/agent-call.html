@@ -45,7 +45,7 @@
     var FN = SUPABASE_URL + '/functions/v1/';
     // 通話錄音 STT 去處：設了 STT_WORKER_URL（NVIDIA Riva 的 Python 服務）就走它，
     // 沒設就回退到 Supabase Edge Function rtc-recording（Gemini 路線）。改這一行即可切換供應商。
-    var STT_WORKER_URL = ''; // 例：'https://waferlock-stt.onrender.com/stt'
+    var STT_WORKER_URL = 'https://waferlock-stt.onrender.com/stt'; // NVIDIA Riva zh-TW STT 服務（留空則回退 Gemini）
     var qs = new URLSearchParams(location.search);
     var room = qs.get('room') || '', name = qs.get('name') || '', conv = qs.get('conv') || '';
     var stateEl = document.getElementById('state'), orb = document.getElementById('orb'), controls = document.getElementById('controls');
