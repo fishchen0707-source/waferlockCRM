@@ -20,6 +20,7 @@ function startGeminiVoicebot(opts) {
 
   var session = null, stream = null, source = null, processor = null;
   var closed = false;
+  var msgCount = 0, totalAudio = 0;
 
   // ---- 下行播放：排程串接 + 支援 barge-in 中斷 ----
   var nextStartTime = 0;      // 下一段音訊的排程起始時間
@@ -88,6 +89,7 @@ function startGeminiVoicebot(opts) {
     .then(function (r) { return r.json(); })
     .then(function (tok) {
       if (!tok || !tok.token) throw new Error(tok && tok.error ? tok.error : "取不到憑證");
+      console.log("[gemini live] 已取得憑證，model=" + tok.model);
       return tok;
     })
     // 2) 麥克風權限（echoCancellation 消喇叭回授，因為現在全雙工持續收音）
@@ -99,6 +101,7 @@ function startGeminiVoicebot(opts) {
     // 3) 載入 SDK 並連線
     .then(function (tok) {
       return import("https://esm.sh/@google/genai").then(function (mod) {
+        console.log("[gemini live] SDK 已載入，開始連線");
         var GoogleGenAI = mod.GoogleGenAI, Modality = mod.Modality;
         var ai = new GoogleGenAI({ apiKey: tok.token, httpOptions: { apiVersion: "v1alpha" } });
         return ai.live.connect({
@@ -108,6 +111,7 @@ function startGeminiVoicebot(opts) {
           callbacks: {
             onopen: function () {
               if (closed) return;
+              console.log("[gemini live] WS 已連上（onopen）");
               setState("🔴 通話中"); onLive();
               // 麥克風 → 16k PCM 上行
               source = actx.createMediaStreamSource(stream);
@@ -133,18 +137,27 @@ function startGeminiVoicebot(opts) {
             },
             onmessage: function (message) {
               if (closed) return;
+              msgCount++;
               var sc = message.serverContent;
               // barge-in：使用者插話 → 立刻停掉 AI 正在播的話
-              if (sc && sc.interrupted) { stopPlayback(); return; }
+              if (sc && sc.interrupted) { console.log("[gemini live] 被打斷（barge-in）"); stopPlayback(); return; }
+              var gotAudio = false;
               // 下行音訊（native audio 走 modelTurn.parts[].inlineData）
               if (sc && sc.modelTurn && sc.modelTurn.parts) {
                 for (var i = 0; i < sc.modelTurn.parts.length; i++) {
                   var p = sc.modelTurn.parts[i];
-                  if (p.inlineData && p.inlineData.data) playPcm24k(b64ToBytes(p.inlineData.data));
+                  if (p.inlineData && p.inlineData.data) { var b = b64ToBytes(p.inlineData.data); totalAudio += b.byteLength; gotAudio = true; playPcm24k(b); }
                 }
+              } else if (message.data) {
+                // 部分 SDK 版本提供便捷欄位 message.data（base64 音訊）；與上面二擇一避免重複播放
+                try { var bb = b64ToBytes(message.data); totalAudio += bb.byteLength; gotAudio = true; playPcm24k(bb); } catch (e) {}
               }
-              // 部分 SDK 版本也提供便捷欄位 message.data（base64 音訊）
-              if (message.data) { try { playPcm24k(b64ToBytes(message.data)); } catch (e) {} }
+              // 前 3 則與首次收到音訊時印出結構，方便除錯
+              if (msgCount <= 3 || (gotAudio && totalAudio > 0 && msgCount <= 30)) {
+                console.log("[gemini live] 第" + msgCount + "則  keys=" + Object.keys(message).join(",") +
+                  "  scKeys=" + (sc ? Object.keys(sc).join(",") : "無serverContent") +
+                  "  累積音訊=" + totalAudio + "bytes");
+              }
             },
             onerror: function (e) { fail("AI 客服連線發生問題"); console.error("[gemini live] error", e); },
             onclose: function (e) {
@@ -152,13 +165,26 @@ function startGeminiVoicebot(opts) {
               if (!closed) { cleanup(); onEnded("closed"); }
             },
           },
-        }).then(function (sess) { session = sess; });
+        }).then(function (sess) {
+          session = sess;
+          // native audio 是對話模型，連上後會靜靜等對方開口；主動送一個觸發讓 AI 先用 Leda 聲音問候客戶
+          console.log("[gemini live] session ready，送出開場問候觸發");
+          if (!closed) {
+            try {
+              session.sendClientContent({
+                turns: [{ role: "user", parts: [{ text: "（電話已接通，請你主動用一句話親切問候並詢問客戶需要什麼協助）" }] }],
+                turnComplete: true,
+              });
+            } catch (e) { console.error("[gemini live] 送開場問候失敗", e); }
+          }
+        });
       });
     })
     .catch(function (err) {
       console.error("[gemini live] start failed", err);
-      var m = String(err && err.message || err);
-      if (/getUserMedia|Permission|NotAllowed/i.test(m)) fail("無法存取麥克風，請允許權限");
+      var m = String(err && err.name || "") + " " + String(err && err.message || err);
+      if (/NotAllowed|Permission|SecurityError/i.test(m)) fail("麥克風權限被拒，請允許後重試");
+      else if (/NotReadable|Could not start audio|NotFound|Overconstrained|Device/i.test(m)) fail("麥克風無法啟動（可能被其他程式或分頁佔用），請關掉其他用到麥克風的程式再重試");
       else fail("無法連上 AI 客服");
     });
 
