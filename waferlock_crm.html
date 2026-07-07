@@ -254,6 +254,19 @@ const pushLineTo = (to, text, sender={name:'維夫拉克客服'}) => {
   sb.functions.invoke('line-push', { body:{ to, text, sender } }).catch(e=>console.error('line-push', e));
 };
 
+// 對話訊息原子 append（見 sql/supabase_atomic_conv_append.sql）：取代舊版「讀本地 conversations
+// 快照 → append → 隨其他欄位一起整包 upsert」的寫法。整包 upsert 若剛好與客戶同時傳訊息的
+// webhook 寫入交錯，會用本地舊快照蓋掉對方剛存的訊息——訊息無聲消失。改由 DB 端單一陳述式
+// 原子完成，不論寫入順序都不會互相覆蓋；本地 UI 不做樂觀更新，改靠 Realtime 訂閱自然補上。
+const appendConvMsg = async (convId, text, {unreadDelta=0}={}) => {
+  if(!convId) return;
+  const msg = {id:'p'+Date.now(), from:'bot', text, time:now()};
+  const {error} = await sb.rpc('append_conversation_message', {
+    p_id:convId, p_msg:msg, p_last_msg:text, p_last_time:now(), p_unread_delta:unreadDelta,
+  });
+  if(error) console.error('append_conversation_message error:', error);
+};
+
 // ── DB 欄位轉換（camelCase <-> snake_case） ──
 const custToDb = c => ({wf_id:c.wfId,name:c.name,phone:c.phone,email:c.email,address:c.address,district:c.district,area:c.area,channel:c.channel,product_id:c.productId,serial_no:c.serialNo,install_date:c.installDate,warranty_months:c.warrantyMonths,warranty_end:c.warrantyEnd,tags:c.tags||[],reg_type:c.regType,reg_date:c.regDate,line_uid:c.lineUid,fb_id:c.fbId,ig_id:c.igId,repair_ids:c.repairIds||[],complaint_ids:c.complaintIds||[],site:c.site,unit:c.unit,order_no:c.orderNo,group_id:c.groupId,project_id:c.projectId,zip:c.zip});
 const dbToCust = r => ({wfId:r.wf_id,name:r.name,phone:r.phone,email:r.email,address:r.address,district:r.district,area:r.area,channel:r.channel,productId:r.product_id,serialNo:r.serial_no,installDate:r.install_date,warrantyMonths:r.warranty_months,warrantyEnd:r.warranty_end,tags:r.tags||[],regType:r.reg_type,regDate:r.reg_date,lineUid:r.line_uid,fbId:r.fb_id,igId:r.ig_id,repairIds:r.repair_ids||[],complaintIds:r.complaint_ids||[],site:r.site,unit:r.unit,orderNo:r.order_no,groupId:r.group_id,projectId:r.project_id,zip:r.zip});
@@ -942,10 +955,10 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
       if(isNew) customers=[...customers,{wfId,name:f.name.trim(),phone:f.phone.trim(),address:f.address,zip:f.zip,
         regType:'manual',regDate:today(),tags:['待整理'],repairIds:[rid],complaintIds:[]}];
       else customers=customers.map(x=>x.wfId===wfId?{...x,repairIds:[...(x.repairIds||[]),rid]}:x);
-      const convs=(prev.conversations||[]).map(cv=>(uid&&cv.id===uid)
-        ?{...cv,msgs:[...(cv.msgs||[]),{id:'p'+Date.now(),from:'bot',text:pushTxt,time:now()}],lastMsg:'已建立報修單',lastTime:now()}:cv);
-      return {...prev,repairs:{...prev.repairs,[rid]:newRepair},customers,conversations:convs};
+      return {...prev,repairs:{...prev.repairs,[rid]:newRepair},customers};
     });
+    // 對話訊息改走原子 RPC，不再靠本地快照整包 upsert；畫面會由 Realtime 訂閱自動補上最新對話
+    appendConvMsg(uid,pushTxt);
     pushLineTo(uid,pushTxt);
     toast('📋 已立案',`${f.name} 報修單 ${rid} 已建立${isNew?'（新客編 '+wfId+'）':''}`,'ok');
     onClose(rid);
@@ -1273,27 +1286,25 @@ function CRMPage(){
       : (prevWk!==dispSw
           ? `🔁 轉單：原 ${oldName} → ${w?.name}｜${slotTxt}${reasonSuffix}${chargeSuffix}`
           : `🔁 改期：${w?.name}｜${slotTxt}${reasonSuffix}${chargeSuffix}`);
-    const pushMsg={id:'p'+Date.now(),from:'bot',
-      text:`🚗 派工通知\n\n師傅：${w?.name}\n預約：${slotTxt}\n師傅出發前將再次通知 📱`,time:now()};
+    const pushText=`🚗 派工通知\n\n師傅：${w?.name}\n預約：${slotTxt}\n師傅出發前將再次通知 📱`;
     updateDB(prev=>{
       const cur=prev.repairs[dispatchRepair.id];
       const nr={...prev.repairs,[dispatchRepair.id]:pushHist({...cur,status:'dispatched',workerId:dispSw,scheduledDate:slotTxt,
         schedDate:dispSd,schedStart:dispStart,schedSpan:span,arrivalPushed:true,charges,chargeTotal:ctotal,
         slaLevel:dispHiRisk?'high':cur.slaLevel,flagBomber:dispBomber,
         note:[cur.note,dispHiRisk?'⚠️高風險維修':'',dispHardJob?'困難施工':'',dispBomber?'💣轟炸戶':''].filter(Boolean).join(' / ')},currentUser?.name,histAction)};
-      const nc=(prev.conversations||[]).map(c=>(uid&&c.id===uid)
-        ?{...c,msgs:[...(c.msgs||[]),pushMsg],lastMsg:'師傅通知已送出',lastTime:now()}:c);
-      return {...prev,repairs:nr,conversations:nc};
+      return {...prev,repairs:nr};
     });
-    pushLineTo(uid, pushMsg.text);
+    // 對話訊息改走原子 RPC，不再靠本地快照整包 upsert
+    appendConvMsg(uid,pushText);
+    pushLineTo(uid, pushText);
     toast('🚗 派工完成',`${w?.name}｜${slotTxt}${uid?'，已推播住戶':'（客戶未綁定 LINE）'}`,'ok');
     setDispatchRepair(null);
   };
   const finishRepairClose=(r,d)=>{
     const chargeLine=(d.charges&&d.charges.length)?`\n費用：$${d.total}`:'\n本次維修免費（保固內）';
     const wkName=(db.workers||[]).find(w=>w.id===r.workerId)?.name||WORKERS.find(w=>w.id===r.workerId)?.name||'—';
-    const closeMsg={id:'p'+Date.now(),from:'bot',time:now(),
-      text:`✅ 維修完成結案\n\n案件：${r.id}\n問題：${r.type} — ${r.issue}${chargeLine}\n師傅：${wkName}\n簽收單號：${d.receiptNo}\n\n感謝您的使用 🙏 期待再為您服務\n⭐ 歡迎為本次服務評分`};
+    const closeText=`✅ 維修完成結案\n\n案件：${r.id}\n問題：${r.type} — ${r.issue}${chargeLine}\n師傅：${wkName}\n簽收單號：${d.receiptNo}\n\n感謝您的使用 🙏 期待再為您服務\n⭐ 歡迎為本次服務評分`;
     const ccu=(db.customers||[]).find(c=>c.wfId===r.wfId);
     const cuid=ccu?.lineUid;
     updateDB(prev=>({...prev,
@@ -1304,10 +1315,10 @@ function CRMPage(){
         warrantyJudgment:d.warrantyJudgment,excludeReason:d.excludeReason,
         auditNote:d.auditNote||'',receiptNo:d.receiptNo,
         completedDate:today()},currentUser?.name,`完工結案｜簽收單號 ${d.receiptNo}`)},
-      conversations:(prev.conversations||[]).map(c=>(cuid&&c.id===cuid)
-        ?{...c,msgs:[...(c.msgs||[]),closeMsg],lastMsg:'維修完成結案',lastTime:now()}:c)
     }));
-    pushLineTo(cuid, closeMsg.text);
+    // 對話訊息改走原子 RPC，不再靠本地快照整包 upsert
+    appendConvMsg(cuid,closeText);
+    pushLineTo(cuid, closeText);
     toast('✅ 已結案',`電子工單已簽收，簽收單號 ${d.receiptNo}`,'ok');
     setTimeout(()=>toast('📨 CSAT 已推播','滿意度問卷已發送住戶','ok'),1500);
     setClosingRepair(null);

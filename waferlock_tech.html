@@ -165,14 +165,19 @@ function pctW(install,months){if(!install||!months)return null;const s=new Date(
 function warrantyBadge(r){ if(r.warranty_in===true)return '<span class="badge b-in">保固內</span>'; if(r.warranty_in===false)return '<span class="badge b-out">保固外</span>'; return ''; }
 // 推播統一走雙軌：①寫進客戶對話 conversations（LINE 模擬頁/CRM 看得到）②綁真實 LINE 才發 App 推播。
 // 回傳 {logged, pushed} 供呼叫端顯性提示，不再靜默。
+// 寫入改走原子 append RPC（見 sql/supabase_atomic_conv_append.sql），取代舊版「讀 msgs → 整包寫回」——
+// 師傅端與客戶同時傳訊息（或 LINE/Meta webhook 同時寫入）不會再互相覆蓋。
 async function logToConversation(wfId,text){
   if(!wfId) return false;
-  const {data}=await sb.from('conversations').select('id,msgs').eq('wf_id',wfId);
+  const {data}=await sb.from('conversations').select('id').eq('wf_id',wfId);
   if(!data||!data.length) return false;
   const time=new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',hour12:false});
   for(const conv of data){
     const msg={id:'t'+Date.now()+Math.random().toString(36).slice(2,5),from:'bot',text,time};
-    await sb.from('conversations').update({msgs:[...(conv.msgs||[]),msg],last_msg:String(text).slice(0,24),last_time:time}).eq('id',conv.id);
+    const {error}=await sb.rpc('append_conversation_message',{
+      p_id:conv.id, p_msg:msg, p_last_msg:String(text).slice(0,24), p_last_time:time, p_unread_delta:0,
+    });
+    if(error) console.error('append_conversation_message error:',error);
   }
   return true;
 }

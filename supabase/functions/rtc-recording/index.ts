@@ -83,25 +83,26 @@ Deno.serve(async (req) => {
     // 2) 選配 Gemini STT 逐字稿 + 摘要
     const { transcript, summary } = wav ? await analyze(new Uint8Array(await wav.arrayBuffer())) : { transcript: "", summary: "" };
 
-    // 3) 若 conv 對得上既有 conversation（id 相同）就附一則錄音訊息，否則只存 Storage
+    // 3) 若 conv 對得上既有 conversation（id 相同）就附一則錄音訊息，否則只存 Storage（不主動新建對話）
     let attached = false;
     if (conv) {
-      const q = await fetch(`${SUPABASE_URL}/rest/v1/conversations?id=eq.${encodeURIComponent(conv)}&select=msgs`, {
+      const q = await fetch(`${SUPABASE_URL}/rest/v1/conversations?id=eq.${encodeURIComponent(conv)}&select=id`, {
         headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
       });
       if (q.ok) {
         const rows = await q.json();
         if (Array.isArray(rows) && rows.length) {
-          const oldMsgs = Array.isArray(rows[0].msgs) ? rows[0].msgs : [];
           const mm = Math.floor(durationSec / 60), ss = durationSec % 60;
           const text = `🎙️ 通話錄音（${mm}分${pad(ss)}秒）${summary ? `｜摘要：${summary}` : ""}${transcript ? "｜含逐字稿" : ""}`;
           const msg = { id: "rec" + Date.now(), from: "agent", by: name, text, time: nowText(), ts: tsNow(), type: "recording", recording: { path, durationSec, summary, transcript } };
-          await fetch(`${SUPABASE_URL}/rest/v1/conversations?id=eq.${encodeURIComponent(conv)}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json", apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, Prefer: "return=minimal" },
-            body: JSON.stringify({ msgs: [...oldMsgs, msg], last_msg: text, last_time: nowText() }),
+          // 原子 append（見 supabase_atomic_conv_append.sql），unread_delta=0 沿用原行為（錄音訊息不推高未讀數）
+          const ap = await fetch(`${SUPABASE_URL}/rest/v1/rpc/append_conversation_message`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+            body: JSON.stringify({ p_id: conv, p_msg: msg, p_last_msg: text, p_last_time: nowText(), p_unread_delta: 0 }),
           });
-          attached = true;
+          if (ap.ok) attached = true;
+          else console.log("[append_conversation_message 失敗]", ap.status, (await ap.text()).slice(0, 200));
         }
       }
     }

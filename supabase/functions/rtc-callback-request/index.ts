@@ -60,38 +60,28 @@ Deno.serve(async (req) => {
       callback: { room, name, phone },
     };
 
-    let oldMsgs: unknown[] = [];
-    const old = await fetch(`${SUPABASE_URL}/rest/v1/conversations?id=eq.${encodeURIComponent(convId)}&select=msgs`, {
-      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
-    });
-    if (old.ok) {
-      const rows = await old.json();
-      oldMsgs = Array.isArray(rows?.[0]?.msgs) ? rows[0].msgs : [];
-    }
-
-    const row = {
-      id: convId,
-      wf_id: null,
-      name: `待回電：${name}`,
-      platform: "phone",
-      av: "📞",
-      unread: 1,
-      last_msg: text,
-      last_time: nowText(),
-      msgs: [...oldMsgs, msg],
-      agent_takeover: true,
-      need_case: true,
-    };
-
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/conversations?on_conflict=id`, {
+    // 原子 append（見 supabase_atomic_conv_append.sql）：取代「讀 msgs → 整包寫回」，
+    // 避免同電話短時間內二次逾時未接聽時互相覆蓋
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/append_conversation_message`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         apikey: SERVICE_KEY,
         Authorization: `Bearer ${SERVICE_KEY}`,
-        Prefer: "resolution=merge-duplicates,return=representation",
       },
-      body: JSON.stringify(row),
+      body: JSON.stringify({
+        p_id: convId,
+        p_msg: msg,
+        p_last_msg: text,
+        p_last_time: nowText(),
+        p_wf_id: null,
+        p_name: `待回電：${name}`,
+        p_platform: "phone",
+        p_av: "📞",
+        p_unread_delta: 1,
+        p_agent_takeover: true,
+        p_need_case: true,
+      }),
     });
     if (!r.ok) return json({ ok: false, status: r.status, error: await r.text() }, 502);
     return json({ ok: true, conversation: convId });
