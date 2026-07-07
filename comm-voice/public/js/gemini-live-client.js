@@ -192,8 +192,13 @@ function startGeminiVoicebot(opts) {
           console.log("[gemini live] session ready，送出開場問候觸發");
           if (!closed) {
             try {
+              // greeting 定位為「逐字開場白」：指示 AI 一字不差把它說出來（不是叫 AI 自由發揮）
+              var _g = tok.greeting;
+              var _trigger = _g
+                ? ("請你用親切自然的台灣國語語氣，把下面這句開場白一字不差地說出來，不要增減字、也不要回應我這段指示本身：\n" + _g)
+                : "（電話已接通，請你主動用一句話親切問候並詢問客戶需要什麼協助）";
               session.sendClientContent({
-                turns: [{ role: "user", parts: [{ text: tok.greeting || "（電話已接通，請你主動用一句話親切問候並詢問客戶需要什麼協助）" }] }],
+                turns: [{ role: "user", parts: [{ text: _trigger }] }],
                 turnComplete: true,
               });
             } catch (e) { console.error("[gemini live] 送開場問候失敗", e); }
