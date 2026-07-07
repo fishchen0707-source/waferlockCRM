@@ -18,8 +18,9 @@
 // ==============================================
 const KEY = Deno.env.get("GEMINI_API_KEY") || "";
 
-// 與 G0 PoC 驗證通過的一致：native audio 原生語音對話（支援 Leda 音色 + 情感對話 + function calling）
-const MODEL_ID = "gemini-2.5-flash-native-audio-preview-12-2025";
+// 改用 gemini-3.1-flash-live-preview：首音延遲 ~0.9s（native audio 約 1.5-2s），代價是不支援情感對話。
+// 保留 Leda 音色。（本機實測：3.1 開 enableAffectiveDialog 會回 1011 Internal error，故移除該設定）
+const MODEL_ID = "gemini-3.1-flash-live-preview";
 const VOICE = "Leda";
 
 // 台灣客服人設（G0 試聽定案）。放伺服器端，不外洩前端。
@@ -59,7 +60,6 @@ Deno.serve(async (req) => {
         generationConfig: {
           responseModalities: ["AUDIO"],
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: VOICE } } },
-          enableAffectiveDialog: true,
         },
         systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
       },
