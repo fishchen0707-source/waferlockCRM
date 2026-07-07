@@ -107,7 +107,18 @@ function startGeminiVoicebot(opts) {
         return ai.live.connect({
           model: tok.model,
           // 其餘設定（音色/人設/情感對話）已鎖在 token 的 liveConnectConstraints
-          config: { responseModalities: [Modality.AUDIO] },
+          config: {
+            responseModalities: [Modality.AUDIO],
+            // 降低回應延遲：讓 VAD 更快判定使用者講完（停頓 0.2 秒即觸發回應）
+            realtimeInputConfig: {
+              automaticActivityDetection: {
+                startOfSpeechSensitivity: "START_SENSITIVITY_HIGH",
+                endOfSpeechSensitivity: "END_SENSITIVITY_HIGH",
+                prefixPaddingMs: 20,
+                silenceDurationMs: 200,
+              },
+            },
+          },
           callbacks: {
             onopen: function () {
               if (closed) return;
