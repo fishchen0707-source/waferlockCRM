@@ -35,7 +35,7 @@
   </div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/rtc-client.js"></script>
-  <script src="js/voicebot-client.js"></script>
+  <script src="js/gemini-live-client.js"></script>
   <script>
   (function () {
     // 信令與 TURN 憑證都掛在既有 Supabase（anon key 前端公開，與專案其餘頁面一致）
@@ -44,7 +44,7 @@
     var FN = SUPABASE_URL + '/functions/v1/';
     var room = (new URLSearchParams(location.search)).get('room') || '';
     var stateEl = document.getElementById('state'), orb = document.getElementById('orb'), controls = document.getElementById('controls'), hint = document.getElementById('hint');
-    var call = null, muted = false;
+    var call = null, bot = null, actx = null, muted = false;
     function setState(s) { stateEl.textContent = s; }
     if (!room) { setState('⚠️ 通話連結無效'); document.getElementById('hint').style.display = 'none'; return; }
     var ho = (new URLSearchParams(location.search)).get('ho'); // 從 AI 語音轉真人而來
@@ -56,10 +56,10 @@
 
     function inCallUI() {
       controls.innerHTML = '<button class="mute" id="mute">🔇 靜音</button><button class="stop" id="stop">⏹ 掛斷</button>';
-      document.getElementById('mute').onclick = function () { muted = !muted; call.setMute(muted); this.textContent = muted ? '🔊 取消靜音' : '🔇 靜音'; };
+      document.getElementById('mute').onclick = function () { muted = !muted; if (bot) bot.setMute(muted); if (call) call.setMute(muted); this.textContent = muted ? '🔊 取消靜音' : '🔇 靜音'; };
       document.getElementById('stop').onclick = endCall;
     }
-    function endCall() { cancelWait(); if (call) call.hangup(); orb.className = 'orb'; setState('通話已結束'); controls.innerHTML = ''; hint.style.display = 'none'; }
+    function endCall() { cancelWait(); try { if (bot) bot.hangup(); } catch (e) {} try { if (call) call.hangup(); } catch (e) {} try { if (actx) actx.close(); } catch (e) {} orb.className = 'orb'; setState('通話已結束'); controls.innerHTML = ''; hint.style.display = 'none'; }
     // D：無人接聽 → 請顧客留姓名電話，開「待回電」工單（語音轉錄電話容易錯，用表單最準）
     function showCallbackForm() {
       cancelWait();
@@ -91,9 +91,17 @@
     }
     document.getElementById('accept').onclick = function () {
       inCallUI(); setState('接通中…');
-      fetch(FN + 'rtc-config', { headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY } }).then(function (r) { return r.json(); }).catch(function () { return {}; }).then(function (cfg) {
-        // 先啟動 AI Voicebot
-        startVoicebot(room, cfg, setState, SUPABASE_URL, SUPABASE_KEY, onStatus);
+      // 在使用者點擊手勢內同步建立 AudioContext，否則 iOS/Safari 會停在 suspended 導致全程無聲
+      actx = new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.resume) { try { actx.resume(); } catch (e) {} }
+      bot = startGeminiVoicebot({
+        actx: actx,
+        tokenUrl: FN + 'gemini-live-token',
+        headers: { 'Content-Type': 'application/json', apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY },
+        setState: setState,
+        // AI 接通即取消「50 秒無人接聽」計時器，避免對談中誤彈留言表單
+        onLive: function () { cancelWait(); orb.className = 'orb live'; },
+        onEnded: function (reason) { orb.className = 'orb'; if (reason === 'hangup') { setState('通話已結束'); controls.innerHTML = ''; hint.style.display = 'none'; } },
       });
     };
   })();

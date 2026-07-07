@@ -1,5 +1,9 @@
 # voicebot（自建 Gemini Live 替代品）— Bug 盤點與達標路線圖
 
+> ⚠️ **路線已變更（2026-07-07）**：NVIDIA 免費 hosted TTS 實測連官方範例都 30 秒 worker 超時（`failed to establish link to worker`）不可靠，已改用正牌 **Google Gemini Live API**（native audio，音色定 Leda）。
+> 新方向的完整路線圖見版本紀錄與規劃檔；新程式在 `supabase/functions/gemini-live-token/` 與 `comm-voice/public/js/gemini-live-client.js`。
+> **本文件以下的 NVIDIA voicebot 內容不再是主線**，僅保留作為 `stt-worker/voicebot.py` 既有程式（未刪）的 bug 參考。
+
 > 產出日期：2026-07-07。給後續 AI session／工程師依序執行用。
 > 目標：用 NVIDIA API（Riva ASR zh-TW → NVIDIA LLM → Riva TTS）做到 Gemini Live 等級的即時語音客服、零 API 費用，並讓 AI 讀取自己的資料庫（既有 Supabase CRM ＋ 新建產品知識庫）像真人一樣回答。
 > 相關程式碼：`stt-worker/voicebot.py`（後端 WS）、`comm-voice/public/js/voicebot-client.js`、`comm-voice/public/call.html`（前端）。已 commit 但**未部署**（卡在缺中文 TTS function-id）。
