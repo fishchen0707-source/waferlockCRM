@@ -21,8 +21,9 @@ import io
 import wave
 import datetime
 import requests
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
+from voicebot import voicebot_handler
 
 NVIDIA_API_KEY = os.environ.get("NVIDIA_API_KEY", "")
 RIVA_FUNCTION_ID = os.environ.get("RIVA_FUNCTION_ID", "")
@@ -228,6 +229,10 @@ async def stt(
     return {
         "ok": True, "path": path, "durationSec": duration,
         "transcript": transcript, "summary": summary, "attached": attached,
-        "asr_err": _LAST_ASR_ERR,  # 除錯：Riva 若失敗這裡會有原因
         "llm_err": _LAST_LLM_ERR,  # 除錯：LLM 摘要若失敗這裡會有原因
     }
+
+@app.websocket("/ws/voicebot")
+async def websocket_endpoint(websocket: WebSocket):
+    await voicebot_handler(websocket)
+
