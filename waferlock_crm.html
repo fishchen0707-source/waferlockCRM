@@ -300,65 +300,86 @@ function Watermark({text}){
 
 const EMPTY_DB = {customers:[],repairs:{},complaints:{},installs:{},conversations:[],workers:[],bookings:[],groups:[],projects:[],wfCounter:0,version:0};
 
-async function loadFromSupabase(){
-  try{
-    const [custsRes,repairsRes,ctRes,installRes,convRes,cfgRes,wkRes,bkRes,grpRes,prjRes] = await Promise.all([
-      sb.from('customers').select('*'),
-      sb.from('repairs').select('*'),
-      sb.from('complaints').select('*'),
-      sb.from('installs').select('*'),
-      sb.from('conversations').select('*'),
-      sb.from('config').select('*'),
-      sb.from('workers').select('*'),
-      sb.from('bookings').select('*'),
-      sb.from('groups').select('*'),
-      sb.from('projects').select('*'),
-    ]);
-    const customers = (custsRes.data||[]).map(dbToCust);
-    const repairs = Object.fromEntries((repairsRes.data||[]).map(r=>[r.id,dbToRepair(r)]));
-    const complaints = Object.fromEntries((ctRes.data||[]).map(r=>[r.id,dbToCt(r)]));
-    const installs = Object.fromEntries((installRes.data||[]).map(r=>[r.id,dbToInstall(r)]));
-    const conversations = (convRes.data||[]).map(dbToConv);
-    const workers = (wkRes.data||[]).filter(w=>w.active!==false).map(dbToWorker);
-    const bookings = (bkRes.data||[]).map(dbToBooking);
-    const groups = (grpRes.data||[]).map(dbToGroup);
-    const projects = (prjRes.data||[]).map(dbToProject);
-    const wfCounter = parseInt((cfgRes.data||[]).find(c=>c.key==='wf_counter')?.value||'0');
-    return {customers,repairs,complaints,installs,conversations,workers,bookings,groups,projects,wfCounter,version:0};
-  }catch(e){ console.error('loadFromSupabase error:',e); return EMPTY_DB; }
+// Supabase 表格逐頁抓取（PostgREST 預設每次最多回 1000 筆，全量表超過門檻就要分頁抓完，
+// 否則資料在使用者眼中會「無聲消失」——查不到客戶、看不到舊工單）
+const SB_PAGE_SIZE = 1000;
+async function selectAllRows(table){
+  let all=[], from=0;
+  while(true){
+    const {data,error} = await sb.from(table).select('*').range(from, from+SB_PAGE_SIZE-1);
+    if(error) throw new Error(`載入 ${table} 失敗：${error.message}`);
+    all = all.concat(data||[]);
+    if(!data || data.length < SB_PAGE_SIZE) break;
+    from += SB_PAGE_SIZE;
+  }
+  return all;
 }
 
+async function loadFromSupabase(){
+  const [custsData,repairsData,ctData,installData,convData,cfgData,wkData,bkData,grpData,prjData] = await Promise.all([
+    selectAllRows('customers'),
+    selectAllRows('repairs'),
+    selectAllRows('complaints'),
+    selectAllRows('installs'),
+    selectAllRows('conversations'),
+    selectAllRows('config'),
+    selectAllRows('workers'),
+    selectAllRows('bookings'),
+    selectAllRows('groups'),
+    selectAllRows('projects'),
+  ]);
+  const customers = custsData.map(dbToCust);
+  const repairs = Object.fromEntries(repairsData.map(r=>[r.id,dbToRepair(r)]));
+  const complaints = Object.fromEntries(ctData.map(r=>[r.id,dbToCt(r)]));
+  const installs = Object.fromEntries(installData.map(r=>[r.id,dbToInstall(r)]));
+  const conversations = convData.map(dbToConv);
+  const workers = wkData.filter(w=>w.active!==false).map(dbToWorker);
+  const bookings = bkData.map(dbToBooking);
+  const groups = grpData.map(dbToGroup);
+  const projects = prjData.map(dbToProject);
+  const wfCounter = parseInt(cfgData.find(c=>c.key==='wf_counter')?.value||'0');
+  return {customers,repairs,complaints,installs,conversations,workers,bookings,groups,projects,wfCounter,version:0};
+}
+
+// 回傳 {ok, errors}：Supabase client 預設「失敗不丟例外」，只在回傳值帶 .error，
+// 舊版只包 try/catch 幾乎抓不到真正的寫入失敗（RLS 擋下、型別錯誤等）——逐筆檢查 .error 才會顯性失敗
 async function syncToSupabase(prev,next){
+  const errors=[];
+  const run=async(label,promise)=>{
+    const {error}=await promise;
+    if(error){ console.error(`syncToSupabase ${label} error:`,error); errors.push(`${label}：${error.message}`); }
+  };
   try{
     const changedCusts=(next.customers||[]).filter(c=>{
       const old=(prev.customers||[]).find(p=>p.wfId===c.wfId);
       return !old||JSON.stringify(old)!==JSON.stringify(c);
     });
-    if(changedCusts.length>0) await sb.from('customers').upsert(changedCusts.map(custToDb));
+    if(changedCusts.length>0) await run('customers', sb.from('customers').upsert(changedCusts.map(custToDb)));
     const changedRepairs=Object.values(next.repairs||{}).filter(r=>{
       const old=(prev.repairs||{})[r.id];
       return !old||JSON.stringify(old)!==JSON.stringify(r);
     });
-    if(changedRepairs.length>0) await sb.from('repairs').upsert(changedRepairs.map(repairToDb));
+    if(changedRepairs.length>0) await run('repairs', sb.from('repairs').upsert(changedRepairs.map(repairToDb)));
     const changedCts=Object.values(next.complaints||{}).filter(ct=>{
       const old=(prev.complaints||{})[ct.id];
       return !old||JSON.stringify(old)!==JSON.stringify(ct);
     });
-    if(changedCts.length>0) await sb.from('complaints').upsert(changedCts.map(ctToDb));
+    if(changedCts.length>0) await run('complaints', sb.from('complaints').upsert(changedCts.map(ctToDb)));
     const changedInstalls=Object.values(next.installs||{}).filter(o=>{
       const old=(prev.installs||{})[o.id];
       return !old||JSON.stringify(old)!==JSON.stringify(o);
     });
-    if(changedInstalls.length>0) await sb.from('installs').upsert(changedInstalls.map(installToDb));
+    if(changedInstalls.length>0) await run('installs', sb.from('installs').upsert(changedInstalls.map(installToDb)));
     const changedConvs=(next.conversations||[]).filter(c=>{
       const old=(prev.conversations||[]).find(p=>p.id===c.id);
       return !old||JSON.stringify(old)!==JSON.stringify(c);
     });
-    if(changedConvs.length>0) await sb.from('conversations').upsert(changedConvs.map(convToDb));
+    if(changedConvs.length>0) await run('conversations', sb.from('conversations').upsert(changedConvs.map(convToDb)));
     if(next.wfCounter!==prev.wfCounter){
-      await sb.from('config').upsert({key:'wf_counter',value:String(next.wfCounter)});
+      await run('config', sb.from('config').upsert({key:'wf_counter',value:String(next.wfCounter)}));
     }
-  }catch(e){ console.error('syncToSupabase error:',e); }
+  }catch(e){ console.error('syncToSupabase exception:',e); errors.push(String(e.message||e)); }
+  return {ok:errors.length===0, errors};
 }
 
 // 照片上傳 Supabase Storage（取代 base64 入庫）：回傳 public URL 陣列
@@ -1227,9 +1248,17 @@ function CRMPage(){
     const workers=db.workers||[];
     const w=workers.find(x=>x.id===dispSw)||WORKERS.find(x=>x.id===dispSw);
     const span=Math.max(1,Math.ceil(Number(dispatchRepair.workHours)||1));
+    // 轉單改派時，先記住舊時段以便新時段衝突時原樣復原（否則舊時段被釋放後若新時段搶輸，
+    // 工單會卡在「顯示已派工、時刻表卻是空的」的中間態）
+    const oldSlot = dispatchRepair.workerId
+      ? {workerId:dispatchRepair.workerId, date:dispatchRepair.schedDate, start:dispatchRepair.schedStart, span:dispatchRepair.schedSpan||1}
+      : null;
     await releaseSlots(dispatchRepair.id); // 先釋放舊時段（轉單改派時避免孤兒佔格）
     const ok=await bookSlots(dispSw,dispSd,dispStart,span,'repair',dispatchRepair.id);
-    if(!ok){ toast('時段衝突','該師傅此時段已被預約，請改其他時段','err'); return; }
+    if(!ok){
+      if(oldSlot?.workerId&&oldSlot.date&&oldSlot.start!=null) await bookSlots(oldSlot.workerId,oldSlot.date,oldSlot.start,oldSlot.span,'repair',dispatchRepair.id);
+      toast('時段衝突','該師傅此時段已被預約，請改其他時段（原時段已還原）','err'); return;
+    }
     const cu=(db.customers||[]).find(c=>c.wfId===dispatchRepair.wfId);
     const uid=cu?.lineUid;
     const charges=normCharges(dispChargeRows); const ctotal=chargesTotal(dispChargeRows);
@@ -1294,9 +1323,16 @@ function CRMPage(){
     const workers=db.workers||[];
     const w=workers.find(x=>x.id===dispSw)||WORKERS.find(x=>x.id===dispSw);
     const span=Math.max(1,Math.ceil(Number(schedInstall.workHours)||2));
+    // 同 doRepairDispatch：先記住舊時段，新時段衝突時原樣復原，避免「已派工但時刻表是空的」中間態
+    const oldSlot = schedInstall.workerId
+      ? {workerId:schedInstall.workerId, date:schedInstall.schedDate, start:schedInstall.schedStart, span:schedInstall.schedSpan||2}
+      : null;
     await releaseSlots(schedInstall.id);
     const ok=await bookSlots(dispSw,dispSd,dispStart,span,'install',schedInstall.id);
-    if(!ok){ toast('時段衝突',`該師傅此 ${span} 小時已被佔用，請改時段`,'err'); return; }
+    if(!ok){
+      if(oldSlot?.workerId&&oldSlot.date&&oldSlot.start!=null) await bookSlots(oldSlot.workerId,oldSlot.date,oldSlot.start,oldSlot.span,'install',schedInstall.id);
+      toast('時段衝突',`該師傅此 ${span} 小時已被佔用，請改時段（原時段已還原）`,'err'); return;
+    }
     const slotTxt=`${dispSd} ${String(dispStart).padStart(2,'0')}:00-${String(dispStart+span).padStart(2,'0')}:00`;
     // 異動紀錄：首次排程／轉單改派／同師傅改期
     const prevWk=schedInstall.workerId;
@@ -3505,15 +3541,22 @@ function App(){
     setTimeout(()=>setToasts(p=>p.filter(t=>t.id!==id)),3500);
   },[]);
 
-  // 初始載入
-  useEffect(()=>{
+  const [loadError,setLoadError] = useState(null);
+  const doInitialLoad=useCallback(()=>{
+    setLoading(true); setLoadError(null);
     loadFromSupabase().then(data=>{
       setDB(data);
       prevDbRef.current = data;
       setLoading(false);
       setSynced(true);
+    }).catch(e=>{
+      console.error('初始載入失敗:',e);
+      setLoadError(e.message||String(e));
+      setLoading(false);
     });
   },[]);
+  // 初始載入
+  useEffect(()=>{ doInitialLoad(); },[doInitialLoad]);
 
   // Hash deep link：登入後 + db 載入後解析一次，導向對應工單/客戶；並監聽 hashchange，
   // 讓頁面開著時再點一個新的深連結（例如 0800 來電彈屏）也能導航，不用整頁重載。
@@ -3549,11 +3592,17 @@ function App(){
     setDB(prev=>{
       const next = typeof updater==='function' ? updater(prev) : updater;
       const withVer = {...next, version:(next.version||0)+1};
-      syncToSupabase(prevDbRef.current, withVer).then(()=>setSynced(true));
+      const basePrev = prevDbRef.current;
+      syncToSupabase(basePrev, withVer).then(({ok,errors})=>{
+        if(ok){ setSynced(true); return; }
+        // 顯性失敗：不確定成功就不能靜默——燈號轉離線，並告訴使用者哪些資料沒存上
+        setSynced(false);
+        toast('⚠️ 資料同步失敗',errors.join('；')||'請檢查網路後重試','err');
+      });
       prevDbRef.current = withVer;
       return withVer;
     });
-  },[]);
+  },[toast]);
 
   // Supabase Realtime 跨分頁與跨裝置同步（增量更新，不再全量重載）
   useEffect(()=>{
@@ -3658,6 +3707,16 @@ function App(){
     <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100vh',gap:16,color:'var(--g500)'}}>
       <div style={{fontSize:32}}>🔄</div>
       <div style={{fontSize:14,fontWeight:600}}>連接 Supabase 雲端資料庫中...</div>
+    </div>
+  );
+
+  // 顯性失敗：載入失敗絕不能假裝空資料庫正常（會讓客服誤建重複客編），改顯示錯誤畫面 + 重試
+  if(loadError) return (
+    <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100vh',gap:16,color:'var(--err)'}}>
+      <div style={{fontSize:32}}>⚠️</div>
+      <div style={{fontSize:14,fontWeight:700}}>雲端資料庫連線失敗</div>
+      <div style={{fontSize:12,color:'var(--g500)',maxWidth:420,textAlign:'center'}}>{loadError}</div>
+      <button onClick={doInitialLoad} style={{padding:'8px 20px',background:'var(--brand)',color:'#fff',border:'none',borderRadius:6,fontSize:13,fontWeight:700,cursor:'pointer'}}>重新連線</button>
     </div>
   );
 
