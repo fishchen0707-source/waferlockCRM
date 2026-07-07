@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>語音客服人設設定</title>
+  <style>
+    :root { --purple:#48086B; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; font-family:-apple-system,"PingFang TC","Noto Sans TC",sans-serif; background:linear-gradient(160deg,#2a0540,#48086B); color:#fff; padding:24px; }
+    .wrap { max-width:720px; margin:0 auto; }
+    h1 { font-size:20px; margin:6px 0 2px; }
+    .sub { color:#d9c7ea; font-size:12px; margin-bottom:22px; }
+    label { display:block; font-size:14px; font-weight:700; margin:18px 0 6px; }
+    .desc { color:#c9b3df; font-size:12px; font-weight:400; margin-bottom:8px; line-height:1.5; }
+    textarea { width:100%; border:none; border-radius:10px; padding:12px; font-size:14px; font-family:inherit; line-height:1.6; resize:vertical; color:#2a0540; }
+    #prompt { min-height:260px; }
+    #greeting { min-height:70px; }
+    button { font-family:inherit; cursor:pointer; border:none; border-radius:24px; padding:13px 30px; font-size:16px; font-weight:700; margin-top:18px; background:#2ecc71; color:#fff; }
+    button:disabled { opacity:.5; cursor:default; }
+    .state { margin-top:14px; font-size:14px; min-height:20px; }
+    .warn { color:#ffd479; font-size:12px; margin-top:24px; line-height:1.6; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🎙️ 語音客服人設設定</h1>
+    <div class="sub">WAFERLOCK · AI 電話客服</div>
+
+    <label>AI 人設（system prompt）
+      <div class="desc">告訴 AI「它是誰、怎麼講話、能做什麼、遇到不會的怎麼辦」。改完存檔後，下一通電話立即生效。</div>
+    </label>
+    <textarea id="prompt" placeholder="載入中…"></textarea>
+
+    <label>開場問候（接通後 AI 主動說的第一句話的指示）
+      <div class="desc">這是「叫 AI 開口」的指示，不是逐字稿。例如：（電話接通，請親切問候並問客戶需要什麼協助）。</div>
+    </label>
+    <textarea id="greeting"></textarea>
+
+    <button id="save" disabled>💾 儲存人設</button>
+    <div class="state" id="state">讀取目前設定中…</div>
+
+    <div class="warn">⚠️ 此頁可修改正式語音客服的行為，網址請勿外流。</div>
+  </div>
+
+  <script>
+  (function () {
+    var SUPABASE_URL = 'https://nkyanyjgfrmovjoqevro.supabase.co';
+    var ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5reWFueWpnZnJtb3Zqb3FldnJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2ODIxMTMsImV4cCI6MjA5NzI1ODExM30.LPnQyceYS7Z1-rlqUtXm3B8dGBOqnmnavTV-PAOSPZ8';
+    var REST = SUPABASE_URL + '/rest/v1/voicebot_settings';
+    var H = { apikey: ANON, Authorization: 'Bearer ' + ANON, 'Content-Type': 'application/json' };
+    var promptEl = document.getElementById('prompt'), greetEl = document.getElementById('greeting');
+    var saveBtn = document.getElementById('save'), stateEl = document.getElementById('state');
+    function setState(s) { stateEl.textContent = s; }
+
+    // 載入目前設定
+    fetch(REST + '?key=eq.default&select=system_prompt,greeting', { headers: H })
+      .then(function (r) { return r.json(); })
+      .then(function (rows) {
+        if (Array.isArray(rows) && rows[0]) {
+          promptEl.value = rows[0].system_prompt || '';
+          greetEl.value = rows[0].greeting || '';
+          setState('目前設定已載入，可以編輯。');
+        } else {
+          setState('⚠️ 找不到設定列——請先在 Supabase SQL Editor 執行 supabase_voicebot_settings.sql 建表。');
+        }
+        saveBtn.disabled = false;
+      })
+      .catch(function (e) { setState('⚠️ 讀取失敗：' + e); });
+
+    // 儲存（upsert）
+    saveBtn.onclick = function () {
+      var p = promptEl.value.trim();
+      if (!p) { setState('⚠️ 人設不能空白'); return; }
+      saveBtn.disabled = true; setState('儲存中…');
+      fetch(REST, {
+        method: 'POST',
+        headers: Object.assign({}, H, { Prefer: 'resolution=merge-duplicates' }),
+        body: JSON.stringify([{ key: 'default', system_prompt: p, greeting: greetEl.value.trim(), updated_at: new Date().toISOString() }]),
+      })
+        .then(function (r) {
+          if (!r.ok) return r.text().then(function (t) { throw new Error('HTTP ' + r.status + ' ' + t.slice(0, 120)); });
+          setState('✅ 已儲存！下一通電話就會用新的人設。');
+          saveBtn.disabled = false;
+        })
+        .catch(function (e) { setState('⚠️ 儲存失敗：' + e.message); saveBtn.disabled = false; });
+    };
+  })();
+  </script>
+</body>
+</html>

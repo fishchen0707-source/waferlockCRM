@@ -23,8 +23,9 @@ const KEY = Deno.env.get("GEMINI_API_KEY") || "";
 const MODEL_ID = "gemini-3.1-flash-live-preview";
 const VOICE = "Leda";
 
-// 台灣客服人設（G0 試聽定案）。放伺服器端，不外洩前端。
-const SYSTEM_PROMPT =
+// 人設改存 Supabase voicebot_settings 表，可在設定頁即時編輯、不用改 code。
+// 以下為讀表失敗時的後備預設（fallback）。
+const FALLBACK_PROMPT =
   "你是台灣門鎖公司「維夫拉克（WAFERLOCK）」的電話客服人員。" +
   "請全程用「台灣人的中文」說話：台灣國語的發音與腔調、台灣慣用詞彙與語助詞（例如：喔、齁、這邊、幫您、稍等一下下），" +
   "語氣親切、有溫度、像真人不像機器人。每次回覆盡量簡短口語、不超過40字。" +
@@ -32,6 +33,27 @@ const SYSTEM_PROMPT =
   "遇到你無法處理、客戶明確要求找真人、或需要當場承諾金額/交期時，" +
   "請客氣地說「這邊幫您轉接專員」並停下等待轉接。" +
   "不要唸出客戶的完整電話或地址。";
+const FALLBACK_GREETING = "（電話已接通，請你主動用一句話親切問候並詢問客戶需要什麼協助）";
+
+// Supabase 環境變數由平台自動注入
+const SUPA_URL = Deno.env.get("SUPABASE_URL") || "";
+const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+
+// 讀設定頁存的人設；讀不到就回 null 讓呼叫端用後備預設
+async function loadSettings(): Promise<{ system_prompt?: string; greeting?: string } | null> {
+  if (!SUPA_URL || !SERVICE_KEY) return null;
+  try {
+    const r = await fetch(
+      `${SUPA_URL}/rest/v1/voicebot_settings?key=eq.default&select=system_prompt,greeting`,
+      { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } },
+    );
+    if (!r.ok) return null;
+    const rows = await r.json();
+    return (Array.isArray(rows) && rows[0]) ? rows[0] : null;
+  } catch (_e) {
+    return null;
+  }
+}
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -51,6 +73,9 @@ Deno.serve(async (req) => {
     });
   }
   try {
+    const settings = await loadSettings();
+    const systemPrompt = (settings && settings.system_prompt) || FALLBACK_PROMPT;
+    const greeting = (settings && settings.greeting) || FALLBACK_GREETING;
     const body = {
       uses: 1,                              // 一次性：一把 token 只夠開一個連線
       expireTime: iso(30 * 60 * 1000),      // token 本身 30 分鐘後失效
@@ -61,7 +86,7 @@ Deno.serve(async (req) => {
           responseModalities: ["AUDIO"],
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: VOICE } } },
         },
-        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        systemInstruction: { parts: [{ text: systemPrompt }] },
       },
     };
     const r = await fetch(
@@ -81,8 +106,8 @@ Deno.serve(async (req) => {
         status: 502, headers: { ...cors, "Content-Type": "application/json" },
       });
     }
-    // 回傳給前端：token（auth_tokens/xxx）＋不帶前綴的 model 名（前端 SDK live.connect 用）
-    return new Response(JSON.stringify({ token: data.name, model: MODEL_ID }), {
+    // 回傳給前端：token（auth_tokens/xxx）＋model 名（前端 SDK live.connect 用）＋開場問候觸發語
+    return new Response(JSON.stringify({ token: data.name, model: MODEL_ID, greeting }), {
       headers: { ...cors, "Content-Type": "application/json" },
     });
   } catch (e) {

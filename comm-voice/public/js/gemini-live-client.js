@@ -193,7 +193,7 @@ function startGeminiVoicebot(opts) {
           if (!closed) {
             try {
               session.sendClientContent({
-                turns: [{ role: "user", parts: [{ text: "（電話已接通，請你主動用一句話親切問候並詢問客戶需要什麼協助）" }] }],
+                turns: [{ role: "user", parts: [{ text: tok.greeting || "（電話已接通，請你主動用一句話親切問候並詢問客戶需要什麼協助）" }] }],
                 turnComplete: true,
               });
             } catch (e) { console.error("[gemini live] 送開場問候失敗", e); }
