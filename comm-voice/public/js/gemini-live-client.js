@@ -112,10 +112,12 @@ function startGeminiVoicebot(opts) {
             // 降低回應延遲：讓 VAD 更快判定使用者講完（停頓 0.2 秒即觸發回應）
             realtimeInputConfig: {
               automaticActivityDetection: {
-                startOfSpeechSensitivity: "START_SENSITIVITY_HIGH",
+                // 開始講話用 LOW：需明確人聲才觸發，避免環境音誤打斷 AI
+                startOfSpeechSensitivity: "START_SENSITIVITY_LOW",
+                // 講完判定用 HIGH＋短靜音：讓 AI 更快接話，降低回應延遲
                 endOfSpeechSensitivity: "END_SENSITIVITY_HIGH",
-                prefixPaddingMs: 20,
-                silenceDurationMs: 200,
+                prefixPaddingMs: 60,
+                silenceDurationMs: 100,
               },
             },
           },
