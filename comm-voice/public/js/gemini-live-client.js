@@ -117,21 +117,29 @@ function startGeminiVoicebot(opts) {
               source = actx.createMediaStreamSource(stream);
               processor = actx.createScriptProcessor(4096, 1, 1);
               var sink = actx.createGain(); sink.gain.value = 0; sink.connect(actx.destination);
+              var upCount = 0, upErrShown = 0;
               processor.onaudioprocess = function (e) {
                 if (closed || !session) return;
                 var input = e.inputBuffer.getChannelData(0);
                 var ratio = actx.sampleRate / 16000;
                 var outLen = Math.floor(input.length / ratio);
                 var out = new Int16Array(outLen);
+                var rms = 0;
                 for (var i = 0; i < outLen; i++) {
                   var v = input[Math.floor(i * ratio)];
+                  rms += v * v;
                   out[i] = Math.max(-32768, Math.min(32767, v * 32768));
                 }
+                rms = Math.sqrt(rms / (outLen || 1));
                 try {
                   session.sendRealtimeInput({
                     audio: { data: bytesToB64(new Uint8Array(out.buffer)), mimeType: "audio/pcm;rate=16000" },
                   });
-                } catch (err) {}
+                  upCount++;
+                  if (upCount % 25 === 0) console.log("[gemini live] 上行 " + upCount + " 塊  當前麥克風音量=" + rms.toFixed(3) + "（講話時應明顯>0.01）");
+                } catch (err) {
+                  if (upErrShown < 3) { console.error("[gemini live] 上行送音訊失敗（這就是 AI 不回應的原因）", err); upErrShown++; }
+                }
               };
               source.connect(processor); processor.connect(sink);
             },
