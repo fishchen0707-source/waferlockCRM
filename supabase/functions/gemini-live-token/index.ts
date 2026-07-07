@@ -2,7 +2,11 @@
 // gemini-live-token — 簽發 Gemini Live API 短效憑證（ephemeral token）
 // 前端拿此 token 直連 Gemini Live WebSocket，GEMINI_API_KEY 只留伺服器、不進前端。
 // 客服人設（model / 台灣腔 Leda 音色 / system prompt / 情感對話）綁在 token 的
-// liveConnectConstraints，鎖在伺服器端、前端無法竄改。
+// bidiGenerateContentSetup，鎖在伺服器端、前端無法竄改。
+//
+// 純 Deno fetch（無 npm 相依，與專案其他 Edge Function 一致），打 Gemini v1alpha REST：
+//   POST https://generativelanguage.googleapis.com/v1alpha/auth_tokens
+//   （body 格式已用 SDK 攔截＋手寫 REST 實測 200 驗證）
 //
 // 部署：Supabase Edge Function「gemini-live-token」（Verify JWT 維持開啟，前端帶 anon key）
 // 密鑰（Supabase → Edge Functions → Secrets）：
@@ -12,15 +16,13 @@
 //         { method:'POST', headers:{ apikey, Authorization:'Bearer '+anon } })
 //   回：{ token:"auth_tokens/xxxx", model:"..." } 或 { error }
 // ==============================================
-import { GoogleGenAI } from "npm:@google/genai";
-
 const KEY = Deno.env.get("GEMINI_API_KEY") || "";
 
 // 與 G0 PoC 驗證通過的一致：native audio 原生語音對話（支援 Leda 音色 + 情感對話 + function calling）
-const MODEL = "gemini-2.5-flash-native-audio-preview-12-2025";
+const MODEL_ID = "gemini-2.5-flash-native-audio-preview-12-2025";
 const VOICE = "Leda";
 
-// 台灣客服人設（G0 試聽定案的加強版）。放伺服器端，不外洩前端。
+// 台灣客服人設（G0 試聽定案）。放伺服器端，不外洩前端。
 const SYSTEM_PROMPT =
   "你是台灣門鎖公司「維夫拉克（WAFERLOCK）」的電話客服人員。" +
   "請全程用「台灣人的中文」說話：台灣國語的發音與腔調、台灣慣用詞彙與語助詞（例如：喔、齁、這邊、幫您、稍等一下下），" +
@@ -36,6 +38,10 @@ const cors = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+function iso(msFromNow: number): string {
+  return new Date(Date.now() + msFromNow).toISOString();
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (!KEY) {
@@ -44,30 +50,43 @@ Deno.serve(async (req) => {
     });
   }
   try {
-    const ai = new GoogleGenAI({ apiKey: KEY, httpOptions: { apiVersion: "v1alpha" } });
-    const now = Date.now();
-    const token = await ai.authTokens.create({
-      config: {
-        uses: 1, // 一次性：一把 token 只夠開一個連線
-        expireTime: new Date(now + 30 * 60 * 1000).toISOString(),        // token 本身 30 分鐘後失效
-        newSessionExpireTime: new Date(now + 2 * 60 * 1000).toISOString(), // 須在 2 分鐘內開始連線
-        liveConnectConstraints: {
-          model: MODEL,
-          config: {
-            responseModalities: ["AUDIO"],
-            speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: VOICE } } },
-            systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-            enableAffectiveDialog: true,
-          },
+    const body = {
+      uses: 1,                              // 一次性：一把 token 只夠開一個連線
+      expireTime: iso(30 * 60 * 1000),      // token 本身 30 分鐘後失效
+      newSessionExpireTime: iso(2 * 60 * 1000), // 須在 2 分鐘內開始連線
+      bidiGenerateContentSetup: {
+        model: "models/" + MODEL_ID,
+        generationConfig: {
+          responseModalities: ["AUDIO"],
+          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: VOICE } } },
+          enableAffectiveDialog: true,
         },
-        httpOptions: { apiVersion: "v1alpha" },
+        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
       },
-    });
-    return new Response(JSON.stringify({ token: token.name, model: MODEL }), {
+    };
+    const r = await fetch(
+      "https://generativelanguage.googleapis.com/v1alpha/auth_tokens?key=" + encodeURIComponent(KEY),
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
+    );
+    if (!r.ok) {
+      const errText = await r.text();
+      console.log("[gemini-live-token] Gemini 回非 200", r.status, errText.slice(0, 300));
+      return new Response(JSON.stringify({ error: "簽發憑證失敗", status: r.status }), {
+        status: 502, headers: { ...cors, "Content-Type": "application/json" },
+      });
+    }
+    const data = await r.json();
+    if (!data.name) {
+      return new Response(JSON.stringify({ error: "Gemini 未回傳 token name" }), {
+        status: 502, headers: { ...cors, "Content-Type": "application/json" },
+      });
+    }
+    // 回傳給前端：token（auth_tokens/xxx）＋不帶前綴的 model 名（前端 SDK live.connect 用）
+    return new Response(JSON.stringify({ token: data.name, model: MODEL_ID }), {
       headers: { ...cors, "Content-Type": "application/json" },
     });
   } catch (e) {
-    console.log("[gemini-live-token 失敗]", String(e));
+    console.log("[gemini-live-token 例外]", String(e));
     return new Response(JSON.stringify({ error: String(e) }), {
       status: 500, headers: { ...cors, "Content-Type": "application/json" },
     });
