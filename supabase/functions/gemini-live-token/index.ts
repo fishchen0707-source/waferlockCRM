@@ -35,6 +35,45 @@ const FALLBACK_PROMPT =
   "不要唸出客戶的完整電話或地址。";
 const FALLBACK_GREETING = "（電話已接通，請你主動用一句話親切問候並詢問客戶需要什麼協助）";
 
+// 工具使用規則（系統固定，附加在使用者人設之後；使用者改人設不會弄丟這段）
+const TOOL_RULES =
+  "\n\n【查詢規則】只要客戶想知道維修或報修的進度、預約時間、師傅何時到，你就必須呼叫 get_case_status 工具查詢後再回答；" +
+  "若還不知道客戶電話，先問到電話再呼叫。查詢後用口語把進度與預約時間講給客戶。" +
+  "查不到就說系統查無這支電話的工單，並問是否要幫忙報修。絕對不要自己編造工單狀態或時間。" +
+  "\n\n【報修規則】當客戶要報修、叫修或預約維修時，你要依序問清楚四件事：客戶怎麼稱呼、要維修的完整地址、聯絡電話、故障問題是什麼。" +
+  "四項都問到後，用口語複誦一次跟客戶確認，客戶確認無誤才呼叫 create_repair 建立工單，成功後把工單編號念給客戶聽。" +
+  "資訊還沒問齊、或客戶還沒確認之前，絕對不要呼叫 create_repair。";
+
+// 工具宣告（綁進 token 的 setup，前端才吃得到；實際查詢在 voicebot-tools Edge Function）
+const TOOLS_DECL = [{
+  functionDeclarations: [
+    {
+      name: "get_case_status",
+      description: "用客戶的聯絡電話查詢他目前的維修工單進度與預約時間",
+      parameters: {
+        type: "OBJECT",
+        properties: { phone: { type: "STRING", description: "客戶的聯絡電話號碼" } },
+        required: ["phone"],
+      },
+    },
+    {
+      name: "create_repair",
+      description: "幫客戶建立一張新的維修報修工單（資訊問齊、客戶確認後才呼叫）",
+      parameters: {
+        type: "OBJECT",
+        properties: {
+          name: { type: "STRING", description: "客戶姓名或稱呼" },
+          phone: { type: "STRING", description: "聯絡電話" },
+          address: { type: "STRING", description: "要維修的完整地址" },
+          issue: { type: "STRING", description: "故障或問題描述" },
+          product: { type: "STRING", description: "產品類型，例如電子鎖、門鎖" },
+        },
+        required: ["name", "address", "issue"],
+      },
+    },
+  ],
+}];
+
 // Supabase 環境變數由平台自動注入
 const SUPA_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -86,7 +125,8 @@ Deno.serve(async (req) => {
           responseModalities: ["AUDIO"],
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: VOICE } } },
         },
-        systemInstruction: { parts: [{ text: systemPrompt }] },
+        systemInstruction: { parts: [{ text: systemPrompt + TOOL_RULES }] },
+        tools: TOOLS_DECL,
       },
     };
     const r = await fetch(
