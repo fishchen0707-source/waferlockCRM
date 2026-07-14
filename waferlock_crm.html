@@ -270,12 +270,12 @@ const appendConvMsg = async (convId, text, {unreadDelta=0}={}) => {
 // ── DB 欄位轉換（camelCase <-> snake_case） ──
 const custToDb = c => ({wf_id:c.wfId,name:c.name,phone:c.phone,email:c.email,address:c.address,district:c.district,area:c.area,channel:c.channel,product_id:c.productId,serial_no:c.serialNo,install_date:c.installDate,warranty_months:c.warrantyMonths,warranty_end:c.warrantyEnd,tags:c.tags||[],reg_type:c.regType,reg_date:c.regDate,line_uid:c.lineUid,fb_id:c.fbId,ig_id:c.igId,repair_ids:c.repairIds||[],complaint_ids:c.complaintIds||[],site:c.site,unit:c.unit,order_no:c.orderNo,group_id:c.groupId,project_id:c.projectId,zip:c.zip});
 const dbToCust = r => ({wfId:r.wf_id,name:r.name,phone:r.phone,email:r.email,address:r.address,district:r.district,area:r.area,channel:r.channel,productId:r.product_id,serialNo:r.serial_no,installDate:r.install_date,warrantyMonths:r.warranty_months,warrantyEnd:r.warranty_end,tags:r.tags||[],regType:r.reg_type,regDate:r.reg_date,lineUid:r.line_uid,fbId:r.fb_id,igId:r.ig_id,repairIds:r.repair_ids||[],complaintIds:r.complaint_ids||[],site:r.site,unit:r.unit,orderNo:r.order_no,groupId:r.group_id,projectId:r.project_id,zip:r.zip});
-const repairToDb = r => ({id:r.id,wf_id:r.wfId,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,worker_id:r.workerId,scheduled_date:r.scheduledDate,desc:r.desc,contact_name:r.contactName,contact_phone:r.contactPhone,site:r.site,unit:r.unit,handling_unit:r.handlingUnit,note:r.note,warranty_in:r.warrantyIn,created_by:r.createdBy,created_at:r.createdAt,unread:r.unread,arrival_pushed:r.arrivalPushed,rating:r.rating,receipt_no:r.receiptNo,audit_note:r.auditNote,completed_date:r.completedDate,sched_date:r.schedDate,sched_start:r.schedStart,sched_span:r.schedSpan,charges:r.charges||[],charge_total:r.chargeTotal,payment_method:r.paymentMethod,paid:r.paid,txn_id:r.txnId,paid_at:r.paidAt,work_note:r.workNote,warranty_judgment:r.warrantyJudgment,exclude_reason:r.excludeReason,photos:r.photos||[],signature:r.signature,sla_level:r.slaLevel,tenant_type:r.tenantType,landlord_confirmed:r.landlordConfirmed,source_channel:r.sourceChannel,community_note:r.communityNote,zip:r.zip,category2:r.category2,time_range:r.timeRange,qty:r.qty,work_hours:r.workHours,flag_bomber:r.flagBomber,eta_at:r.etaAt,eta_text:r.etaText,accepted_at:r.acceptedAt,arrived_at:r.arrivedAt,est_distance_km:r.estDistanceKm,eta_source:r.etaSource,history:r.history||[],fault_model:r.faultModel,fault_reason_major:r.faultReasonMajor,fault_reason_detail:r.faultReasonDetail,handling_result:r.handlingResult});
-const dbToRepair = r => ({id:r.id,wfId:r.wf_id,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,workerId:r.worker_id,scheduledDate:r.scheduled_date,desc:r.desc,contactName:r.contact_name,contactPhone:r.contact_phone,site:r.site,unit:r.unit,handlingUnit:r.handling_unit,note:r.note,warrantyIn:r.warranty_in,createdBy:r.created_by,createdAt:r.created_at,unread:r.unread,arrivalPushed:r.arrival_pushed,rating:r.rating,receiptNo:r.receipt_no,auditNote:r.audit_note,completedDate:r.completed_date,schedDate:r.sched_date,schedStart:r.sched_start,schedSpan:r.sched_span,charges:r.charges||[],chargeTotal:r.charge_total,paymentMethod:r.payment_method,paid:r.paid,txnId:r.txn_id,paidAt:r.paid_at,workNote:r.work_note,warrantyJudgment:r.warranty_judgment,excludeReason:r.exclude_reason,photos:r.photos||[],signature:r.signature,slaLevel:r.sla_level,tenantType:r.tenant_type,landlordConfirmed:r.landlord_confirmed,sourceChannel:r.source_channel,communityNote:r.community_note,zip:r.zip,category2:r.category2,timeRange:r.time_range,qty:r.qty,workHours:r.work_hours,flagBomber:r.flag_bomber,etaAt:r.eta_at,etaText:r.eta_text,acceptedAt:r.accepted_at,arrivedAt:r.arrived_at,estDistanceKm:r.est_distance_km,etaSource:r.eta_source,history:r.history||[],faultModel:r.fault_model,faultReasonMajor:r.fault_reason_major,faultReasonDetail:r.fault_reason_detail,handlingResult:r.handling_result});
+const repairToDb = r => ({id:r.id,wf_id:r.wfId,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,worker_id:r.workerId,scheduled_date:r.scheduledDate,desc:r.desc,contact_name:r.contactName,contact_phone:r.contactPhone,site:r.site,unit:r.unit,handling_unit:r.handlingUnit,note:r.note,warranty_in:r.warrantyIn,created_by:r.createdBy,created_at:r.createdAt,unread:r.unread,arrival_pushed:r.arrivalPushed,rating:r.rating,receipt_no:r.receiptNo,audit_note:r.auditNote,completed_date:r.completedDate,sched_date:r.schedDate,sched_start:r.schedStart,sched_span:r.schedSpan,charges:r.charges||[],charge_total:r.chargeTotal,payment_method:r.paymentMethod,paid:r.paid,txn_id:r.txnId,paid_at:r.paidAt,work_note:r.workNote,warranty_judgment:r.warrantyJudgment,exclude_reason:r.excludeReason,photos:r.photos||[],signature:r.signature,sla_level:r.slaLevel,tenant_type:r.tenantType,landlord_confirmed:r.landlordConfirmed,source_channel:r.sourceChannel,community_note:r.communityNote,zip:r.zip,category2:r.category2,time_range:r.timeRange,qty:r.qty,work_hours:r.workHours,flag_bomber:r.flagBomber,eta_at:r.etaAt,eta_text:r.etaText,accepted_at:r.acceptedAt,arrived_at:r.arrivedAt,est_distance_km:r.estDistanceKm,eta_source:r.etaSource,history:r.history||[],fault_model:r.faultModel,fault_reason_major:r.faultReasonMajor,fault_reason_detail:r.faultReasonDetail,handling_result:r.handlingResult,invoice_type:r.invoiceType,tax_id:r.taxId,invoice_title:r.invoiceTitle});
+const dbToRepair = r => ({id:r.id,wfId:r.wf_id,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,workerId:r.worker_id,scheduledDate:r.scheduled_date,desc:r.desc,contactName:r.contact_name,contactPhone:r.contact_phone,site:r.site,unit:r.unit,handlingUnit:r.handling_unit,note:r.note,warrantyIn:r.warranty_in,createdBy:r.created_by,createdAt:r.created_at,unread:r.unread,arrivalPushed:r.arrival_pushed,rating:r.rating,receiptNo:r.receipt_no,auditNote:r.audit_note,completedDate:r.completed_date,schedDate:r.sched_date,schedStart:r.sched_start,schedSpan:r.sched_span,charges:r.charges||[],chargeTotal:r.charge_total,paymentMethod:r.payment_method,paid:r.paid,txnId:r.txn_id,paidAt:r.paid_at,workNote:r.work_note,warrantyJudgment:r.warranty_judgment,excludeReason:r.exclude_reason,photos:r.photos||[],signature:r.signature,slaLevel:r.sla_level,tenantType:r.tenant_type,landlordConfirmed:r.landlord_confirmed,sourceChannel:r.source_channel,communityNote:r.community_note,zip:r.zip,category2:r.category2,timeRange:r.time_range,qty:r.qty,workHours:r.work_hours,flagBomber:r.flag_bomber,etaAt:r.eta_at,etaText:r.eta_text,acceptedAt:r.accepted_at,arrivedAt:r.arrived_at,estDistanceKm:r.est_distance_km,etaSource:r.eta_source,history:r.history||[],faultModel:r.fault_model,faultReasonMajor:r.fault_reason_major,faultReasonDetail:r.fault_reason_detail,handlingResult:r.handling_result,invoiceType:r.invoice_type,taxId:r.tax_id,invoiceTitle:r.invoice_title});
 const ctToDb = c => ({id:c.id,wf_id:c.wfId,name:c.name,phone:c.phone,date:c.date,created_at:c.createdAt,created_by:c.createdBy,call_channel:c.callChannel,department:c.department,cat1:c.cat1,cat2:c.cat2,cat3:c.cat3,process:c.process,status:c.status,closed_date:c.closedDate,timeline:c.timeline||[]});
 const dbToCt = r => ({id:r.id,wfId:r.wf_id,name:r.name,phone:r.phone,date:r.date,createdAt:r.created_at,createdBy:r.created_by,callChannel:r.call_channel,department:r.department,cat1:r.cat1,cat2:r.cat2,cat3:r.cat3,process:r.process,status:r.status,closedDate:r.closed_date,timeline:r.timeline||[]});
-const installToDb = o => ({id:o.id,name:o.name,phone:o.phone,address:o.address,channel:o.channel,note:o.note,product_id:o.productId,serial_no:o.serialNo,locksmith_id:o.locksmithId,status:o.status,created_date:o.createdDate,created_ts:o.createdTs,arrival_pushed:o.arrivalPushed,photos:o.photos||[],signature:o.signature,verify:o.verify||{},taught:o.taught||{},work_note:o.workNote,completed_date:o.completedDate,wf_id:o.wfId,warranty_end:o.warrantyEnd,worker_id:o.workerId,sched_date:o.schedDate,sched_start:o.schedStart,sched_span:o.schedSpan,charges:o.charges||[],charge_total:o.chargeTotal,payment_method:o.paymentMethod,paid:o.paid,txn_id:o.txnId,paid_at:o.paidAt,tenant_type:o.tenantType,landlord_confirmed:o.landlordConfirmed,source_channel:o.sourceChannel,community_note:o.communityNote,zip:o.zip,category2:o.category2,time_range:o.timeRange,qty:o.qty,work_hours:o.workHours,flag_bomber:o.flagBomber,history:o.history||[]});
-const dbToInstall = r => ({id:r.id,name:r.name,phone:r.phone,address:r.address,channel:r.channel,note:r.note,productId:r.product_id,serialNo:r.serial_no,locksmithId:r.locksmith_id,status:r.status,createdDate:r.created_date,createdTs:r.created_ts?parseInt(r.created_ts):null,arrivalPushed:r.arrival_pushed,photos:r.photos||[],signature:r.signature,verify:r.verify||{},taught:r.taught||{},workNote:r.work_note,completedDate:r.completed_date,wfId:r.wf_id,warrantyEnd:r.warranty_end,workerId:r.worker_id,schedDate:r.sched_date,schedStart:r.sched_start,schedSpan:r.sched_span,charges:r.charges||[],chargeTotal:r.charge_total,paymentMethod:r.payment_method,paid:r.paid,txnId:r.txn_id,paidAt:r.paid_at,tenantType:r.tenant_type,landlordConfirmed:r.landlord_confirmed,sourceChannel:r.source_channel,communityNote:r.community_note,zip:r.zip,category2:r.category2,timeRange:r.time_range,qty:r.qty,workHours:r.work_hours,flagBomber:r.flag_bomber,history:r.history||[]});
+const installToDb = o => ({id:o.id,name:o.name,phone:o.phone,address:o.address,channel:o.channel,note:o.note,product_id:o.productId,serial_no:o.serialNo,locksmith_id:o.locksmithId,status:o.status,created_date:o.createdDate,created_ts:o.createdTs,arrival_pushed:o.arrivalPushed,photos:o.photos||[],signature:o.signature,verify:o.verify||{},taught:o.taught||{},work_note:o.workNote,completed_date:o.completedDate,wf_id:o.wfId,warranty_end:o.warrantyEnd,worker_id:o.workerId,sched_date:o.schedDate,sched_start:o.schedStart,sched_span:o.schedSpan,charges:o.charges||[],charge_total:o.chargeTotal,payment_method:o.paymentMethod,paid:o.paid,txn_id:o.txnId,paid_at:o.paidAt,tenant_type:o.tenantType,landlord_confirmed:o.landlordConfirmed,source_channel:o.sourceChannel,community_note:o.communityNote,zip:o.zip,category2:o.category2,time_range:o.timeRange,qty:o.qty,work_hours:o.workHours,flag_bomber:o.flagBomber,shipment_no:o.shipmentNo,shipped_date:o.shippedDate,billing_status:o.billingStatus,invoice_type:o.invoiceType,tax_id:o.taxId,invoice_title:o.invoiceTitle,history:o.history||[]});
+const dbToInstall = r => ({id:r.id,name:r.name,phone:r.phone,address:r.address,channel:r.channel,note:r.note,productId:r.product_id,serialNo:r.serial_no,locksmithId:r.locksmith_id,status:r.status,createdDate:r.created_date,createdTs:r.created_ts?parseInt(r.created_ts):null,arrivalPushed:r.arrival_pushed,photos:r.photos||[],signature:r.signature,verify:r.verify||{},taught:r.taught||{},workNote:r.work_note,completedDate:r.completed_date,wfId:r.wf_id,warrantyEnd:r.warranty_end,workerId:r.worker_id,schedDate:r.sched_date,schedStart:r.sched_start,schedSpan:r.sched_span,charges:r.charges||[],chargeTotal:r.charge_total,paymentMethod:r.payment_method,paid:r.paid,txnId:r.txn_id,paidAt:r.paid_at,tenantType:r.tenant_type,landlordConfirmed:r.landlord_confirmed,sourceChannel:r.source_channel,communityNote:r.community_note,zip:r.zip,category2:r.category2,timeRange:r.time_range,qty:r.qty,workHours:r.work_hours,flagBomber:r.flag_bomber,shipmentNo:r.shipment_no,shippedDate:r.shipped_date,billingStatus:r.billing_status,invoiceType:r.invoice_type,taxId:r.tax_id,invoiceTitle:r.invoice_title,history:r.history||[]});
 const convToDb = c => ({id:c.id,wf_id:c.wfId,name:c.name,platform:c.platform,av:c.av,unread:c.unread||0,last_msg:c.lastMsg,last_time:c.lastTime,msgs:c.msgs||[],agent_takeover:c.agentTakeover||false,need_case:c.needCase||false,biz_inquiry:c.bizInquiry||false});
 const dbToConv = r => ({id:r.id,wfId:r.wf_id,name:r.name,platform:r.platform,av:r.av,unread:r.unread||0,lastMsg:r.last_msg,lastTime:r.last_time,msgs:r.msgs||[],agentTakeover:r.agent_takeover||false,needCase:r.need_case||false,bizInquiry:r.biz_inquiry||false});
 
@@ -416,6 +416,7 @@ const CHANNELS = {
   store_tc:{label:'台中漢神直營',type:'offline',icon:'🏪'},
   store_tp:{label:'台北信義門市',type:'offline',icon:'🏪'},
   lock_shop:{label:'合作鎖店',type:'offline',icon:'🔑'},
+  dealer:{label:'經銷商',type:'offline',icon:'🤝'},
   builder:{label:'建案配置',type:'builder',icon:'🏗️'},
 };
 const PRODUCTS = {
@@ -616,6 +617,10 @@ function WorkOrderModal({mode,record,warrantyIn,onClose,onSubmit}){
   const [taught,setTaught]=useState(false);
   const [receiptNo,setReceiptNo]=useState(null);
   const [pay,setPay]=useState(warrantyIn?'free':'cash');
+  // 開票資訊（發票實際由 TipTop 開立，這裡蒐集開票需要的三欄，隨工單存檔供請款用）
+  const [invType,setInvType]=useState('electronic'); // electronic 電子 / duplicate 二聯 / triplicate 三聯
+  const [taxId,setTaxId]=useState('');
+  const [invTitle,setInvTitle]=useState('');
   const chargeable = wj!=='in';
   const total=chargesTotal(chargeRows);
   const submit=async()=>{
@@ -625,12 +630,14 @@ function WorkOrderModal({mode,record,warrantyIn,onClose,onSubmit}){
     if(mode==='repair'&&chargeable&&normCharges(chargeRows).length===0){alert('需收費案件請填寫收費品項');return;}
     if(mode==='install'&&!(v.s1&&v.s2&&v.s3)){alert('請完成三項驗收確認');return;}
     if(mode==='install'&&!taught){alert('請確認已完成現場操作教學');return;}
+    if(invType==='triplicate'&&(!/^\d{8}$/.test(taxId.trim())||!invTitle.trim())){alert('三聯式發票需填 8 碼統編與抬頭');return;}
     let rno=null;
     try{ const {data}=await sb.rpc('next_case_no',{p_prefix:'SR'}); rno=data; }catch(e){ rno='SR'+Date.now(); }
     setReceiptNo(rno);
     const payMethod=(mode==='repair'&&wj==='in')?'free':pay;
     const txn=mockPayment(payMethod, total);
-    onSubmit({photos,signature:sig,note,auditNote,charges:normCharges(chargeRows),total,verify:v,taught,receiptNo:rno,warrantyJudgment:wj,excludeReason:excl.trim(),paymentMethod:txn.method,paid:txn.paid,txnId:txn.txnId,paidAt:txn.paidAt});
+    onSubmit({photos,signature:sig,note,auditNote,charges:normCharges(chargeRows),total,verify:v,taught,receiptNo:rno,warrantyJudgment:wj,excludeReason:excl.trim(),paymentMethod:txn.method,paid:txn.paid,txnId:txn.txnId,paidAt:txn.paidAt,
+      invoiceType:invType,taxId:invType==='triplicate'?taxId.trim():'',invoiceTitle:invType==='triplicate'?invTitle.trim():''});
   };
   return(
     <div className="mo" onClick={e=>e.target===e.currentTarget&&onClose()}>
@@ -684,6 +691,22 @@ function WorkOrderModal({mode,record,warrantyIn,onClose,onSubmit}){
               </div>
               <div style={{fontSize:11.5,color:'var(--g400)',marginTop:6}}>💳 金額 ${total}；送出後將模擬完成收款並產生交易編號（之後串接金流 API）。</div>
             </>}
+        </div>
+        <div className="wo-sec"><label>🧾 開票資訊（發票由 ERP 開立，此處先記錄）</label>
+          <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:6}}>
+            {[['electronic','電子發票'],['duplicate','二聯式'],['triplicate','三聯式（統編）']].map(([k,l])=>(
+              <button key={k} type="button" onClick={()=>setInvType(k)}
+                style={{padding:'6px 14px',borderRadius:6,border:`1px solid ${invType===k?'var(--brand)':'var(--g200)'}`,background:invType===k?'var(--brand)':'#fff',color:invType===k?'#fff':'var(--g600)',fontSize:12,fontWeight:700,cursor:'pointer'}}>{l}</button>
+            ))}
+          </div>
+          {invType==='triplicate'&&(
+            <div style={{display:'grid',gridTemplateColumns:'1fr 2fr',gap:6}}>
+              <input value={taxId} onChange={e=>setTaxId(e.target.value)} placeholder="統一編號（8 碼）*" maxLength={8}
+                style={{border:'1px solid var(--g200)',borderRadius:5,padding:'7px 10px',fontSize:12.5,outline:'none'}}/>
+              <input value={invTitle} onChange={e=>setInvTitle(e.target.value)} placeholder="發票抬頭 *"
+                style={{border:'1px solid var(--g200)',borderRadius:5,padding:'7px 10px',fontSize:12.5,outline:'none'}}/>
+            </div>
+          )}
         </div>
         <div className="wo-sec"><label>現場照片</label><PhotoUpload photos={photos} setPhotos={setPhotos} folder={`${mode==='install'?'installs':'repairs'}/${record?.id||'misc'}`}/></div>
         <div className="wo-sec"><label>處理說明</label><textarea value={note} onChange={e=>setNote(e.target.value)} rows={2} style={{width:'100%',border:'1px solid var(--g200)',borderRadius:5,padding:'7px 10px',fontSize:12.5,outline:'none',resize:'vertical',fontFamily:'inherit'}} placeholder="維修 / 安裝內容摘要"/></div>
@@ -790,6 +813,11 @@ const mockPayment = (method, amount) => {
   return {method, paid:true, txnId:pre+'-'+Date.now()+'-'+Math.random().toString(36).slice(2,6).toUpperCase(), paidAt:new Date().toISOString()};
 };
 const PAY_LABEL = {cash:'現金',transfer:'轉帳',card:'刷卡',free:'免費'};
+// 請款狀態（單向推進：待請款→已請款→已開票；發票由 TipTop 開，CRM 只追蹤進度）
+const BILLING_FLOW = {unbilled:'billed', billed:'invoiced'};
+const BILLING_LABEL = {unbilled:'⏳ 待請款', billed:'📤 已請款', invoiced:'🧾 已開票'};
+const BILLING_STYLE = {unbilled:{bg:'#FEF3C7',fg:'#92400E'}, billed:{bg:'#DBEAFE',fg:'#1D4ED8'}, invoiced:{bg:'#D1FAE5',fg:'#065F46'}};
+const INVOICE_LABEL = {electronic:'電子發票', duplicate:'二聯式', triplicate:'三聯式'};
 
 // ─── 地址選取畫面（中華郵政風格：縣市→鄉鎮自動帶 3 碼，其餘自行輸入）───
 function AddressPicker({initial, onConfirm, onClose}){
@@ -923,7 +951,7 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
         installDate:null,warrantyMonths:null,warrantyEnd:null,tags:['待安裝'],repairIds:[],complaintIds:[]}];
       else if(f.groupId) customers=customers.map(c=>c.wfId===wfId?{...c,groupId:f.groupId,projectId:f.projectId||c.projectId}:c);
       const order=pushHist({id,name:f.name.trim(),phone:f.phone.trim(),address:f.address,channel:f.channel,
-        productId:f.productId,serialNo:f.serialNo,locksmithId:f.locksmithId,wfId,scheduledDate:f.scheduledDate,
+        productId:f.productId,serialNo:f.serialNo,locksmithId:null,wfId,scheduledDate:f.scheduledDate,
         status:'pending',createdDate:today(),createdTs:Date.now(),arrivalPushed:false,...common,...bk.fields},
         currentUser?.name,'建立安裝工單'+(bk.fields.workerId?'＋排程':''));
       return {...prev,customers,installs:{...prev.installs,[id]:order}};
@@ -1030,9 +1058,9 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
             ⚠️ 租客屬高風險，已取得房東確認（必勾）
           </label>
         )}
-        <div className="mf"><label>社區特殊需求</label>
+        {cat==='repair'&&<div className="mf"><label>社區特殊需求</label>
           <input value={f.communityNote} onChange={e=>set('communityNote',e.target.value)} placeholder="例：需門禁卡、施工時段限制、社區報備..."/>
-        </div>
+        </div>}
 
         {/* 安裝專屬 */}
         {cat==='install'&&<>
@@ -1053,10 +1081,7 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
               </div>
             </div>
           )}
-          <div className="mf2">
-            <div className="mf"><label>產品序號</label><input value={f.serialNo} onChange={e=>set('serialNo',e.target.value)}/></div>
-            <div className="mf"><label>指派鎖店師傅</label><select value={f.locksmithId} onChange={e=>set('locksmithId',e.target.value)}>{LOCKSMITHS.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
-          </div>
+          <div className="mf"><label>產品序號</label><input value={f.serialNo} onChange={e=>set('serialNo',e.target.value)}/></div>
         </>}
 
         {/* 維修專屬 */}
@@ -1102,14 +1127,14 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
           </div>
         )}
 
-        {/* 風險旗標 */}
-        <div className="mf"><label>風險旗標</label>
+        {/* 風險旗標（維修情境的內部標記，新裝訂單不露出） */}
+        {cat==='repair'&&<div className="mf"><label>風險旗標</label>
           <div style={{display:'flex',gap:14,flexWrap:'wrap',fontSize:12}}>
             <label style={{display:'flex',alignItems:'center',gap:5,cursor:'pointer'}}><input type="checkbox" checked={f.hiRisk} onChange={e=>set('hiRisk',e.target.checked)}/>⚠️ 高風險維修</label>
             <label style={{display:'flex',alignItems:'center',gap:5,cursor:'pointer'}}><input type="checkbox" checked={f.hardJob} onChange={e=>set('hardJob',e.target.checked)}/>🔧 困難施工</label>
             <label style={{display:'flex',alignItems:'center',gap:5,cursor:'pointer'}}><input type="checkbox" checked={f.bomber} onChange={e=>set('bomber',e.target.checked)}/>💣 轟炸戶</label>
           </div>
-        </div>
+        </div>}
 
         <div className="mf"><label>備註</label>
           <textarea value={f.note} onChange={e=>set('note',e.target.value)} rows={2}
@@ -1179,6 +1204,10 @@ function CRMPage(){
   const [dispHardJob,setDispHardJob] = useState(false);
   const [dispBomber,setDispBomber] = useState(false);
   const [dispReason,setDispReason] = useState(''); // 轉單原因（已指派師傅時才用）
+  // ERP 出貨（新裝流程：未出貨前不能排安裝）
+  const [shipModal,setShipModal] = useState(null); // 要標記出貨的安裝單物件
+  const [shipNo,setShipNo] = useState('');
+  const [shipDate,setShipDate] = useState(todayISO());
   const hlRef = useRef(null);
 
   const customers = db.customers||[];
@@ -1314,6 +1343,7 @@ function CRMPage(){
         paymentMethod:d.paymentMethod,paid:d.paid,txnId:d.txnId,paidAt:d.paidAt,
         warrantyJudgment:d.warrantyJudgment,excludeReason:d.excludeReason,
         auditNote:d.auditNote||'',receiptNo:d.receiptNo,
+        invoiceType:d.invoiceType,taxId:d.taxId,invoiceTitle:d.invoiceTitle,
         completedDate:today()},currentUser?.name,`完工結案｜簽收單號 ${d.receiptNo}`)},
     }));
     // 對話訊息改走原子 RPC，不再靠本地快照整包 upsert
@@ -1322,6 +1352,35 @@ function CRMPage(){
     toast('✅ 已結案',`電子工單已簽收，簽收單號 ${d.receiptNo}`,'ok');
     setTimeout(()=>toast('📨 CSAT 已推播','滿意度問卷已發送住戶','ok'),1500);
     setClosingRepair(null);
+  };
+
+  // ── 請款狀態推進（安裝單：待請款→已請款→已開票，單向，每步寫異動紀錄）──
+  const advanceBilling=(o)=>{
+    const cur=o.billingStatus||'unbilled';
+    const next=BILLING_FLOW[cur];
+    if(!next) return;
+    updateDB(prev=>{
+      const rec=prev.installs[o.id];
+      if(!rec) return prev;
+      return {...prev,installs:{...prev.installs,[o.id]:pushHist({...rec,billingStatus:next},
+        currentUser?.name,`請款進度：${BILLING_LABEL[cur]} → ${BILLING_LABEL[next]}`)}};
+    });
+    toast('💰 請款進度更新',BILLING_LABEL[next],'ok');
+  };
+
+  // ── ERP 出貨（新裝流程：CRM 記出貨狀態＋TipTop 出貨單號，未出貨前不能排安裝）──
+  const openShipModal=o=>{ setShipModal(o); setShipNo(o.shipmentNo||''); setShipDate(o.shippedDate||todayISO()); };
+  const confirmShip=()=>{
+    if(!shipNo.trim()){ toast('請填出貨單號','TipTop 出貨單號不可空白','warn'); return; }
+    const id=shipModal.id;
+    updateDB(prev=>{
+      const cur=prev.installs[id];
+      if(!cur) return prev;
+      return {...prev,installs:{...prev.installs,[id]:pushHist({...cur,shipmentNo:shipNo.trim(),shippedDate:shipDate},
+        currentUser?.name,`ERP 出貨｜單號 ${shipNo.trim()}｜${shipDate}`)}};
+    });
+    toast('🚚 已標記出貨',`單號 ${shipNo.trim()}`,'ok');
+    setShipModal(null); setShipNo(''); setShipDate(todayISO());
   };
 
   // ── 安裝排程 ──
@@ -1405,7 +1464,7 @@ function CRMPage(){
           tags:[...new Set([...(c.tags||[]).filter(t=>t!=='待安裝'),'保固中'])]});
       }
       return {...prev,
-        installs:{...prev.installs,[o.id]:pushHist({...prev.installs[o.id],status:'done',photos:d.photos,signature:d.signature,verify:d.verify,taught:d.taught,workNote:d.note,charges:d.charges,chargeTotal:d.total,paymentMethod:d.paymentMethod,paid:d.paid,txnId:d.txnId,paidAt:d.paidAt,receiptNo:d.receiptNo,completedDate:today(),wfId,warrantyEnd},currentUser?.name,`完工驗收｜保固至 ${warrantyEnd}`)},
+        installs:{...prev.installs,[o.id]:pushHist({...prev.installs[o.id],status:'done',photos:d.photos,signature:d.signature,verify:d.verify,taught:d.taught,workNote:d.note,charges:d.charges,chargeTotal:d.total,paymentMethod:d.paymentMethod,paid:d.paid,txnId:d.txnId,paidAt:d.paidAt,receiptNo:d.receiptNo,invoiceType:d.invoiceType,taxId:d.taxId,invoiceTitle:d.invoiceTitle,billingStatus:'unbilled',completedDate:today(),wfId,warrantyEnd},currentUser?.name,`完工驗收｜保固至 ${warrantyEnd}`)},
         customers};
     });
     const uid=lineUidByPhone(o.phone);
@@ -1747,7 +1806,6 @@ function CRMPage(){
         <span className={`sb ${o.status==='done'?'done':o.status==='failed'?'urgent':o.status==='pending'?'pending':'dispatched'}`}>{STEPLABEL[o.status]}</span>
       </div>
       <div className="rb">
-        <div><span>🔑 負責師傅</span><br/><strong>{LOCKSMITHS.find(s=>s.id===o.locksmithId)?.name||'未指派'}</strong></div>
         <div><span>👷 派工師傅</span><br/><strong>{(db.workers||[]).find(w=>w.id===o.workerId)?.name||WORKERS.find(w=>w.id===o.workerId)?.name||'未排程'}</strong></div>
         {o.schedDate&&<div><span>⏰ 預約</span><br/><strong>{o.schedDate} {String(o.schedStart||0).padStart(2,'0')}:00</strong></div>}
         {o.serialNo&&<div><span>📋 序號</span><br/><strong style={{fontFamily:'JetBrains Mono',fontSize:10}}>{o.serialNo}</strong></div>}
@@ -1755,6 +1813,19 @@ function CRMPage(){
       {o.paymentMethod&&<div style={{marginTop:6,fontSize:10.5,padding:'5px 9px',background:'#F0FDF4',borderRadius:5,color:'#065F46',fontWeight:700}}>💳 {PAY_LABEL[o.paymentMethod]||o.paymentMethod}{o.chargeTotal>0?` $${o.chargeTotal}`:''}{o.paymentMethod!=='free'?`　${o.paid?'✅ 已收款':'未收款'}`:''}{o.txnId?` · ${o.txnId}`:''}</div>}
       {renderChargesDetail(o.charges)}
       {o.status==='done'&&<div style={{fontSize:11,color:'var(--ok)',fontWeight:700,marginTop:4}}>✅ 完工 {o.completedDate}　·　保固至 {o.warrantyEnd}</div>}
+      {/* 請款進度（完工後）：待請款→已請款→已開票，單向推進，每步寫異動紀錄 */}
+      {o.status==='done'&&(()=>{
+        const bs=o.billingStatus||'unbilled';
+        const st=BILLING_STYLE[bs]||BILLING_STYLE.unbilled;
+        const nxt=BILLING_FLOW[bs];
+        return(
+          <div style={{marginTop:6,display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+            <span style={{fontSize:10.5,padding:'3px 9px',background:st.bg,color:st.fg,borderRadius:9,fontWeight:700}}>{BILLING_LABEL[bs]}</span>
+            {o.invoiceType&&<span style={{fontSize:10.5,color:'var(--g500)'}}>{INVOICE_LABEL[o.invoiceType]||o.invoiceType}{o.taxId?`｜統編 ${o.taxId}`:''}{o.invoiceTitle?`｜${o.invoiceTitle}`:''}</span>}
+            {nxt&&<button onClick={()=>advanceBilling(o)} style={{padding:'3px 10px',background:'var(--brand)',color:'#fff',border:'none',borderRadius:4,fontSize:10.5,fontWeight:700,cursor:'pointer'}}>→ 標記{BILLING_LABEL[nxt].slice(2)}</button>}
+          </div>
+        );
+      })()}
       {o.status==='failed'&&<div style={{fontSize:11,color:'var(--err)',fontWeight:700,marginTop:4}}>❌ 已回報客服處理</div>}
       {o.status==='done'&&(o.verify||o.taught!=null||o.workNote)&&(
         <div style={{marginTop:6,background:'#F8FAFC',border:'1px solid var(--g200)',borderRadius:6,padding:'8px 10px',fontSize:11.5,color:'var(--g700)',lineHeight:1.7}}>
@@ -1772,9 +1843,19 @@ function CRMPage(){
           📷 照片與簽名（{(o.photos||[]).length}）
         </button>
       )}
+      {/* ERP 出貨資訊／閘門：已出貨顯示單號；未出貨且未排程的新單，排程被鎖住直到標記出貨 */}
+      {o.shipmentNo
+        ? <div style={{marginTop:6,fontSize:10.5,padding:'5px 9px',background:'#ECFDF5',borderRadius:5,color:'#065F46',fontWeight:700}}>🚚 已出貨　單號 {o.shipmentNo}{o.shippedDate?`　·　${o.shippedDate}`:''}</div>
+        : (o.status==='pending'&&!o.workerId&&<div style={{marginTop:6,fontSize:10.5,padding:'5px 9px',background:'#FEF3C7',borderRadius:5,color:'#92400E',fontWeight:700}}>🚚 待出貨 — 完成 ERP 出貨後才能排安裝</div>)}
       {o.status!=='done'&&o.status!=='failed'&&(
         <div style={{marginTop:8,display:'flex',gap:6,flexWrap:'wrap'}}>
-          {(o.status==='pending'||o.status==='arrived')&&<button onClick={()=>openInstallSchedule(o)} style={{padding:'5px 12px',background:o.workerId?'#FEF3C7':'#EDE9FE',color:o.workerId?'#92400E':'#5B21B6',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>{o.workerId?'🔁 轉單／改排程':'📅 排程派工'}</button>}
+          {(o.status==='pending'||o.status==='arrived')&&!o.shipmentNo&&<button onClick={()=>openShipModal(o)} style={{padding:'5px 12px',background:'#D1FAE5',color:'#065F46',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>🚚 標記出貨</button>}
+          {(o.status==='pending'||o.status==='arrived')&&(()=>{
+            const shipLocked=!o.shipmentNo&&!o.workerId; // 已排程舊單不回溯鎖
+            return <button onClick={()=>{if(shipLocked){toast('尚未出貨','請先完成 ERP 出貨（標記出貨）再排安裝','warn');return;}openInstallSchedule(o);}}
+              title={shipLocked?'先完成 ERP 出貨':''}
+              style={{padding:'5px 12px',background:o.workerId?'#FEF3C7':'#EDE9FE',color:o.workerId?'#92400E':'#5B21B6',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:shipLocked?'not-allowed':'pointer',opacity:shipLocked?.45:1}}>{o.workerId?'🔁 轉單／改排程':'📅 排程派工'}</button>;
+          })()}
           {o.status==='pending'&&<button onClick={()=>arriveInstall(o)} style={{padding:'5px 12px',background:'var(--accent)',color:'var(--brand)',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>📍 標記到場</button>}
           {o.status==='arrived'&&<button onClick={()=>installedDone(o)} style={{padding:'5px 12px',background:'var(--ok)',color:'#fff',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>🔧 施工完成</button>}
           {o.status==='installed'&&<button onClick={()=>setVerifyInstall(o)} style={{padding:'5px 12px',background:'var(--ok)',color:'#fff',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>🔬 完工驗收 + 保固登錄</button>}
@@ -2219,6 +2300,29 @@ function CRMPage(){
           onClose={()=>setClosingRepair(null)}
           onSubmit={d=>finishRepairClose(closingRepair,d)}/>;
       })()}
+
+      {/* ── ERP 出貨標記 ── */}
+      {shipModal&&(
+        <div className="mo" onClick={e=>e.target===e.currentTarget&&setShipModal(null)}>
+          <div className="mob" style={{maxWidth:420}}>
+            <h3>🚚 標記 ERP 出貨</h3>
+            <div style={{background:'var(--g50)',borderRadius:7,padding:10,marginBottom:12,fontSize:12}}>
+              <div style={{fontWeight:700}}>{shipModal.name}　<span style={{fontFamily:'JetBrains Mono',fontSize:10,color:'var(--g400)'}}>{shipModal.id}</span></div>
+              <div style={{color:'var(--g500)'}}>{PRODUCTS[shipModal.productId]?.name||shipModal.productId||'—'}　×{shipModal.qty||1}</div>
+            </div>
+            <div className="mf"><label>TipTop 出貨單號 <span style={{color:'var(--err)'}}>*</span></label>
+              <input value={shipNo} onChange={e=>setShipNo(e.target.value)} placeholder="例：SO-20260707-001"/>
+            </div>
+            <div className="mf"><label>出貨日期</label>
+              <input type="date" value={shipDate} onChange={e=>setShipDate(e.target.value)}/>
+            </div>
+            <div className="mact">
+              <button className="cancel" onClick={()=>setShipModal(null)}>取消</button>
+              <button className="confirm" onClick={confirmShip}>確認出貨</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── 安裝完工驗收 ── */}
       {verifyInstall&&<WorkOrderModal mode="install" record={verifyInstall} warrantyIn={true}
