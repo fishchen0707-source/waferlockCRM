@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WAFERLOCK 電子鎖安裝諮詢</title>
+<style>
+:root{--brand:#0F2744;--brand2:#1E4080;--accent:#38BDF8;--ok:#10B981;--err:#EF4444;
+  --g100:#F1F5F9;--g200:#E2E8F0;--g300:#CBD5E1;--g400:#94A3B8;--g500:#64748B;--g700:#334155;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Noto Sans TC',system-ui,sans-serif;background:#F0F4F8;color:var(--g700);
+  min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:24px 14px;}
+.card{background:#fff;border-radius:16px;box-shadow:0 8px 30px rgba(15,39,68,.12);
+  max-width:460px;width:100%;overflow:hidden;}
+.hero{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;padding:26px 24px;}
+.hero .lock{font-size:30px;}
+.hero h1{font-size:19px;font-weight:800;margin-top:8px;letter-spacing:.5px;}
+.hero p{font-size:12.5px;opacity:.8;margin-top:5px;line-height:1.6;}
+.body{padding:22px 24px 26px;}
+.field{margin-bottom:15px;}
+.field label{display:block;font-size:12.5px;font-weight:700;color:var(--g700);margin-bottom:6px;}
+.field label .req{color:var(--err);margin-left:2px;}
+.field input,.field textarea,.field select{width:100%;border:1px solid var(--g200);border-radius:8px;
+  padding:11px 12px;font-size:14px;font-family:inherit;outline:none;background:#fff;color:var(--g700);}
+.field input:focus,.field textarea:focus,.field select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(56,189,248,.15);}
+.field textarea{resize:vertical;min-height:88px;}
+.field .hint{font-size:11px;color:var(--g400);margin-top:4px;}
+.hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden;}
+#submitBtn{width:100%;background:var(--brand);color:#fff;border:none;border-radius:10px;
+  padding:14px;font-size:15px;font-weight:800;cursor:pointer;margin-top:6px;letter-spacing:1px;}
+#submitBtn:disabled{opacity:.55;cursor:wait;}
+.msg{margin-top:12px;padding:10px 12px;border-radius:8px;font-size:12.5px;font-weight:600;display:none;}
+.msg.err{display:block;background:#FEE2E2;color:#991B1B;}
+.done{text-align:center;padding:44px 24px;}
+.done .ic{font-size:52px;}
+.done h2{font-size:19px;font-weight:800;color:var(--brand);margin-top:12px;}
+.done p{font-size:13px;color:var(--g500);margin-top:8px;line-height:1.8;}
+.foot{text-align:center;font-size:10.5px;color:var(--g400);padding:0 24px 18px;}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="hero">
+    <div class="lock">🔒</div>
+    <h1>WAFERLOCK 智慧電子鎖</h1>
+    <p>留下您的需求，專人將盡快與您聯繫，為您規劃合適的門鎖與到府安裝。</p>
+  </div>
+
+  <div class="body" id="formArea">
+    <div class="field">
+      <label>姓名／稱呼 <span class="req">*</span></label>
+      <input id="f_name" maxlength="30" placeholder="例：陳先生／王小姐" autocomplete="name">
+    </div>
+    <div class="field">
+      <label>聯絡電話 <span class="req">*</span></label>
+      <input id="f_phone" maxlength="20" inputmode="tel" placeholder="例：0912345678" autocomplete="tel">
+    </div>
+    <div class="field">
+      <label>安裝地址（選填）</label>
+      <input id="f_address" maxlength="80" placeholder="方便我們評估門的狀況與到府安排">
+    </div>
+    <div class="field">
+      <label>想了解的產品（選填）</label>
+      <select id="f_product">
+        <option value="">— 不確定，請專人建議 —</option>
+        <option value="L376">L376 智能電子鎖</option>
+        <option value="L396">L396 進階電子鎖</option>
+        <option value="L600">L600 人臉辨識旗艦</option>
+        <option value="L901">L901 掌靜脈頂規</option>
+        <option value="L900">L900 旗艦款</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>需求說明 <span class="req">*</span></label>
+      <textarea id="f_content" maxlength="500" placeholder="例：想在大門加裝電子鎖，門是舊型三段鎖，希望有指紋與密碼功能"></textarea>
+      <div class="hint">若能附上門的正面／側面照片與尺寸，專人聯繫時會更快為您評估。</div>
+    </div>
+    <!-- honeypot：正常使用者看不到，機器人常會填 → 填了就靜默視為成功不落單 -->
+    <div class="hp"><label>請勿填寫此欄</label><input id="f_website" tabindex="-1" autocomplete="off"></div>
+
+    <button id="submitBtn" onclick="submitInquiry()">送出諮詢</button>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <div class="done" id="doneArea" style="display:none;">
+    <div class="ic">✅</div>
+    <h2>已收到您的諮詢</h2>
+    <p>感謝您的信任，專人將盡快與您聯繫。<br>如需即時協助，也歡迎加入官方 LINE。</p>
+  </div>
+
+  <div class="foot">© WAFERLOCK 維夫拉克．智慧門禁</div>
+</div>
+
+<script>
+// ── 設定（部署前填入）──────────────────────────────────────
+// case-intake Edge Function 位址（同 Supabase 專案）
+const INTAKE_URL = 'https://nkyanyjgfrmovjoqevro.supabase.co/functions/v1/case-intake';
+// 表單金鑰：貼上 Supabase Secret「INTAKE_FORM_KEY」的值。
+// 註：前端金鑰必然公開，此金鑰權限已收窄為「只能建立安裝諮詢單」，外洩頂多被灌諮詢單，無法建客訴或讀資料。
+const INTAKE_FORM_KEY = 'PASTE_YOUR_INTAKE_FORM_KEY_HERE';
+// ────────────────────────────────────────────────────────
+
+function showErr(text){ const m=document.getElementById('msg'); m.className='msg err'; m.textContent=text; }
+
+async function submitInquiry(){
+  const name=document.getElementById('f_name').value.trim();
+  const phone=document.getElementById('f_phone').value.trim();
+  const address=document.getElementById('f_address').value.trim();
+  const product=document.getElementById('f_product').value;
+  const content=document.getElementById('f_content').value.trim();
+  const honeypot=document.getElementById('f_website').value.trim();
+
+  if(!name){ showErr('請填寫姓名／稱呼'); return; }
+  if(!phone){ showErr('請填寫聯絡電話'); return; }
+  if(!content){ showErr('請簡單說明您的需求'); return; }
+
+  const btn=document.getElementById('submitBtn');
+  btn.disabled=true; btn.textContent='送出中…';
+
+  // honeypot 被填 → 判定機器人，假裝成功、不打 API、不落單
+  if(honeypot){ document.getElementById('formArea').style.display='none'; document.getElementById('doneArea').style.display='block'; return; }
+
+  try{
+    const r=await fetch(INTAKE_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-intake-key':INTAKE_FORM_KEY},
+      body:JSON.stringify({kind:'install_inquiry',source:'web',name,phone,address,content,product_id:product||null}),
+    });
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok||!d.ok){ throw new Error(d.error||('伺服器回應 '+r.status)); }
+    document.getElementById('formArea').style.display='none';
+    document.getElementById('doneArea').style.display='block';
+  }catch(e){
+    btn.disabled=false; btn.textContent='送出諮詢';
+    showErr('送出失敗，請稍後再試或改用電話聯繫。（'+e.message+'）');
+  }
+}
+</script>
+</body>
+</html>

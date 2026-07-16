@@ -142,7 +142,7 @@ input,select,textarea{font-family:inherit}
 .ctime{font-size:10px;color:var(--g400)}
 .cprev{font-size:11px;color:var(--g500);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:20px}
 .cplat{font-size:9px;font-weight:700;padding:1px 4px;border-radius:3px;margin-right:3px}
-.cplat.line{background:#E8F5E9;color:#2E7D32}.cplat.fb{background:#E3F2FD;color:#1565C0}.cplat.ig{background:#FCE4EC;color:#880E4F}.cplat.phone{background:#EDE9FE;color:#5B21B6}
+.cplat.line{background:#E8F5E9;color:#2E7D32}.cplat.fb{background:#E3F2FD;color:#1565C0}.cplat.ig{background:#FCE4EC;color:#880E4F}.cplat.phone{background:#EDE9FE;color:#5B21B6}.cplat.email{background:#FEF3C7;color:#92400E}.cplat.web{background:#E0F2FE;color:#0369A1}
 .hstat{font-size:9px;font-weight:700;padding:1px 5px;border-radius:8px;margin-left:4px;position:relative;display:inline-block;vertical-align:middle}
 .hstat .newdot{position:absolute;top:-3px;right:-4px;width:8px;height:8px;background:var(--err);border-radius:50%;border:1.5px solid #fff;animation:blink 1s infinite}
 .cunread{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:var(--err);color:#fff;font-size:9px;font-weight:800;min-width:15px;height:15px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 3px}
@@ -269,7 +269,7 @@ const dbToConv = r => ({id:r.id,wfId:r.wf_id,name:r.name,platform:r.platform,av:
 // 對話處理狀態三態（顯示在客戶姓名旁；對話標頭下拉可切換；已完成收到新訊息會自動翻回未處理）
 const HANDLE_STATUS = {pending:{label:'未處理',bg:'#FEE2E2',fg:'#DC2626'},processing:{label:'處理中',bg:'#FEF3C7',fg:'#B45309'},done:{label:'已完成',bg:'#DCFCE7',fg:'#15803D'}};
 // 平台徽章對照：DB 的 platform 存全名（facebook/instagram），CSS class 與顯示字用短名
-const platBadge = p => ({line:{cls:'line',label:'LINE'},facebook:{cls:'fb',label:'FB'},instagram:{cls:'ig',label:'IG'},phone:{cls:'phone',label:'電話'}}[p]||{cls:'',label:(p||'?').toUpperCase()});
+const platBadge = p => ({line:{cls:'line',label:'LINE'},facebook:{cls:'fb',label:'FB'},instagram:{cls:'ig',label:'IG'},phone:{cls:'phone',label:'電話'},email:{cls:'email',label:'Email'},web:{cls:'web',label:'網頁'}}[p]||{cls:'',label:(p||'?').toUpperCase()});
 
 const EMPTY_DB = {customers:[],repairs:{},complaints:{},installs:{},conversations:[],workers:[],wfCounter:0,version:0};
 
@@ -1499,7 +1499,7 @@ function AgentPage(){
         </div>
         <div className="pt-tabs">
           {/* tab 值必須用 DB platform 的全名（facebook/instagram），縮寫會什麼都篩不到 */}
-          {[['all','全部'],['line','LINE'],['facebook','FB'],['instagram','IG'],['phone','電話']].map(([v,l])=>(
+          {[['all','全部'],['line','LINE'],['facebook','FB'],['instagram','IG'],['phone','電話'],['email','Email']].map(([v,l])=>(
             <button key={v} className={`pt-tab ${v} ${filter===v?'on':''}`}
               onClick={()=>setFilter(v)}>{l}</button>
           ))}
