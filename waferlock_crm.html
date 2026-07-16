@@ -2720,9 +2720,14 @@ function HomePage(){
       })
   ).filter(inDateRange);
   const filtered=[...filteredBase].sort((a,b)=>sortDir==='asc'?(a._date-b._date):(b._date-a._date));
+  // 比照客訴分頁的「未處理／待追蹤」分區：維修、安裝（與全部案件）也拆「未處理／處理中」，
+  // AI 自動建的單落在未處理區、置頂全列不分頁，一眼可見不漏接；「追蹤中客訴」專屬檢視維持平鋪
+  const splitView = typeFilter!=='following_complaint';
+  const pendingPool = splitView ? filtered.filter(c=>c.status==='pending') : [];
+  const activePool  = splitView ? filtered.filter(c=>c.status!=='pending') : filtered;
   const pageSize=30;
-  const totalPages=Math.max(1,Math.ceil(filtered.length/pageSize));
-  const pageCases=filtered.slice((Math.min(pageNo,totalPages)-1)*pageSize,Math.min(pageNo,totalPages)*pageSize);
+  const totalPages=Math.max(1,Math.ceil(activePool.length/pageSize));
+  const pageCases=activePool.slice((Math.min(pageNo,totalPages)-1)*pageSize,Math.min(pageNo,totalPages)*pageSize);
   useEffect(()=>{ setPageNo(1); },[typeFilter,dept,dateFrom,dateTo,sortDir,results]);
   const openCustomer=wfId=>{ setCrmTarget(wfId); setPage('crm'); };
   const caseUrl=(wfId,caseId)=>location.origin+location.pathname+'#crm/'+wfId+'/'+caseId;
@@ -3012,7 +3017,9 @@ function HomePage(){
               {fc.map(renderCard)}
             </>);
           })()}
-          {typeFilter!=='complaint'&&pageCases.map(c=>{
+          {typeFilter!=='complaint'&&(()=>{
+            if(filtered.length===0) return null; // 全空時由上方「無符合條件的案件」空狀態呈現，不重複列 0 件標題
+            const renderPoolCard=c=>{
             const addr=c.address||c.building||c.district||'—';
             const s=ST[c.status]||{label:c.status||'—',bg:'#F1F5F9',fg:'#64748B'};
             return(
@@ -3047,8 +3054,21 @@ function HomePage(){
                 </span>
               </div>
             );
-          })}
-          {typeFilter!=='complaint'&&filtered.length>pageSize&&(
+            };
+            return(<>
+              {splitView&&<div style={{fontWeight:700,fontSize:11.5,color:'#475569',padding:'6px 0',borderBottom:'1px solid #E2E8F0',marginBottom:8}}>
+                ⏳ 未處理列表 <span style={{color:'#EF4444',fontWeight:900}}>{pendingPool.length}</span> 件
+              </div>}
+              {splitView&&pendingPool.length===0&&<div style={{fontSize:12,color:'#94A3B8',padding:'8px 0 12px'}}>目前無未處理案件</div>}
+              {splitView&&pendingPool.map(renderPoolCard)}
+              {splitView&&<div style={{fontWeight:700,fontSize:11.5,color:'#475569',padding:'6px 0',borderBottom:'1px solid #E2E8F0',marginBottom:8,marginTop:12}}>
+                🔧 處理中列表 <span style={{color:'#2563EB',fontWeight:900}}>{activePool.length}</span> 件
+              </div>}
+              {splitView&&activePool.length===0&&<div style={{fontSize:12,color:'#94A3B8',padding:'8px 0 12px'}}>目前無處理中案件</div>}
+              {pageCases.map(renderPoolCard)}
+            </>);
+          })()}
+          {typeFilter!=='complaint'&&activePool.length>pageSize&&(
             <div style={{display:'flex',justifyContent:'center',alignItems:'center',gap:10,padding:'12px 0 4px'}}>
               <button onClick={()=>setPageNo(p=>Math.max(1,p-1))} disabled={pageNo<=1}
                 style={{fontSize:12,padding:'6px 12px',border:'1px solid #CBD5E1',borderRadius:7,background:pageNo<=1?'#F1F5F9':'#fff',cursor:pageNo<=1?'not-allowed':'pointer'}}>上一頁</button>
