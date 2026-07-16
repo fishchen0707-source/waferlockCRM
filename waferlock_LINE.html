@@ -142,7 +142,9 @@ input,select,textarea{font-family:inherit}
 .ctime{font-size:10px;color:var(--g400)}
 .cprev{font-size:11px;color:var(--g500);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:20px}
 .cplat{font-size:9px;font-weight:700;padding:1px 4px;border-radius:3px;margin-right:3px}
-.cplat.line{background:#E8F5E9;color:#2E7D32}.cplat.fb{background:#E3F2FD;color:#1565C0}.cplat.ig{background:#FCE4EC;color:#880E4F}
+.cplat.line{background:#E8F5E9;color:#2E7D32}.cplat.fb{background:#E3F2FD;color:#1565C0}.cplat.ig{background:#FCE4EC;color:#880E4F}.cplat.phone{background:#EDE9FE;color:#5B21B6}
+.hstat{font-size:9px;font-weight:700;padding:1px 5px;border-radius:8px;margin-left:4px;position:relative;display:inline-block;vertical-align:middle}
+.hstat .newdot{position:absolute;top:-3px;right:-4px;width:8px;height:8px;background:var(--err);border-radius:50%;border:1.5px solid #fff;animation:blink 1s infinite}
 .cunread{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:var(--err);color:#fff;font-size:9px;font-weight:800;min-width:15px;height:15px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 3px}
 .urg-indicator{width:7px;height:7px;background:var(--err);border-radius:50%;display:inline-block;margin-right:3px;animation:blink 1s infinite}
 .apmain{flex:1;display:flex;flex-direction:column;overflow:hidden}
@@ -262,8 +264,12 @@ const ctToDb = c => ({id:c.id,wf_id:c.wfId,name:c.name,phone:c.phone,date:c.date
 const dbToCt = r => ({id:r.id,wfId:r.wf_id,name:r.name,phone:r.phone,date:r.date,createdAt:r.created_at,createdBy:r.created_by,callChannel:r.call_channel,department:r.department,cat1:r.cat1,cat2:r.cat2,cat3:r.cat3,process:r.process,status:r.status,closedDate:r.closed_date,timeline:r.timeline||[]});
 const installToDb = o => ({id:o.id,name:o.name,phone:o.phone,address:o.address,channel:o.channel,note:o.note,product_id:o.productId,serial_no:o.serialNo,locksmith_id:o.locksmithId,status:o.status,created_date:o.createdDate,created_ts:o.createdTs,arrival_pushed:o.arrivalPushed,photos:o.photos||[],signature:o.signature,verify:o.verify||{},taught:o.taught||{},work_note:o.workNote,completed_date:o.completedDate,wf_id:o.wfId,warranty_end:o.warrantyEnd,worker_id:o.workerId,sched_date:o.schedDate,sched_start:o.schedStart,sched_span:o.schedSpan,charges:o.charges||[],charge_total:o.chargeTotal,payment_method:o.paymentMethod,paid:o.paid,txn_id:o.txnId,paid_at:o.paidAt,tenant_type:o.tenantType,landlord_confirmed:o.landlordConfirmed,source_channel:o.sourceChannel,community_note:o.communityNote,zip:o.zip,category2:o.category2,time_range:o.timeRange,qty:o.qty,work_hours:o.workHours,flag_bomber:o.flagBomber,history:o.history||[]});
 const dbToInstall = r => ({id:r.id,name:r.name,phone:r.phone,address:r.address,channel:r.channel,note:r.note,productId:r.product_id,serialNo:r.serial_no,locksmithId:r.locksmith_id,status:r.status,createdDate:r.created_date,createdTs:r.created_ts?parseInt(r.created_ts):null,arrivalPushed:r.arrival_pushed,photos:r.photos||[],signature:r.signature,verify:r.verify||{},taught:r.taught||{},workNote:r.work_note,completedDate:r.completed_date,wfId:r.wf_id,warrantyEnd:r.warranty_end,workerId:r.worker_id,schedDate:r.sched_date,schedStart:r.sched_start,schedSpan:r.sched_span,charges:r.charges||[],chargeTotal:r.charge_total,paymentMethod:r.payment_method,paid:r.paid,txnId:r.txn_id,paidAt:r.paid_at,tenantType:r.tenant_type,landlordConfirmed:r.landlord_confirmed,sourceChannel:r.source_channel,communityNote:r.community_note,zip:r.zip,category2:r.category2,timeRange:r.time_range,qty:r.qty,workHours:r.work_hours,flagBomber:r.flag_bomber,history:r.history||[]});
-const convToDb = c => ({id:c.id,wf_id:c.wfId,name:c.name,platform:c.platform,av:c.av,unread:c.unread||0,last_msg:c.lastMsg,last_time:c.lastTime,msgs:c.msgs||[],agent_takeover:c.agentTakeover||false,need_case:c.needCase||false,biz_inquiry:c.bizInquiry||false});
-const dbToConv = r => ({id:r.id,wfId:r.wf_id,name:r.name,platform:r.platform,av:r.av,unread:r.unread||0,lastMsg:r.last_msg,lastTime:r.last_time,msgs:r.msgs||[],agentTakeover:r.agent_takeover||false,needCase:r.need_case||false,bizInquiry:r.biz_inquiry||false});
+const convToDb = c => ({id:c.id,wf_id:c.wfId,name:c.name,platform:c.platform,av:c.av,unread:c.unread||0,last_msg:c.lastMsg,last_time:c.lastTime,msgs:c.msgs||[],agent_takeover:c.agentTakeover||false,need_case:c.needCase||false,biz_inquiry:c.bizInquiry||false,handle_status:c.handleStatus||'pending'});
+const dbToConv = r => ({id:r.id,wfId:r.wf_id,name:r.name,platform:r.platform,av:r.av,unread:r.unread||0,lastMsg:r.last_msg,lastTime:r.last_time,msgs:r.msgs||[],agentTakeover:r.agent_takeover||false,needCase:r.need_case||false,bizInquiry:r.biz_inquiry||false,handleStatus:r.handle_status||'pending'});
+// 對話處理狀態三態（顯示在客戶姓名旁；對話標頭下拉可切換；已完成收到新訊息會自動翻回未處理）
+const HANDLE_STATUS = {pending:{label:'未處理',bg:'#FEE2E2',fg:'#DC2626'},processing:{label:'處理中',bg:'#FEF3C7',fg:'#B45309'},done:{label:'已完成',bg:'#DCFCE7',fg:'#15803D'}};
+// 平台徽章對照：DB 的 platform 存全名（facebook/instagram），CSS class 與顯示字用短名
+const platBadge = p => ({line:{cls:'line',label:'LINE'},facebook:{cls:'fb',label:'FB'},instagram:{cls:'ig',label:'IG'},phone:{cls:'phone',label:'電話'}}[p]||{cls:'',label:(p||'?').toUpperCase()});
 
 const EMPTY_DB = {customers:[],repairs:{},complaints:{},installs:{},conversations:[],workers:[],wfCounter:0,version:0};
 
@@ -504,6 +510,8 @@ function CustomerPage(){
           name: bound ? cname : convs[idx].name,
           msgs:[...convs[idx].msgs, newMsg],
           unread: from==='user' ? (convs[idx].unread||0)+1 : convs[idx].unread,
+          // 客戶傳新訊息：已完成→自動翻回未處理（不漏接）；處理中維持不變（列表 pill 會亮紅點）
+          handleStatus: (from==='user'&&convs[idx].handleStatus==='done') ? 'pending' : convs[idx].handleStatus,
           lastMsg:text, lastTime:now()};
       }
       return {...prev, conversations:convs};
@@ -1490,7 +1498,8 @@ function AgentPage(){
           {totalUnread>0&&<span className="nbadge">{totalUnread}</span>}
         </div>
         <div className="pt-tabs">
-          {[['all','全部'],['line','LINE'],['fb','FB'],['ig','IG']].map(([v,l])=>(
+          {/* tab 值必須用 DB platform 的全名（facebook/instagram），縮寫會什麼都篩不到 */}
+          {[['all','全部'],['line','LINE'],['facebook','FB'],['instagram','IG'],['phone','電話']].map(([v,l])=>(
             <button key={v} className={`pt-tab ${v} ${filter===v?'on':''}`}
               onClick={()=>setFilter(v)}>{l}</button>
           ))}
@@ -1504,8 +1513,13 @@ function AgentPage(){
               <div className="citem-hdr">
                 <div className="cname">
                   {urg&&<span className="urg-indicator"/>}
-                  <span className={`cplat ${c.platform}`}>{c.platform?.toUpperCase()}</span>
+                  <span className={`cplat ${platBadge(c.platform).cls}`}>{platBadge(c.platform).label}</span>
                   {c.name}
+                  {(()=>{const st=HANDLE_STATUS[c.handleStatus||'pending'];return(
+                    <span className="hstat" style={{background:st.bg,color:st.fg}}>
+                      {st.label}
+                      {c.handleStatus==='processing'&&(c.unread||0)>0&&<span className="newdot" title="有新訊息"/>}
+                    </span>);})()}
                 </div>
                 <span className="ctime">{c.lastTime}</span>
               </div>
@@ -1525,11 +1539,17 @@ function AgentPage(){
               <div style={{flex:1,minWidth:0}}>
                 <h4>{active.name}</h4>
                 <p style={{fontSize:10.5,color:'var(--g400)',margin:0}}>
-                  <span className={`cplat ${active.platform}`}>{active.platform?.toUpperCase()}</span>
+                  <span className={`cplat ${platBadge(active.platform).cls}`}>{platBadge(active.platform).label}</span>
                   {active.wfId&&<span style={{fontFamily:'monospace'}}>{active.wfId}</span>}
                   {active.agentTakeover&&<span style={{color:'var(--err)',fontWeight:700,marginLeft:4}}>· AI已暫停</span>}
                 </p>
               </div>
+              {/* 處理狀態下拉：改了立即寫回 DB（既有 upsert 機制） */}
+              <select value={active.handleStatus||'pending'}
+                onChange={e=>{const v=e.target.value;updateDB(prev=>({...prev,conversations:prev.conversations.map(x=>x.id===active.id?{...x,handleStatus:v}:x)}));}}
+                style={{fontSize:11,fontWeight:700,padding:'4px 6px',borderRadius:5,border:'1px solid var(--g200)',background:HANDLE_STATUS[active.handleStatus||'pending'].bg,color:HANDLE_STATUS[active.handleStatus||'pending'].fg,cursor:'pointer'}}>
+                {Object.entries(HANDLE_STATUS).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+              </select>
               <button className="apact crm"
                 onClick={()=>toast('🔗','已在CRM頁面查看客戶資料（請切換到 waferlock_crm.html）','ok')}>CRM</button>
               {active.wfId&&<button className="apact" style={{background:'var(--warn)',color:'#fff'}} onClick={()=>setCaseModal(true)}>📋 立案</button>}
