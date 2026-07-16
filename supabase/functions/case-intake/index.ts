@@ -151,7 +151,7 @@ Deno.serve(async (req) => {
       if (!cust.wfId) return json({ ok: false, error: "發客編失敗" }, 502);
       const ir = await dbPost("installs", {
         id, wf_id: cust.wfId, name, phone, address, channel: "web",
-        product_id: b.product_id || null, serial_no: null, scheduled_date: "",
+        product_id: b.product_id || null, serial_no: null,
         status: "pending", created_date: today, created_ts: Date.now(),
         note: (subject ? subject + "\n" : "") + content,
         history: [{ by: source === "email" ? "Email進件" : "網頁諮詢單", ts: Date.now(), action: "外部進件：新裝機諮詢" }],
