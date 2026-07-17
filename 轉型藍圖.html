@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WAFERLOCK 轉型五大支柱</title>
+<style>
+  :root{
+    --navy:#0F2744; --navy2:#1E3A5F; --blue:#2563EB; --line:#E2E8F0;
+    --g50:#F8FAFC; --g100:#F1F5F9; --g400:#94A3B8; --g500:#64748B; --g600:#475569; --g800:#1E293B;
+    --ok:#15803D; --okbg:#DCFCE7; --warn:#B45309; --warnbg:#FEF3C7; --wait:#64748B; --waitbg:#F1F5F9;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,"Segoe UI","PingFang TC","Microsoft JhengHei",sans-serif;color:var(--g800);background:var(--g50);line-height:1.7;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1000px;margin:0 auto;padding:32px 20px 100px}
+  /* header */
+  header{text-align:center;margin-bottom:8px}
+  header h1{font-size:30px;color:var(--navy);letter-spacing:.5px}
+  header .sub{color:var(--g500);font-size:15px;margin-top:6px}
+  /* OKR 結構說明條 */
+  .okr-bar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:22px 0 6px}
+  .okr-bar .chip{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--g600);background:#fff;border:1px solid var(--line);border-radius:20px;padding:5px 12px}
+  .okr-bar .chip b{color:var(--navy)}
+  .okr-bar .arw{color:var(--g400);align-self:center}
+  /* 總覽進度 */
+  .overview{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px 22px;margin:20px 0 26px;box-shadow:0 1px 3px rgba(15,39,68,.05)}
+  .overview .ov-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+  .overview .ov-top .t{font-weight:700;color:var(--navy);font-size:14px}
+  .overview .ov-top .n{font-size:12.5px;color:var(--g500)}
+  .pbar{height:12px;background:var(--g100);border-radius:8px;overflow:hidden;display:flex}
+  .pbar .seg{height:100%}
+  .pbar .seg.done{background:var(--ok)}.pbar .seg.prog{background:var(--warn)}.pbar .seg.todo{background:transparent}
+  .plegend{display:flex;gap:16px;margin-top:10px;font-size:12px;color:var(--g600);flex-wrap:wrap}
+  .plegend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:middle}
+  /* 支柱卡 */
+  .pillar{background:#fff;border:1px solid var(--line);border-radius:14px;margin-bottom:14px;overflow:hidden;box-shadow:0 1px 3px rgba(15,39,68,.05);transition:box-shadow .15s}
+  .pillar:hover{box-shadow:0 4px 14px rgba(15,39,68,.09)}
+  .phead{display:flex;align-items:center;gap:16px;padding:18px 22px;cursor:pointer;user-select:none}
+  .pnum{width:44px;height:44px;flex-shrink:0;border-radius:12px;background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800}
+  .ptitle{flex:1;min-width:0}
+  .ptitle h2{font-size:17px;color:var(--navy);font-weight:800}
+  .ptitle .oneline{font-size:12.5px;color:var(--g500);margin-top:2px}
+  .pmini{display:flex;align-items:center;gap:14px;flex-shrink:0}
+  .pmini .mprog{width:90px}
+  .pmini .mprog .mbar{height:7px;background:var(--g100);border-radius:5px;overflow:hidden}
+  .pmini .mprog .mfill{height:100%;background:var(--ok)}
+  .pmini .mprog .mtxt{font-size:10.5px;color:var(--g500);text-align:right;margin-top:3px}
+  .chev{color:var(--g400);font-size:14px;transition:transform .2s}
+  .pillar.open .chev{transform:rotate(90deg)}
+  .pbody{display:none;padding:0 22px 22px;border-top:1px solid var(--line)}
+  .pillar.open .pbody{display:block}
+  .sec-t{font-size:12px;font-weight:800;color:var(--g500);letter-spacing:1px;margin:18px 0 8px;text-transform:uppercase}
+  /* KPI */
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+  .kpi{background:var(--g50);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .kpi .kt{font-size:12px;color:var(--g600);margin-bottom:4px}
+  .kpi .kv{font-size:15px;font-weight:800;color:var(--navy)}
+  .kpi .kv .arrow{color:var(--ok);margin:0 4px}
+  /* 工作項 */
+  .work{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px dashed var(--line)}
+  .work:last-child{border-bottom:none}
+  .wst{flex-shrink:0;font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:20px;white-space:nowrap;min-width:60px;text-align:center}
+  .wst.done{background:var(--okbg);color:var(--ok)}.wst.prog{background:var(--warnbg);color:var(--warn)}.wst.todo{background:var(--waitbg);color:var(--wait)}
+  .wbody{flex:1;min-width:0}
+  .wbody .wname{font-size:13.5px;font-weight:600;color:var(--g800)}
+  .wbody .wmeta{font-size:11.5px;color:var(--g500);margin-top:2px}
+  .arci{display:inline-block;background:#EEF2FF;color:#4338CA;font-size:10.5px;font-weight:700;padding:1px 8px;border-radius:6px;margin-right:6px}
+  /* 苔曙啟發 */
+  .insight{background:#FFFBEB;border-left:4px solid #F59E0B;border-radius:0 8px 8px 0;padding:11px 15px;margin-top:16px;font-size:12.5px;color:#78350F}
+  .insight b{color:#92400E}
+  footer{text-align:center;color:var(--g400);font-size:12px;margin-top:36px;border-top:1px solid var(--line);padding-top:18px}
+  .expandall{display:block;margin:0 auto 18px;font-size:12.5px;color:var(--blue);background:none;border:1px solid var(--line);border-radius:20px;padding:6px 16px;cursor:pointer}
+  @media(max-width:640px){
+    .pmini .mprog{display:none}
+    header h1{font-size:24px}
+    .phead{padding:15px 16px;gap:12px}
+    .pbody{padding:0 16px 18px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>WAFERLOCK 轉型五大支柱</h1>
+    <div class="sub">從 B2B 代工 → B2C 服務品牌｜用 OKR 定義轉型，每一步都看得到數字</div>
+  </header>
+
+  <div class="okr-bar">
+    <span class="chip">🎯 <b>支柱</b> 往哪去</span><span class="arw">→</span>
+    <span class="chip">📊 <b>KPI</b> 數字證明到了沒</span><span class="arw">→</span>
+    <span class="chip">🔧 <b>工作項</b> 做什麼事</span><span class="arw">→</span>
+    <span class="chip">👤 <b>ARCI</b> 誰交付</span>
+  </div>
+
+  <div class="overview">
+    <div class="ov-top"><span class="t">整體進度</span><span class="n" id="ovNum"></span></div>
+    <div class="pbar" id="ovBar"></div>
+    <div class="plegend">
+      <span><i style="background:var(--ok)"></i>已完成</span>
+      <span><i style="background:var(--warn)"></i>進行中</span>
+      <span><i style="background:var(--g100)"></i>待啟動</span>
+      <span style="margin-left:auto;color:var(--g400)">點支柱展開細節</span>
+    </div>
+  </div>
+
+  <button class="expandall" id="expandAll">全部展開 / 收合</button>
+  <div id="pillars"></div>
+
+  <footer>
+    參照苔曙企業（47年塑膠射出 OEM）AI 轉型系列改寫 ·「後勤學別人、前台自己長」<br>
+    現況標記為系統實際狀態，功能持續推進，以實際系統為準
+  </footer>
+</div>
+
+<script>
+// ── 五大支柱資料（現況 done/prog/todo 誠實對應 repo 實作狀態）──
+const PILLARS = [
+  {
+    n:1, title:"訂單一條龍", oneline:"從成交到交付不落地，每一棒自動接力、狀態透明",
+    kpis:[
+      {t:"訂單→出貨的人工抄寫",v:"多次手抄 <span class='arrow'>→</span> 0 次"},
+      {t:"每段狀態自動通知",v:"事後電話問 <span class='arrow'>→</span> 自動推播"},
+      {t:"成交→安裝完工前置時間",v:"目標 ↓ 30%"},
+    ],
+    works:[
+      {st:"prog", name:"ERP（鼎新 TipTop）出貨串接", arci:"內勤助理", meta:"已有出貨單號欄位＋『標記出貨』解鎖排程；尚待與 ERP 真串接"},
+      {st:"todo", name:"庫存／出貨／物流各段自動通知客戶＋內部", arci:"系統", meta:"每一棒完成自動發 LINE／簡訊"},
+      {st:"done", name:"安裝完工回寫、保固起算", arci:"師傅＋內勤", meta:"師傅端結案→CRM 即時顯示"},
+    ],
+    insight:"苔曙：ERP 當後台帳務主機、自建工具貼現場，資料該共通處才串。「資料分散不是問題，沒人去串才是問題。」"
+  },
+  {
+    n:2, title:"全通路進件不漏接", oneline:"LINE／FB／IG／電話／Email／網頁，任何管道進來都變一張案件走同一條路",
+    kpis:[
+      {t:"進件→首次回應時間",v:"看心情 <span class='arrow'>→</span> 有 SLA"},
+      {t:"漏接率",v:"目標 → 0"},
+      {t:"AI 自動建單比例",v:"目標 ↑"},
+    ],
+    works:[
+      {st:"done", name:"多平台整合收件匣（LINE/FB/IG/電話）", arci:"客服", meta:"同一收件匣、回覆自動路由對應管道"},
+      {st:"done", name:"對話處理狀態三態（未處理/處理中/已完成）", arci:"客服", meta:"客戶再進線自動翻回未處理，不漏接"},
+      {st:"prog", name:"case-intake 進件 API（Email／網頁）", arci:"系統", meta:"程式已寫，待部署＋設金鑰；網頁商機建安裝單、Email 建客訴單"},
+      {st:"done", name:"AI 語音客服口頭報修自動建單", arci:"AI＋客服", meta:"問齊姓名/地址/問題才建，依地址沿用客編"},
+    ],
+    insight:"苔曙食安回收：把四個系統的追溯鏈「串成一條時間軸」，1-2 小時 → 5 分鐘。進件也是——先讓所有管道匯進同一條路。"
+  },
+  {
+    n:3, title:"現場即戰力", oneline:"派工到結案，師傅一支手機搞定",
+    kpis:[
+      {t:"派工→到場時間",v:"憑經驗喊 <span class='arrow'>→</span> GPS 推 ETA"},
+      {t:"當日結案率",v:"目標 ↑"},
+      {t:"現場一次完成率",v:"目標 ↑"},
+    ],
+    works:[
+      {st:"done", name:"派工排程＋工務時刻表（分區佔格）", arci:"派工/管理", meta:"維修佔1格、安裝佔2格，衝突自動擋"},
+      {st:"done", name:"接案 GPS ETA 自動推播客戶", arci:"師傅＋系統", meta:"「預計幾點到」自動發客戶"},
+      {st:"done", name:"三階段 QC 結案（型號→原因→處理）", arci:"師傅", meta:"老師傅判斷變下拉選單"},
+      {st:"done", name:"現場拍照、客戶簽名、收款", arci:"師傅", meta:"手機一次完成，CRM 留痕跡"},
+    ],
+    insight:"苔曙現場平板：「設計要遷就現場，不是要求現場遷就系統。」刻意做很簡單，年長員工、外籍同仁都能用——師傅端也該守這條。"
+  },
+  {
+    n:4, title:"金流與保固閉環", oneline:"收款電子化、發票自動、保固到期主動聯繫回頭客",
+    kpis:[
+      {t:"現場收款數位化比例",v:"目標 ↑"},
+      {t:"發票自動開立率",v:"手開 <span class='arrow'>→</span> 自動"},
+      {t:"保固到期前主動聯繫轉單率",v:"被動等 <span class='arrow'>→</span> 主動提醒"},
+    ],
+    works:[
+      {st:"prog", name:"師傅現場電子收款（LINE Pay/刷卡/QR）", arci:"師傅＋財務", meta:"mockPayment 雛形已預留串接點"},
+      {st:"todo", name:"真金流串接（藍新/台新等）", arci:"財務＋系統", meta:"計畫書2 已規劃方案比較"},
+      {st:"todo", name:"電子發票自動開立（B2C 載具／B2B 統編）", arci:"財務", meta:"—"},
+      {st:"todo", name:"保固到期主動提醒→回頭客商機", arci:"客服＋系統", meta:"保固到期前自動聯繫，把售後變售前"},
+    ],
+    insight:"苔曙「人不應該做機器可以做的事」。手開發票、手記收款正是機器該做的——省下的時間拿去做客戶服務。"
+  },
+  {
+    n:5, title:"老闆的即時儀表板", oneline:"不用問就知道營運狀況、異常自動告警",
+    kpis:[
+      {t:"關鍵報表自動化程度",v:"手工彙整 <span class='arrow'>→</span> 自動"},
+      {t:"異常從發生到告知",v:"隔天發現 <span class='arrow'>→</span> 當下"},
+      {t:"主管主動查詢次數",v:"目標 ↓"},
+    ],
+    works:[
+      {st:"done", name:"品質/師傅/客服三大報表＋CSV 匯出", arci:"管理層", meta:"型號故障率、師傅時效、客服績效"},
+      {st:"todo", name:"每日營運摘要自動推播主管手機", arci:"系統", meta:"每早自動推：昨日進件/結案/待處理"},
+      {st:"todo", name:"異常自動告警（未處理超時、緊急案件）", arci:"系統", meta:"SLA 逾時→通知主管"},
+    ],
+    insight:"苔曙「生產報告每早 08:15 自動傳主管手機」「先給結論、明細留電腦」——手機看數字，細節回系統查。"
+  },
+];
+
+const ST_LABEL = {done:"✅ 已完成", prog:"🟡 進行中", todo:"⬜ 待啟動"};
+
+function countWorks(p){
+  const c={done:0,prog:0,todo:0};
+  p.works.forEach(w=>c[w.st]++);
+  return c;
+}
+
+// 渲染支柱
+const pc = document.getElementById('pillars');
+PILLARS.forEach(p=>{
+  const c = countWorks(p);
+  const total = p.works.length;
+  const pct = Math.round((c.done + c.prog*0.5)/total*100);
+  const el = document.createElement('div');
+  el.className = 'pillar';
+  el.innerHTML = `
+    <div class="phead">
+      <div class="pnum">${p.n}</div>
+      <div class="ptitle"><h2>${p.title}</h2><div class="oneline">${p.oneline}</div></div>
+      <div class="pmini">
+        <div class="mprog"><div class="mbar"><div class="mfill" style="width:${pct}%"></div></div><div class="mtxt">${c.done}/${total} 完成</div></div>
+        <span class="chev">▶</span>
+      </div>
+    </div>
+    <div class="pbody">
+      <div class="sec-t">📊 KPI — 怎麼知道成功了（數字）</div>
+      <div class="kpis">${p.kpis.map(k=>`<div class="kpi"><div class="kt">${k.t}</div><div class="kv">${k.v}</div></div>`).join('')}</div>
+      <div class="sec-t">🔧 工作項 — 要做的事（含交付單位 ARCI）</div>
+      <div>${p.works.map(w=>`
+        <div class="work">
+          <span class="wst ${w.st}">${ST_LABEL[w.st]}</span>
+          <div class="wbody"><div class="wname">${w.name}</div>
+            <div class="wmeta"><span class="arci">${w.arci}</span>${w.meta}</div></div>
+        </div>`).join('')}</div>
+      <div class="insight">💡 <b>苔曙啟發</b>：${p.insight}</div>
+    </div>`;
+  el.querySelector('.phead').addEventListener('click', ()=> el.classList.toggle('open'));
+  pc.appendChild(el);
+});
+
+// 總覽進度條（全部工作項加總）
+(function(){
+  let done=0,prog=0,todo=0;
+  PILLARS.forEach(p=>{const c=countWorks(p);done+=c.done;prog+=c.prog;todo+=c.todo;});
+  const total=done+prog+todo;
+  const bar=document.getElementById('ovBar');
+  bar.innerHTML = `<div class="seg done" style="width:${done/total*100}%"></div><div class="seg prog" style="width:${prog/total*100}%"></div><div class="seg todo" style="width:${todo/total*100}%"></div>`;
+  document.getElementById('ovNum').textContent = `${done} 完成 · ${prog} 進行中 · ${todo} 待啟動（共 ${total} 項）`;
+})();
+
+// 全部展開/收合
+let allOpen=false;
+document.getElementById('expandAll').addEventListener('click',()=>{
+  allOpen=!allOpen;
+  document.querySelectorAll('.pillar').forEach(p=>p.classList.toggle('open',allOpen));
+});
+</script>
+</body>
+</html>
