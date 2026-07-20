@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>三方對焦會議議程 — 網聯 × IT × Fish</title>
+<style>
+  :root{
+    --navy:#0F2744; --navy2:#1E3A5F; --blue:#2563EB; --line:#E2E8F0;
+    --g50:#F8FAFC; --g100:#F1F5F9; --g400:#94A3B8; --g500:#64748B; --g600:#475569; --g800:#1E293B;
+    --v:#7C3AED; --vbg:#F5F3FF; --amber:#B45309; --amberbg:#FFFBEB; --ok:#15803D;
+    --vendor:#2563EB; --it:#0891B2; --fish:#7C3AED;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,"Segoe UI","PingFang TC","Microsoft JhengHei",sans-serif;color:var(--g800);background:var(--g50);line-height:1.65;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:940px;margin:0 auto;padding:28px 20px 80px}
+  header{background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;border-radius:16px;padding:24px 28px;margin-bottom:18px}
+  header h1{font-size:24px;letter-spacing:.5px}
+  header .goal{margin-top:8px;font-size:14px;color:#CBD9EC}
+  .roles{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+  .role{font-size:12px;font-weight:700;padding:4px 12px;border-radius:20px;background:rgba(255,255,255,.14)}
+  .role .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}
+  /* 定調台詞 */
+  .opening{background:var(--vbg);border:1px solid #DDD6FE;border-radius:14px;padding:16px 20px;margin-bottom:20px}
+  .opening h3{font-size:14px;color:var(--v);margin-bottom:8px}
+  .opening .say{font-size:13.5px;color:#4C1D95;background:#fff;border-radius:10px;padding:12px 14px;border-left:4px solid var(--v);font-style:italic}
+  /* 議題卡 */
+  .topic{background:#fff;border:1px solid var(--line);border-radius:14px;margin-bottom:14px;overflow:hidden;box-shadow:0 1px 3px rgba(15,39,68,.05)}
+  .thead{display:flex;align-items:flex-start;gap:14px;padding:16px 20px;border-bottom:1px solid var(--line);background:var(--g50)}
+  .tnum{width:36px;height:36px;flex-shrink:0;border-radius:10px;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:800}
+  .thead .tt{flex:1}
+  .thead h2{font-size:16.5px;color:var(--navy)}
+  .thead .bg{font-size:12.5px;color:var(--g500);margin-top:3px}
+  .tbody{padding:14px 20px 18px}
+  .ask{margin-bottom:12px}
+  .ask .who{display:inline-block;font-size:11px;font-weight:800;padding:2px 9px;border-radius:6px;margin-bottom:6px}
+  .who.vendor{background:#DBEAFE;color:var(--vendor)} .who.it{background:#CFFAFE;color:var(--it)} .who.tri{background:#F3E8FF;color:var(--fish)}
+  .qitem{display:flex;gap:8px;align-items:flex-start;font-size:13px;padding:3px 0}
+  .qitem input{margin-top:5px;flex-shrink:0}
+  .outcome{background:#F0FDF4;border-left:4px solid var(--ok);border-radius:0 8px 8px 0;padding:10px 14px;margin-top:10px;font-size:12.5px}
+  .outcome b{color:var(--ok)}
+  .risk{background:var(--amberbg);border-left:4px solid #F59E0B;border-radius:0 8px 8px 0;padding:10px 14px;margin-top:8px;font-size:12.5px;color:#78350F}
+  .risk b{color:#92400E}
+  /* 責任矩陣 */
+  .matrix{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px 22px;margin:22px 0}
+  .matrix h2{font-size:17px;color:var(--navy);margin-bottom:4px}
+  .matrix .hint{font-size:12.5px;color:var(--g500);margin-bottom:12px}
+  table{border-collapse:collapse;width:100%;font-size:12.5px}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:center}
+  th{background:var(--navy);color:#fff;font-weight:600}
+  td:first-child{text-align:left;font-weight:600;color:var(--g800)}
+  .raci-key{font-size:11.5px;color:var(--g500);margin-top:10px}
+  /* 會後待辦 */
+  .todo{background:#fff;border:1px dashed var(--g400);border-radius:14px;padding:18px 22px;margin-top:20px}
+  .todo h2{font-size:16px;color:var(--navy);margin-bottom:10px}
+  .todo .row{display:grid;grid-template-columns:1fr 120px 110px;gap:8px;font-size:12px;padding:6px 0;border-bottom:1px dashed var(--line)}
+  .todo .row.head{font-weight:700;color:var(--g500);border-bottom:2px solid var(--line)}
+  .todo .blank{border-bottom:1px solid var(--g400);min-height:20px}
+  .strat{background:var(--vbg);border-radius:12px;padding:14px 18px;margin-top:20px;font-size:13px;color:#4C1D95}
+  .strat b{color:var(--v)}
+  .printbtn{position:fixed;bottom:20px;right:20px;background:var(--navy);color:#fff;border:none;border-radius:24px;padding:11px 20px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(15,39,68,.25)}
+  @media print{
+    body{background:#fff}.printbtn{display:none}.wrap{max-width:100%;padding:0}
+    header{background:var(--navy)!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .topic,.matrix,.todo{break-inside:avoid;box-shadow:none}
+  }
+  @media(max-width:640px){.todo .row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>三方對焦會議議程</h1>
+    <div class="goal">目的：不是要 IT 學新東西、也不是要改 ERP —— 是把「AI 怎麼維運」「ERP 資料怎麼安全地串」的<b>分工與界線</b>當場劃清楚。</div>
+    <div class="roles">
+      <span class="role"><span class="dot" style="background:#60A5FA"></span>網聯（廠商）— 建系統／程式維運</span>
+      <span class="role"><span class="dot" style="background:#22D3EE"></span>IT/MIS（內部）— 基礎設施／資安</span>
+      <span class="role"><span class="dot" style="background:#A78BFA"></span>Fish — 需求／決策／居中劃線</span>
+    </div>
+  </header>
+
+  <div class="opening">
+    <h3>🎤 開場 5 分鐘定調（Fish 可照唸，先降低 IT 焦慮）</h3>
+    <div class="say">「今天不是要 IT 學寫程式、也不是要改動我們的 ERP。我想達成的只有一件事：把哪些事網聯做、哪些事 IT 做、哪些我來決定，<b>當場畫成一張表</b>。程式的維護我傾向交給網聯，IT 這邊負責的是你們本來就在管的伺服器、網路、資安。所以今天大家放心，我們是來『分工』，不是來加你們工作。」</div>
+  </div>
+
+  <div id="topics"></div>
+
+  <!-- 責任矩陣 -->
+  <div class="matrix">
+    <h2>★ 責任邊界矩陣（今天最該定案的一張表）</h2>
+    <div class="hint">貫穿所有議題的底層問題。當場逐列填：誰是 <b>R</b> 執行、<b>A</b> 負責、<b>C</b> 諮詢、<b>I</b> 告知。空白處會中填。</div>
+    <table>
+      <tr><th>工作項目</th><th>網聯</th><th>IT/MIS</th><th>Fish</th></tr>
+      <tr><td>雲端伺服器 / 網路 / 備份</td><td></td><td></td><td></td></tr>
+      <tr><td>系統資安 / 帳號權限 / 金鑰保管</td><td></td><td></td><td></td></tr>
+      <tr><td>程式改動 / 加功能 / 修 bug</td><td></td><td></td><td></td></tr>
+      <tr><td>日常維運（重啟 / 監控 / 改設定）</td><td></td><td></td><td></td></tr>
+      <tr><td>ERP（TIPTOP）資料出口 / 串接</td><td></td><td></td><td></td></tr>
+      <tr><td>SIP / 語音伺服器 建置與維護</td><td></td><td></td><td></td></tr>
+      <tr><td>舊資料清洗 / 轉檔 / 匯入</td><td></td><td></td><td></td></tr>
+      <tr><td>需求定義 / 驗收 / 最終決策</td><td></td><td></td><td></td></tr>
+    </table>
+    <div class="raci-key">R=實際執行　A=負全責（單一窗口）　C=需諮詢　I=需被告知</div>
+  </div>
+
+  <!-- 會後待辦 -->
+  <div class="todo">
+    <h2>📌 會後待辦（會末 5 分鐘一起收）</h2>
+    <div class="row head"><span>決議 / 待辦事項</span><span>負責人</span><span>期限</span></div>
+    <div class="row"><span class="blank"></span><span class="blank"></span><span class="blank"></span></div>
+    <div class="row"><span class="blank"></span><span class="blank"></span><span class="blank"></span></div>
+    <div class="row"><span class="blank"></span><span class="blank"></span><span class="blank"></span></div>
+    <div class="row"><span class="blank"></span><span class="blank"></span><span class="blank"></span></div>
+    <div class="row"><span class="blank"></span><span class="blank"></span><span class="blank"></span></div>
+  </div>
+
+  <div class="strat">
+    <b>💡 策略提醒（給 Fish 自己看）：</b>IT 兼任、不懂程式、又要扛維運，他心裡大概率抗拒。你的角色是<b>居中把界線劃清</b>——讓他覺得扛的是他扛得動的（伺服器、網路、資安），而不是整套 AI。把「程式維運交網聯」講明，反而降低他的抗拒。另外：ERP 能開放到什麼程度常是<b>鼎新</b>決定，不是網聯——今天這題未必收得了尾，但至少要問出「卡點在誰、下一步找誰」。
+  </div>
+</div>
+
+<button class="printbtn" onclick="window.print()">🖨️ 列印 / 存 PDF</button>
+
+<script>
+const TOPICS = [
+  {
+    n:1, title:"ERP（TIPTOP）串接能到什麼地步", bg:"「能串到哪」比「要不要串」關鍵。且此案曾被 IT 否決、原因未明——今天要把它攤開。",
+    asks:[
+      {who:"vendor", label:"對網聯問", qs:[
+        "技術上能串接鼎新 TIPTOP 到什麼程度？即時 API 雙向同步，還是只能定時批次匯入匯出？",
+        "庫存查詢是即時反查，還是隔一段時間才更新？",
+        "你們過去接過鼎新 TIPTOP 嗎？用什麼方式接的？"]},
+      {who:"it", label:"對 IT 問", qs:[
+        "當初否決 ERP 串接的原因是什麼？（資安？TIPTOP 沒開放？授權費？改壞風險？）",
+        "TIPTOP 後面的資料庫是哪一種（Oracle / Informix / SQL Server）？",
+        "能不能開一個『唯讀（只能 SELECT）』的資料帳號給外部系統讀？"]},
+      {who:"tri", label:"三方確認", qs:[
+        "TIPTOP『開不開放、開到什麼程度』是不是要鼎新點頭？今天是否缺『鼎新／ERP 維護商』這個角色？"]},
+    ],
+    outcome:"產出：①釐清當初否決真因　②確認資料庫類型與『能否開唯讀出口』　③若卡在鼎新，明確列出『下一步要找誰、問什麼』。先求『讀出來』（安全、零風險），雙向自動下單放後面。",
+    risk:"ERP 串接常卡在鼎新（第三方）不是網聯。今天可能得到『網聯說可以、但要看 ERP 那邊』的半吊子結論——先接受，重點是問出卡點與下一棒。"
+  },
+  {
+    n:2, title:"AI 系統維運 —— IT 不懂程式怎麼辦", bg:"IT 最真實的焦慮。選網聯的理由是『源碼歸我方、可自行維運』，但看不懂的源碼＝價值打折。",
+    asks:[
+      {who:"vendor", label:"對網聯問", qs:[
+        "日常維運（重啟、備份、監控、改設定）需不需要寫程式？還是連改個小功能都要動 code？",
+        "你們的系統是什麼技術棧（Node / PostgreSQL 之類）？維運要具備什麼技能？",
+        "合約第 10 項的 FDE 顧問陪跑，能不能『帶著 IT 同仁實際上手』，而不只是口頭『有問題找我們』？"]},
+      {who:"it", label:"對 IT 問", qs:[
+        "伺服器 / 網路 / 備份 / 資安這些你們本來就在做——這部分接手沒問題吧？",
+        "『改程式 / 加功能』你們不碰、交網聯，這樣界線你們能接受嗎？"]},
+      {who:"tri", label:"三方確認", qs:[
+        "IT 是『接手維運』還是『只做基礎設施、程式維運交網聯』？這條線今天一定要劃。"]},
+    ],
+    outcome:"產出：一條清楚的維運分工線——『伺服器/網路/備份/資安＝IT；改程式/加功能＝網聯』；並確認 FDE 陪跑的具體形式（帶上手 or 純諮詢）。",
+    risk:"『交網聯維運（年 24 萬）』與『IT 接手』本身有張力。若不劃清，IT 會扛一個扛不動的東西，你擔心的『責任在他、能力不足』就會成真。"
+  },
+  {
+    n:3, title:"資料遷移與現有系統介接", bg:"新系統上線時，舊資料怎麼進去？常被漏掉、上線才卡住。",
+    asks:[
+      {who:"vendor", label:"對網聯問", qs:[
+        "舊系統資料（舊維修流水帳、Fish 自建的 LINE AI demo）要怎麼匯入新系統？你們負責轉檔嗎？",
+        "資料清洗（去重、格式對齊）誰做？需要我方提供什麼格式？"]},
+      {who:"it", label:"對 IT 問", qs:[
+        "舊維修流水帳系統的資料匯得出來嗎？什麼格式？",
+        "ERP 裡的客戶主檔要不要一起帶進來？"]},
+      {who:"tri", label:"三方確認", qs:[
+        "上線『切換日』怎麼安排？舊系統平行跑多久才停？"]},
+    ],
+    outcome:"產出：一份『要遷移哪些資料、誰清洗、誰轉檔、什麼格式、切換時程』的清單。",
+  },
+  {
+    n:4, title:"帳號、權限與資安", bg:"系統部署在『自有雲端帳號』——誰開、誰管、金鑰交給誰，要講清楚。",
+    asks:[
+      {who:"it", label:"對 IT 問", qs:[
+        "自有雲端帳號誰開立、誰保管主控權？（這是 IT 的事）",
+        "API 金鑰、資料庫存取權限，交接給誰保管？"]},
+      {who:"vendor", label:"對網聯問", qs:[
+        "五級權限、外部帳號（經銷商 / 鎖店）怎麼管？資安怎麼把關？",
+        "系統的資安等級（加密、稽核日誌、SSO）做到哪？"]},
+      {who:"tri", label:"三方確認", qs:[
+        "外部帳號（經銷商/鎖店）萬一外洩，責任與應變流程是什麼？"]},
+    ],
+    outcome:"產出：確認『雲端帳號歸屬與保管人、金鑰交接對象、外部帳號資安責任』。",
+  },
+  {
+    n:5, title:"SIP／語音的技術前置", bg:"要自建 SIP server 給網聯接語音。之前反映內部主機無法提供、找不到廠商維護。",
+    asks:[
+      {who:"vendor", label:"對網聯問", qs:[
+        "你們接語音需要我方提供什麼規格的 SIP？有沒有推薦的建置方式或合作的系統商？",
+        "如果我方自建有困難，有沒有替代方案（雲端 SIP / SBC 服務）？"]},
+      {who:"it", label:"對 IT 問", qs:[
+        "SIP server 這個技術缺口，IT 補得上嗎？還是要另尋系統商？"]},
+    ],
+    outcome:"產出：確認 SIP 由誰建、誰維護；若內部補不上，列出『要另找的系統商 / 雲端方案』選項。",
+    risk:"語音是 0800/AI 客服的前置。SIP 卡住，語音整條就動不了——這題別讓它懸著。"
+  },
+  {
+    n:6, title:"測試與驗收的技術配合", bg:"分段驗收時，IT 要不要參與技術驗收？影響 IT 的投入時間。",
+    asks:[
+      {who:"it", label:"對 IT 問", qs:[
+        "技術驗收（資安、效能、串接正確性）你們要不要參與？還是只看功能面？"]},
+      {who:"tri", label:"三方確認", qs:[
+        "每個分段驗收，IT 需要投入多少時間？先講好，避免臨時被抓。"]},
+    ],
+    outcome:"產出：確認 IT 在驗收的角色與投入時間，寫進驗收流程。",
+  },
+];
+
+const WHO_LABEL = {vendor:"vendor", it:"it", tri:"tri"};
+const tc = document.getElementById('topics');
+TOPICS.forEach(t=>{
+  const el = document.createElement('div');
+  el.className = 'topic';
+  el.innerHTML = `
+    <div class="thead">
+      <div class="tnum">${t.n}</div>
+      <div class="tt"><h2>${t.title}</h2><div class="bg">${t.bg}</div></div>
+    </div>
+    <div class="tbody">
+      ${t.asks.map(a=>`
+        <div class="ask">
+          <span class="who ${a.who}">${a.label}</span>
+          ${a.qs.map(q=>`<label class="qitem"><input type="checkbox"><span>${q}</span></label>`).join('')}
+        </div>`).join('')}
+      <div class="outcome"><b>✅ 本題要產出</b>：${t.outcome.replace('產出：','')}</div>
+      ${t.risk?`<div class="risk"><b>★ 風險提醒</b>：${t.risk}</div>`:''}
+    </div>`;
+  tc.appendChild(el);
+});
+</script>
+</body>
+</html>
