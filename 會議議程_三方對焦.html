@@ -58,13 +58,39 @@
   .todo .blank{border-bottom:1px solid var(--g400);min-height:20px}
   .strat{background:var(--vbg);border-radius:12px;padding:14px 18px;margin-top:20px;font-size:13px;color:#4C1D95}
   .strat b{color:var(--v)}
-  .printbtn{position:fixed;bottom:20px;right:20px;background:var(--navy);color:#fff;border:none;border-radius:24px;padding:11px 20px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(15,39,68,.25)}
+  /* ── 會議紀錄輸入欄 ── */
+  .ans{display:block;width:calc(100% - 24px);margin:1px 0 7px 24px;font:inherit;font-size:12.5px;color:var(--navy2);
+       border:none;border-bottom:1px dashed #CBD5E1;background:transparent;padding:3px 4px}
+  .ans::placeholder{color:#CBD5E1;font-style:italic}
+  .ans:focus{outline:none;border-bottom:1.5px solid var(--blue);background:#F8FAFF}
+  .note{margin-top:10px}
+  .note label{display:block;font-size:11.5px;font-weight:800;color:var(--g500);margin-bottom:4px}
+  .note textarea{width:100%;font:inherit;font-size:13px;color:var(--navy2);border:1px solid var(--line);border-radius:8px;
+       padding:8px 10px;background:#FCFDFF;resize:vertical;min-height:56px;overflow:hidden}
+  .note textarea:focus{outline:none;border-color:var(--blue);background:#fff}
+  td input,.todo input{width:100%;font:inherit;font-size:12.5px;color:var(--navy2);border:none;background:transparent;padding:2px 3px;text-align:inherit}
+  td input{text-align:center;font-weight:700;text-transform:uppercase}
+  td input:focus,.todo input:focus{outline:none;background:#EFF6FF;border-radius:4px}
+  .todo input{border-bottom:1px solid var(--g400);border-radius:0}
+  .meta{display:flex;gap:14px;flex-wrap:wrap;margin-top:14px;font-size:12px}
+  .meta span{color:#CBD9EC}
+  .meta input{font:inherit;font-size:12px;color:#fff;background:rgba(255,255,255,.12);border:none;
+       border-bottom:1px solid rgba(255,255,255,.35);border-radius:4px 4px 0 0;padding:3px 8px;min-width:110px}
+  .meta input:focus{outline:none;background:rgba(255,255,255,.22)}
+  .meta input::placeholder{color:rgba(255,255,255,.45)}
+  .bar{position:fixed;bottom:20px;right:20px;display:flex;gap:8px;z-index:9}
+  .bar button{background:var(--navy);color:#fff;border:none;border-radius:24px;padding:11px 18px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(15,39,68,.25)}
+  .bar button.ghost{background:#fff;color:var(--navy);border:1px solid var(--line)}
+  .saved{position:fixed;bottom:22px;left:20px;font-size:12px;color:var(--g400);z-index:9}
   @media print{
-    body{background:#fff}.printbtn{display:none}.wrap{max-width:100%;padding:0}
+    body{background:#fff}.bar,.saved{display:none}.wrap{max-width:100%;padding:0}
     header{background:var(--navy)!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .topic,.matrix,.todo{break-inside:avoid;box-shadow:none}
+    .ans,.note textarea,td input,.todo input,.meta input{border-color:#94A3B8!important;background:#fff!important;color:#000!important}
+    .note textarea{min-height:0}
+    .meta input{color:#fff!important;background:transparent!important}
   }
-  @media(max-width:640px){.todo .row{grid-template-columns:1fr}}
+  @media(max-width:640px){.todo .row{grid-template-columns:1fr}.bar button{padding:10px 14px;font-size:12px}}
 </style>
 </head>
 <body>
@@ -76,6 +102,12 @@
       <span class="role"><span class="dot" style="background:#60A5FA"></span>網聯（廠商）— 建系統／程式維運</span>
       <span class="role"><span class="dot" style="background:#22D3EE"></span>IT/MIS（內部）— 基礎設施／資安</span>
       <span class="role"><span class="dot" style="background:#A78BFA"></span>Fish — 需求／決策／居中劃線</span>
+    </div>
+    <div class="meta">
+      <span>日期 <input data-k="m-date" placeholder="2026/__/__"></span>
+      <span>地點 <input data-k="m-place" placeholder="會議室"></span>
+      <span>出席 <input data-k="m-att" placeholder="網聯：___　IT：___　其他：___" style="min-width:260px"></span>
+      <span>紀錄 <input data-k="m-rec" placeholder="Fish" style="min-width:70px"></span>
     </div>
   </header>
 
@@ -90,29 +122,18 @@
   <div class="matrix">
     <h2>★ 責任邊界矩陣（今天最該定案的一張表）</h2>
     <div class="hint">貫穿所有議題的底層問題。當場逐列填：誰是 <b>R</b> 執行、<b>A</b> 負責、<b>C</b> 諮詢、<b>I</b> 告知。空白處會中填。</div>
-    <table>
-      <tr><th>工作項目</th><th>網聯</th><th>IT/MIS</th><th>Fish</th></tr>
-      <tr><td>雲端伺服器 / 網路 / 備份</td><td></td><td></td><td></td></tr>
-      <tr><td>系統資安 / 帳號權限 / 金鑰保管</td><td></td><td></td><td></td></tr>
-      <tr><td>程式改動 / 加功能 / 修 bug</td><td></td><td></td><td></td></tr>
-      <tr><td>日常維運（重啟 / 監控 / 改設定）</td><td></td><td></td><td></td></tr>
-      <tr><td>ERP（TIPTOP）資料出口 / 串接</td><td></td><td></td><td></td></tr>
-      <tr><td>SIP / 語音伺服器 建置與維護</td><td></td><td></td><td></td></tr>
-      <tr><td>舊資料清洗 / 轉檔 / 匯入</td><td></td><td></td><td></td></tr>
-      <tr><td>需求定義 / 驗收 / 最終決策</td><td></td><td></td><td></td></tr>
+    <table id="mx">
+      <tr><th>工作項目</th><th>網聯</th><th>IT/MIS</th><th>Fish</th><th style="width:26%">備註 / 當場講定的細節</th></tr>
     </table>
-    <div class="raci-key">R=實際執行　A=負全責（單一窗口）　C=需諮詢　I=需被告知</div>
+    <div class="raci-key">R=實際執行　A=負全責（單一窗口）　C=需諮詢　I=需被告知（直接在格子裡打字）</div>
   </div>
 
   <!-- 會後待辦 -->
   <div class="todo">
     <h2>📌 會後待辦（會末 5 分鐘一起收）</h2>
     <div class="row head"><span>決議 / 待辦事項</span><span>負責人</span><span>期限</span></div>
-    <div class="row"><span class="blank"></span><span class="blank"></span><span class="blank"></span></div>
-    <div class="row"><span class="blank"></span><span class="blank"></span><span class="blank"></span></div>
-    <div class="row"><span class="blank"></span><span class="blank"></span><span class="blank"></span></div>
-    <div class="row"><span class="blank"></span><span class="blank"></span><span class="blank"></span></div>
-    <div class="row"><span class="blank"></span><span class="blank"></span><span class="blank"></span></div>
+    <div id="todos"></div>
+    <button class="ghost" id="addtodo" style="margin-top:10px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;color:var(--navy);cursor:pointer">＋ 再加一列</button>
   </div>
 
   <div class="strat">
@@ -120,7 +141,12 @@
   </div>
 </div>
 
-<button class="printbtn" onclick="window.print()">🖨️ 列印 / 存 PDF</button>
+<div class="saved" id="saved"></div>
+<div class="bar">
+  <button class="ghost" id="clearbtn">🗑 清空</button>
+  <button class="ghost" id="exportbtn">📄 匯出紀錄</button>
+  <button onclick="window.print()">🖨️ 列印 / PDF</button>
+</div>
 
 <script>
 const TOPICS = [
@@ -209,7 +235,11 @@ const TOPICS = [
   },
 ];
 
-const WHO_LABEL = {vendor:"vendor", it:"it", tri:"tri"};
+const MATRIX = ["雲端伺服器 / 網路 / 備份","系統資安 / 帳號權限 / 金鑰保管","程式改動 / 加功能 / 修 bug",
+  "日常維運（重啟 / 監控 / 改設定）","ERP（TIPTOP）資料出口 / 串接","SIP / 語音伺服器 建置與維護",
+  "舊資料清洗 / 轉檔 / 匯入","需求定義 / 驗收 / 最終決策"];
+
+// ── 議題卡：每題問句後面接一格答覆、卡末一格本題結論 ──
 const tc = document.getElementById('topics');
 TOPICS.forEach(t=>{
   const el = document.createElement('div');
@@ -220,16 +250,117 @@ TOPICS.forEach(t=>{
       <div class="tt"><h2>${t.title}</h2><div class="bg">${t.bg}</div></div>
     </div>
     <div class="tbody">
-      ${t.asks.map(a=>`
+      ${t.asks.map((a,ai)=>`
         <div class="ask">
           <span class="who ${a.who}">${a.label}</span>
-          ${a.qs.map(q=>`<label class="qitem"><input type="checkbox"><span>${q}</span></label>`).join('')}
+          ${a.qs.map((q,qi)=>`<label class="qitem"><input type="checkbox" data-k="c${t.n}-${ai}-${qi}"><span>${q}</span></label>
+            <input class="ans" data-k="a${t.n}-${ai}-${qi}" placeholder="對方怎麼回…">`).join('')}
         </div>`).join('')}
       <div class="outcome"><b>✅ 本題要產出</b>：${t.outcome.replace('產出：','')}</div>
       ${t.risk?`<div class="risk"><b>★ 風險提醒</b>：${t.risk}</div>`:''}
+      <div class="note"><label>📝 本題結論（會中填）</label><textarea data-k="n${t.n}" placeholder="這題最後講定什麼？誰負責？卡在哪、下一步找誰？"></textarea></div>
     </div>`;
   tc.appendChild(el);
 });
+
+// ── 責任矩陣：每格可打字 ──
+const mx = document.getElementById('mx');
+MATRIX.forEach((label,i)=>{
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td>${label}</td>`
+    + ['v','i','f'].map(c=>`<td><input data-k="mx${i}-${c}" maxlength="4" placeholder="—"></td>`).join('')
+    + `<td style="text-align:left"><input data-k="mx${i}-n" placeholder="…"></td>`;
+  mx.appendChild(tr);
+});
+
+// ── 會後待辦：可加列 ──
+const todos = document.getElementById('todos');
+function addTodoRow(i){
+  const d = document.createElement('div');
+  d.className = 'row';
+  d.innerHTML = `<span><input data-k="td${i}-t" placeholder="決議 / 待辦"></span>`
+    + `<span><input data-k="td${i}-w" placeholder="負責人"></span>`
+    + `<span><input data-k="td${i}-d" placeholder="期限"></span>`;
+  todos.appendChild(d);
+}
+let todoN = 6;
+for(let i=0;i<todoN;i++) addTodoRow(i);
+document.getElementById('addtodo').onclick = ()=>{ addTodoRow(todoN++); };
+
+// ── 自動存檔（localStorage，會中誤關分頁不會全沒）──
+const KEY = 'wl-meeting-3way';
+const savedEl = document.getElementById('saved');
+function collect(){
+  const o = {};
+  document.querySelectorAll('[data-k]').forEach(el=>{
+    o[el.dataset.k] = el.type==='checkbox' ? el.checked : el.value;
+  });
+  o._todoN = todoN;
+  return o;
+}
+let t0;
+function save(){
+  try{ localStorage.setItem(KEY, JSON.stringify(collect())); }catch(e){ return; }
+  savedEl.textContent = '💾 已自動儲存 ' + new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'});
+  clearTimeout(t0); t0 = setTimeout(()=>{ savedEl.textContent=''; }, 2500);
+}
+function restore(){
+  let o; try{ o = JSON.parse(localStorage.getItem(KEY)||'null'); }catch(e){ return; }
+  if(!o) return;
+  while(todoN < (o._todoN||6)) addTodoRow(todoN++);   // 先補回加過的列，才填得進去
+  document.querySelectorAll('[data-k]').forEach(el=>{
+    const v = o[el.dataset.k];
+    if(v===undefined) return;
+    if(el.type==='checkbox') el.checked = !!v; else { el.value = v; autoGrow(el); }
+  });
+}
+function autoGrow(el){
+  if(el.tagName!=='TEXTAREA') return;
+  el.style.height='auto'; el.style.height = el.scrollHeight + 'px';
+}
+document.addEventListener('input', e=>{ autoGrow(e.target); save(); });
+document.addEventListener('change', e=>{ if(e.target.type==='checkbox') save(); });
+restore();
+
+// ── 匯出純文字（會後貼進 mail / 版本紀錄用）──
+document.getElementById('exportbtn').onclick = ()=>{
+  const g = k => { const el = document.querySelector(`[data-k="${k}"]`); return el ? el.value.trim() : ''; };
+  const L = [];
+  L.push('三方對焦會議紀錄（網聯 × IT × Fish）');
+  L.push(`日期：${g('m-date')}　地點：${g('m-place')}`);
+  L.push(`出席：${g('m-att')}　紀錄：${g('m-rec')}`);
+  TOPICS.forEach(t=>{
+    L.push('', `【議題 ${t.n}】${t.title}`);
+    t.asks.forEach((a,ai)=>a.qs.forEach((q,qi)=>{
+      const ans = g(`a${t.n}-${ai}-${qi}`);
+      if(ans) L.push(`  Q（${a.label}）${q}`, `  A：${ans}`);
+    }));
+    const n = g(`n${t.n}`);
+    L.push(`  ▶ 本題結論：${n || '（未填）'}`);
+  });
+  L.push('', '【責任邊界矩陣】R=執行 A=負全責 C=諮詢 I=告知');
+  MATRIX.forEach((label,i)=>{
+    const row = ['v','i','f'].map(c=>g(`mx${i}-${c}`)||'—');
+    const note = g(`mx${i}-n`);
+    L.push(`  ${label}｜網聯:${row[0]}　IT:${row[1]}　Fish:${row[2]}${note?'　# '+note:''}`);
+  });
+  L.push('', '【會後待辦】');
+  for(let i=0;i<todoN;i++){
+    const tx = g(`td${i}-t`); if(!tx) continue;
+    L.push(`  ${i+1}. ${tx}｜負責人：${g(`td${i}-w`)||'—'}｜期限：${g(`td${i}-d`)||'—'}`);
+  }
+  const blob = new Blob([L.join('\n')], {type:'text/plain;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `三方對焦會議紀錄_${g('m-date').replace(/\//g,'')||'未填日期'}.txt`;
+  a.click(); URL.revokeObjectURL(a.href);
+};
+
+document.getElementById('clearbtn').onclick = ()=>{
+  if(!confirm('確定清空所有已填內容？此動作無法復原。')) return;
+  localStorage.removeItem(KEY);
+  location.reload();
+};
 </script>
 </body>
 </html>
