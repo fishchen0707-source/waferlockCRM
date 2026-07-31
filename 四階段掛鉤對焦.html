@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>四階段掛鉤對焦 — 維夫拉克 × 網聯</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--brand:#0F2744;--brand2:#1E3A5F;--accent:#38BDF8;--ok:#10B981;--warn:#F59E0B;--err:#EF4444;
+  --wf:#2563EB;--vendor:#7C3AED;
+  --g50:#F8FAFC;--g100:#F1F5F9;--g200:#E2E8F0;--g300:#CBD5E1;--g400:#94A3B8;--g500:#64748B;--g600:#475569;--g700:#334155;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Noto Sans TC',system-ui,-apple-system,"Microsoft JhengHei",sans-serif;background:#F0F4F8;color:var(--g700);
+  line-height:1.65;padding-bottom:70px;-webkit-font-smoothing:antialiased;}
+header{background:var(--brand);color:#fff;padding:16px 24px;position:sticky;top:0;z-index:20;
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;box-shadow:0 2px 10px rgba(15,39,68,.2);}
+header h1{font-size:17px;font-weight:800;}
+header .sub{font-size:11.5px;opacity:.7;margin-top:2px;}
+.savebar{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.role-pick{display:flex;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.3);}
+.role-pick button{background:transparent;color:rgba(255,255,255,.65);border:none;padding:7px 14px;
+  font-size:12.5px;font-weight:800;cursor:pointer;font-family:inherit;}
+.role-pick button.on{background:var(--accent);color:var(--brand);}
+.savebar input{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.3);border-radius:6px;
+  padding:6px 10px;color:#fff;font-size:12.5px;outline:none;width:100px;font-family:inherit;}
+.savebar input::placeholder{color:rgba(255,255,255,.5);}
+#saveBtn{background:var(--accent);color:var(--brand);border:none;border-radius:6px;padding:7px 18px;
+  font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;}
+#saveBtn:disabled{opacity:.5;cursor:wait;}
+#saveMsg{font-size:11px;opacity:.85;width:100%;text-align:right;}
+.wrap{max-width:1080px;margin:0 auto;padding:20px 16px;}
+.frame{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;border-radius:14px;padding:20px 24px;margin-bottom:16px;}
+.frame h2{font-size:14px;margin-bottom:8px;color:var(--accent);}
+.frame .big{font-size:18px;font-weight:800;line-height:1.55;}
+.frame .note{font-size:12.5px;opacity:.85;margin-top:10px;line-height:1.85;}
+.frame .def{background:rgba(56,189,248,.14);border-radius:8px;padding:10px 14px;margin-top:12px;font-size:13px;font-weight:700;}
+/* 時間軸 */
+.tl{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:8px;}
+@media(max-width:820px){.tl{grid-template-columns:1fr 1fr;}}
+@media(max-width:520px){.tl{grid-template-columns:1fr;}}
+.tp{background:#fff;border-radius:12px;padding:14px 16px;box-shadow:0 1px 3px rgba(0,0,0,.06);border-top:4px solid var(--g300);position:relative;}
+.tp.now{border-top-color:var(--err);box-shadow:0 0 0 2px rgba(239,68,68,.25),0 1px 3px rgba(0,0,0,.06);}
+.tp .ph{font-size:10.5px;font-weight:800;color:var(--g400);}
+.tp .nm{font-size:14px;font-weight:800;color:var(--brand);margin-top:2px;line-height:1.4;}
+.tp .dt{font-size:12px;color:var(--g500);margin-top:6px;}
+.tp .cd{font-size:11.5px;font-weight:800;color:var(--err);margin-top:4px;}
+.countdown{background:#FEF2F2;border:1.5px solid #FCA5A5;border-radius:10px;padding:12px 16px;
+  font-size:13px;color:#991B1B;font-weight:700;margin-bottom:20px;text-align:center;}
+.sec-t{font-size:16px;font-weight:800;color:var(--brand);margin:26px 0 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.sec-t .hint{font-size:11.5px;font-weight:400;color:var(--g500);}
+/* 掛鉤 */
+.link{background:#fff;border-radius:12px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden;}
+.link-h{padding:13px 18px;background:var(--g50);border-bottom:1px solid var(--g200);
+  font-size:14px;font-weight:800;color:var(--brand);display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.link-h .ar{color:var(--accent);font-size:16px;}
+.link-b{padding:6px 18px 14px;}
+table{border-collapse:collapse;width:100%;font-size:12.5px;margin-top:8px;}
+th,td{border:1px solid var(--g200);padding:8px 10px;text-align:left;vertical-align:top;}
+th{background:var(--g50);color:var(--g600);font-weight:800;font-size:11.5px;}
+td.k{font-weight:700;color:var(--brand);width:23%;}
+td.risk{color:#B45309;}
+/* 矛盾 */
+.clash{background:#FFF7ED;border:2px solid #FDBA74;border-radius:12px;padding:16px 20px;margin-bottom:12px;}
+.clash h3{font-size:14.5px;color:#9A3412;margin-bottom:6px;}
+.clash p{font-size:12.5px;color:#9A3412;line-height:1.85;}
+.clash .fix{background:#FFEDD5;border-radius:8px;padding:10px 14px;margin-top:9px;font-size:12.5px;color:#7C2D12;line-height:1.8;}
+.clash .fix b{font-size:13px;}
+/* 前提清單 */
+.pre{background:#fff;border-radius:12px;padding:6px 18px;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:12px;}
+.pre-i{padding:11px 0;border-bottom:1px solid var(--g100);display:grid;grid-template-columns:1fr 150px 110px;gap:10px;align-items:start;}
+.pre-i:last-child{border-bottom:none;}
+.pre-i.head{font-weight:800;color:var(--g500);font-size:11.5px;border-bottom:2px solid var(--g200);}
+@media(max-width:700px){.pre-i{grid-template-columns:1fr;}}
+.pre-i .t{font-size:13px;font-weight:700;color:var(--brand);}
+.pre-i .d{font-size:11.5px;color:var(--g500);margin-top:2px;line-height:1.65;}
+.pre-i input{width:100%;border:1px solid var(--g200);border-radius:6px;padding:6px 9px;font-size:12.5px;
+  font-family:inherit;outline:none;background:var(--g50);color:var(--g700);}
+.pre-i input:focus{border-color:var(--accent);background:#fff;}
+.pre-i input:disabled{background:#F1F5F9;color:var(--g400);border-style:dashed;cursor:not-allowed;}
+.who{display:inline-block;font-size:9.5px;font-weight:800;padding:1px 7px;border-radius:5px;margin-left:6px;}
+.who.wf{background:#DBEAFE;color:var(--wf);}
+.who.vendor{background:#EDE9FE;color:var(--vendor);}
+.who.both{background:#FEF3C7;color:#92400E;}
+/* demo 對照 */
+.demo{background:#fff;border-radius:12px;padding:6px 18px;box-shadow:0 1px 3px rgba(0,0,0,.06);}
+.demo-i{padding:12px 0;border-bottom:1px solid var(--g100);}
+.demo-i:last-child{border-bottom:none;}
+.demo-i .t{font-size:13.5px;font-weight:800;color:var(--brand);}
+.demo-i .f{font-size:11.5px;color:var(--accent);font-weight:700;margin-top:2px;}
+.demo-i .d{font-size:12.5px;color:var(--g600);margin-top:4px;line-height:1.8;}
+/* 好消息 */
+.good{background:#F0FDF4;border:2px solid #86EFAC;border-radius:12px;padding:16px 20px;margin-bottom:12px;}
+.good h3{font-size:14.5px;color:#065F46;margin-bottom:6px;}
+.good p{font-size:12.5px;color:#065F46;line-height:1.85;}
+.fld{margin-top:12px;}
+.fld label{font-size:11px;font-weight:800;display:block;margin-bottom:3px;}
+.fld.wf label{color:var(--wf);} .fld.vendor label{color:var(--vendor);}
+.fld textarea{width:100%;border:1px solid var(--g200);border-radius:6px;padding:7px 10px;font-size:12.5px;
+  font-family:inherit;outline:none;background:var(--g50);color:var(--g700);resize:vertical;min-height:48px;}
+.fld textarea:focus{border-color:var(--accent);background:#fff;}
+.fld textarea:disabled{background:#F1F5F9;color:var(--g400);border-style:dashed;cursor:not-allowed;}
+.toast{position:fixed;right:18px;bottom:18px;background:var(--brand);color:#fff;border-radius:8px;
+  padding:12px 18px;font-size:13px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.25);display:none;z-index:99;}
+.toast.err{background:var(--err);}
+@media print{
+  body{background:#fff;padding:0;}header{position:static;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .savebar,.toast{display:none;}.link,.pre,.demo,.clash,.good,.tp{break-inside:avoid;box-shadow:none;border:1px solid var(--g200);}
+  input,textarea{background:#fff!important;color:#000!important;border-color:var(--g400)!important;}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🔗 四階段掛鉤對焦</h1>
+    <div class="sub">維夫拉克 × 網聯｜階段之間要先凍結什麼，才不會下一期返工</div>
+  </div>
+  <div class="savebar">
+    <div class="role-pick">
+      <button id="roleWf" class="on" onclick="setRole('wf')">維夫拉克</button>
+      <button id="roleVendor" onclick="setRole('vendor')">網聯</button>
+    </div>
+    <input id="author" placeholder="填寫人" maxlength="12">
+    <button id="saveBtn" onclick="save()">💾 儲存</button>
+    <span id="saveMsg"></span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="frame">
+    <h2>今天要對焦的一件事</h2>
+    <div class="big">四個階段不是四個獨立專案，是一條資料流。<br>前一期沒凍結的東西，就是後一期的返工。</div>
+    <div class="note">
+      合約分四期交付，但客服建的單要給派工用、派工的客戶要進 360、360 的會員才能做行銷——<b>資料是同一份，只是逐期長出來</b>。
+      所以每一期的驗收標準不只是「功能會動」，還要包含「下一期需要的欄位已經在裡面」。
+    </div>
+    <div class="def">📌「完成」的定義（本次確認）：<b>第一階段 8 月底＝中區實際上線使用</b>，不是建置完成可測試。</div>
+  </div>
+
+  <div class="tl" id="timeline"></div>
+  <div class="countdown" id="countdown"></div>
+
+  <div class="good">
+    <h3>✅ 先講一個降低風險的事實：8 月上線是「並行」，不是「切換」</h3>
+    <p>
+      依 7/20 董事長會議決議，義聖外包服務至 <b>2027 年 3 月</b>才終止。因此 2026 年 8 月中區上線時，
+      外包仍在服務中——AI 客服是<b>加上去的一層，不是取代</b>。萬一初期不穩，既有管道仍可承接。
+      到 2027/3 正式接回自營前，有約 <b>7 個月的磨合期</b>可累積知識庫、訓練人員、擴大自動應答範圍。
+    </p>
+    <p style="margin-top:8px">⇒ 建議明天把這點講明：8 月的驗收標準應是<b>「中區可實際受理並正確轉單」</b>，而非「AI 解決率達 X%」。後者需要時間累積，不該綁在第一期。</p>
+  </div>
+
+  <div class="sec-t">🔗 階段之間必須先凍結的東西<span class="hint">左邊那一期若沒定，右邊那一期就要返工</span></div>
+  <div id="links"></div>
+
+  <div class="sec-t">⚠️ 兩個順序矛盾<span class="hint">照合約標題順序做會卡住，明天要當場定解法</span></div>
+  <div id="clashes"></div>
+
+  <div class="sec-t">📋 8 月底中區上線的前提清單<span class="hint">不只系統——人、內容、線路都要到位。負責人與期限會中填</span></div>
+  <div class="pre" id="prereq"></div>
+
+  <div class="sec-t">🖥️ 我方 MVP 的角色：可執行的規格書<span class="hint">MVP 不作實際使用，demo 的目的是把業務邏輯交出去</span></div>
+  <div class="demo" id="demos"></div>
+
+  <div class="sec-t">📝 會中補充</div>
+  <div class="pre" style="padding:16px 18px">
+    <div class="fld wf"><label>維夫拉克補充（範圍、優先序、我方要補的事）</label>
+      <textarea data-side="wf" id="memo_wf" placeholder="會中記錄…"></textarea></div>
+    <div class="fld vendor" style="margin-top:10px"><label>網聯回覆（可行性、工期、需我方提供什麼）</label>
+      <textarea data-side="vendor" id="memo_vendor" placeholder="廠商可自行上線補填…"></textarea></div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL='https://nkyanyjgfrmovjoqevro.supabase.co';
+const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5reWFueWpnZnJtb3Zqb3FldnJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2ODIxMTMsImV4cCI6MjA5NzI1ODExM30.LPnQyceYS7Z1-rlqUtXm3B8dGBOqnmnavTV-PAOSPZ8';
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+const WF_KEY='phase_link_wf', VENDOR_KEY='phase_link_vendor';
+
+const PHASES=[
+  {n:'第一階段',nm:'智慧客服',end:'2026-08-31',label:'2026 年 8 月'},
+  {n:'第二階段',nm:'CRM 顧客 360 與派工營運中心',end:'2026-09-30',label:'2026 年 9 月'},
+  {n:'第三階段',nm:'會員與自助服務',end:'2026-10-31',label:'2026 年 10 月'},
+  {n:'第四階段',nm:'行銷自動化',end:'2026-11-30',label:'2026 年 11 月'},
+];
+
+// ── 階段掛鉤：前一期必須凍結什麼 ──
+const LINKS=[
+  {from:'第一階段 智慧客服',to:'第二階段 派工營運中心',hot:true,
+   intro:'這是今天最關鍵的一段。客服 8 月建的單，9 月派工要能直接接手；若 8 月只做「對話」而沒有「案件」，9 月得回頭補資料模型，且 8 月已產生的資料轉不過去。',
+   rows:[
+     ['案件資料模型','派工單直接由客服受理的案件轉出，不重新建單','9 月改模型並遷移 8 月已產生的案件'],
+     ['客戶識別鍵＝地址','我方既有規則：電話非唯一（同號可多住所），以地址識別客編','8 月的客戶資料要整批重新歸戶'],
+     ['區域欄位（北／中／南）','客服分區進線與派工分區調度必須是同一套定義','派工排程無法分區，工務時刻表做不出來'],
+     ['案件狀態機對應','客服三態（未處理／處理中／已完成）↔ 派工四態（待派工／待接單／已排程／完工）','同一張單兩套狀態，報表與 SLA 全部對不起來'],
+     ['產品型號與序號','派工要知道修什麼機種；訪談確認型號攸關料件與故障判斷','師傅到場才發現機種不符，二次派工'],
+     ['保固狀態','派工第一層規則即保固內外（保固內委鎖店由公司付費／保固外轉鎖店直接收費）','無法自動判斷派工對象與費用流向'],
+   ]},
+  {from:'第二階段 顧客 360',to:'第三階段 會員與自助',
+   intro:'360 是會員的基礎。會員綁定、保固登錄、自助查詢都掛在同一份客戶主檔上。',
+   rows:[
+     ['客戶主檔欄位完整度','會員綁定要能對上既有客戶，而非另開一份名單','會員與客戶變成兩份資料，日後要合併'],
+     ['產品與保固歸戶','自助查保固要查得到「我家這把鎖」','住戶查不到自己的產品，自助服務形同虛設'],
+     ['服務歷程可讀性','自助查進度要看得到派工與維修紀錄','客戶仍需打電話問進度，沒有減負效果'],
+   ]},
+  {from:'第三階段 會員',to:'第四階段 行銷自動化',
+   intro:'行銷自動化的前提是分眾，分眾的前提是有可辨識、有標籤的會員。',
+   rows:[
+     ['會員標籤與分眾維度','依產品、保固到期、服務歷程分眾投放','只能全體群發，與現行做法無異'],
+     ['同意與退訂機制','行銷觸達須有合法依據與退出管道','個資與行銷法遵風險'],
+   ]},
+];
+
+// ── 順序矛盾 ──
+const CLASHES=[
+  {t:'矛盾一：派工要判保固，但保固登錄排在更後面',
+   p:'第二階段（9 月）的派工，第一層規則就是保固內外判定——這是訪談確認的現行做法，不是新設計。但保固登錄看起來屬於第三階段（10 月）「會員與自助服務」。等於 9 月派工上線時，系統沒有保固資料可判。',
+   fix:'<b>建議解法：把「保固資料」與「保固登錄功能」拆開。</b>保固<u>資料</u>由我方於第二階段前先行匯入（既有系統已有保固起訖與產品序號）；第三階段再做客戶<u>自助登錄</u>的功能。兩者不是同一件事，不必綁在同一期。'},
+  {t:'矛盾二：客服要認客戶，但顧客 360 排在下一期',
+   p:'第一階段（8 月）客服受理時就必須識別「這是誰、他家哪把鎖、保固到了沒」，但顧客 360 屬於第二階段（9 月）。若 8 月先用 LINE ID 或電話當識別鍵，9 月併入以地址為主鍵的 360 時，會有一輪資料清理。',
+   fix:'<b>建議解法：第一階段就先定識別鍵並建「最小客戶主檔」</b>（客編＝地址、姓名、電話、產品、保固）。第二階段再擴充為完整 360（服務歷程、對話、消費紀錄）。<u>先定鍵、後長欄位</u>，避免事後歸戶。'},
+];
+
+// ── 8 月上線前提（who: wf / vendor / both）──
+const PREREQ=[
+  {id:'p1',t:'0800 中部分區進線接入',d:'中部 0800 轉入新系統；台北、高雄維持現狀各自接（7/20 董事長決議）',who:'both'},
+  {id:'p2',t:'LINE OA 接入與憑證交付',d:'官方帳號 channel 憑證歸屬與交付對象需確認',who:'both'},
+  {id:'p3',t:'AI 應答 ＋ 轉真人 ＋ 通話摘要帶入',d:'轉真人時須同時帶入先前對話摘要與客戶已試步驟，避免客戶重講一次',who:'vendor'},
+  {id:'p4',t:'知識庫首批內容',d:'訪談已盤出高頻 5 題（設定卡誤解／公務卡未設定／不知刪除／鑰匙頂鎖舌／指紋範圍過窄）＋產品手冊',who:'wf'},
+  {id:'p5',t:'最小客戶主檔（識別鍵＝地址）',d:'見矛盾二。第一階段就要定鍵，不能等第二階段',who:'both'},
+  {id:'p6',t:'客服人員到位並完成訓練',d:'7/20 決議由業助內部調任（產品熟＋系統熟），Jack 與 Sandy 討論人選。⚠️ 人未定則 8 月底無人可上線',who:'wf'},
+  {id:'p7',t:'驗收標準與測試案例',d:'建議定為「中區可實際受理並正確轉單」，不綁 AI 自動解決率',who:'both'},
+];
+
+// ── MVP demo 對照：每階段要交出什麼業務邏輯 ──
+const DEMOS=[
+  {t:'客服受理與收件匣',f:'對應第一階段',d:'多管道收件匣、處理狀態三態、對話結案後客戶再進線自動翻回未處理。<b>要交出的邏輯：</b>什麼情況算未處理、什麼情況自動翻回。'},
+  {t:'客編與客戶歸戶',f:'對應第一、二階段',d:'<b>要交出的邏輯：客編唯一鍵＝地址</b>（電話非唯一，同一支號碼可對應多個住所）。這是整套資料模型的根，第一階段就要定。'},
+  {t:'派工與工務時刻表',f:'對應第二階段',d:'北中南分區、時段格位、維修佔 1 格安裝佔 2 格、防撞單、轉單改派留紀錄。<b>要交出的邏輯：</b>分區規則與衝突判定。'},
+  {t:'保固判定與費用流向',f:'對應第二階段',d:'保固內委請鎖店由公司付費／保固外轉鎖店直接向客戶收費／保內但不保固須填原因。<b>要交出的邏輯：</b>這三種情形的判定與計費差異。'},
+  {t:'師傅端結案',f:'對應第二階段',d:'到場→施工→照片＋簽名＋收費品項＋保固判定→結案。<b>要交出的邏輯：</b>結案必要條件（照片與簽名為必填）。⚠️ 驗收須改為兩段式，見另份路線圖。'},
+  {t:'保固登錄與會員綁定',f:'對應第三階段',d:'LINE 綁定、保固查詢、我要報修三個模式。<b>要交出的邏輯：</b>綁定後如何對應到既有客編。'},
+];
+
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+const today=new Date(); today.setHours(0,0,0,0);
+
+// 時間軸
+document.getElementById('timeline').innerHTML=PHASES.map(p=>{
+  const end=new Date(p.end+'T00:00:00');
+  const days=Math.round((end-today)/86400000);
+  const isNow=days>=0 && days<=45;
+  return `<div class="tp ${isNow?'now':''}">
+    <div class="ph">${esc(p.n)}</div><div class="nm">${esc(p.nm)}</div>
+    <div class="dt">${esc(p.label)}</div>
+    <div class="cd">${days<0?'已過期':'剩 '+days+' 天'}</div></div>`;
+}).join('');
+
+const d1=Math.round((new Date('2026-08-31T00:00:00')-today)/86400000);
+document.getElementById('countdown').textContent=
+  `⏱ 今天是 ${today.toLocaleDateString('zh-TW')}　—　距第一階段（中區實際上線）剩 ${d1} 天，四期連續交付、每期一個大模組`;
+
+// 掛鉤
+document.getElementById('links').innerHTML=LINKS.map(l=>`
+  <div class="link">
+    <div class="link-h">${esc(l.from)}<span class="ar">→</span>${esc(l.to)}${l.hot?'<span style="font-size:10.5px;font-weight:800;background:#FEE2E2;color:#991B1B;padding:2px 9px;border-radius:9px">今天重點</span>':''}</div>
+    <div class="link-b">
+      <div style="font-size:12.5px;color:var(--g600);line-height:1.8;margin-top:6px">${esc(l.intro)}</div>
+      <table><tr><th style="width:23%">必須先凍結</th><th>下一期為什麼需要</th><th style="width:30%">沒凍結的後果</th></tr>
+      ${l.rows.map(r=>`<tr><td class="k">${esc(r[0])}</td><td>${esc(r[1])}</td><td class="risk">${esc(r[2])}</td></tr>`).join('')}
+      </table>
+    </div>
+  </div>`).join('');
+
+document.getElementById('clashes').innerHTML=CLASHES.map(c=>`
+  <div class="clash"><h3>${esc(c.t)}</h3><p>${esc(c.p)}</p><div class="fix">${c.fix}</div></div>`).join('');
+
+const WHO_LABEL={wf:'維夫拉克',vendor:'網聯',both:'雙方'};
+document.getElementById('prereq').innerHTML=
+  `<div class="pre-i head"><span>項目</span><span>負責人</span><span>期限</span></div>`+
+  PREREQ.map(p=>`<div class="pre-i">
+    <div><div class="t">${esc(p.t)}<span class="who ${p.who}">${WHO_LABEL[p.who]}</span></div>
+      <div class="d">${esc(p.d)}</div></div>
+    <div><input data-side="wf" id="${p.id}_owner" placeholder="負責人"></div>
+    <div><input data-side="wf" id="${p.id}_due" placeholder="期限"></div>
+  </div>`).join('');
+
+document.getElementById('demos').innerHTML=DEMOS.map(d=>`
+  <div class="demo-i"><div class="t">${esc(d.t)}</div><div class="f">${esc(d.f)}</div>
+    <div class="d">${d.d}</div></div>`).join('');
+
+// ── 身分切換：只能編自己那側，另一側可見但鎖定 ──
+let role=localStorage.getItem('phaselink_role')||'wf';
+function setRole(r){
+  role=r; localStorage.setItem('phaselink_role',r);
+  document.getElementById('roleWf').className=(r==='wf'?'on':'');
+  document.getElementById('roleVendor').className=(r==='vendor'?'on':'');
+  document.querySelectorAll('[data-side]').forEach(el=>{el.disabled=(el.dataset.side!==r);});
+  document.getElementById('saveBtn').textContent=(r==='wf'?'💾 儲存（維夫拉克）':'💾 儲存（網聯）');
+}
+function fieldsOf(side){
+  return side==='wf' ? PREREQ.flatMap(p=>[p.id+'_owner',p.id+'_due']).concat(['memo_wf'])
+                     : ['memo_vendor'];
+}
+async function load(){
+  const {data,error}=await sb.from('config').select('key,value').in('key',[WF_KEY,VENDOR_KEY]);
+  if(error){ showToast('⚠️ 載入失敗：'+error.message,true); return; }
+  let msg=[];
+  (data||[]).forEach(row=>{
+    let s; try{ s=JSON.parse(row.value); }catch(e){ console.error('解析失敗',row.key,e); return; }
+    const side=(row.key===WF_KEY)?'wf':'vendor';
+    fieldsOf(side).forEach(fid=>{
+      const el=document.getElementById(fid);
+      if(el && s.fields && s.fields[fid]!==undefined) el.value=s.fields[fid];
+    });
+    if(s.savedAt) msg.push(`${side==='wf'?'維夫拉克':'網聯'} ${s.savedAt}｜${s.author||'—'}`);
+    if(side===role && s.author) document.getElementById('author').value=s.author;
+  });
+  if(msg.length) document.getElementById('saveMsg').textContent='上次儲存　'+msg.join('　／　');
+}
+async function save(){
+  const btn=document.getElementById('saveBtn'); btn.disabled=true;
+  const key=(role==='wf')?WF_KEY:VENDOR_KEY;
+  const payload={
+    author:document.getElementById('author').value.trim(),
+    savedAt:new Date().toLocaleString('zh-TW',{hour12:false}),
+    fields:Object.fromEntries(fieldsOf(role).map(f=>[f,(document.getElementById(f)||{}).value?.trim()||''])),
+  };
+  const {error}=await sb.from('config').upsert({key:key,value:JSON.stringify(payload)});
+  btn.disabled=false;
+  if(error){ showToast('⚠️ 儲存失敗：'+error.message,true); return; }
+  showToast('✅ 已儲存（'+(role==='wf'?'維夫拉克':'網聯')+'）');
+  load();
+}
+function showToast(m,e){const t=document.getElementById('toast');t.textContent=m;t.className='toast'+(e?' err':'');
+  t.style.display='block';setTimeout(()=>{t.style.display='none';},3000);}
+
+setRole(role);
+load();
+</script>
+</body>
+</html>
