@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工務作業移轉路線圖 — 維夫拉克 × 網聯</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--brand:#0F2744;--brand2:#1E3A5F;--accent:#38BDF8;--ok:#10B981;--warn:#F59E0B;--err:#EF4444;
+  --wf:#2563EB;--vendor:#7C3AED;
+  --g50:#F8FAFC;--g100:#F1F5F9;--g200:#E2E8F0;--g300:#CBD5E1;--g400:#94A3B8;--g500:#64748B;--g600:#475569;--g700:#334155;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Noto Sans TC',system-ui,-apple-system,"Microsoft JhengHei",sans-serif;background:#F0F4F8;color:var(--g700);
+  line-height:1.65;padding-bottom:70px;-webkit-font-smoothing:antialiased;}
+header{background:var(--brand);color:#fff;padding:16px 24px;position:sticky;top:0;z-index:20;
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;box-shadow:0 2px 10px rgba(15,39,68,.2);}
+header h1{font-size:17px;font-weight:800;}
+header .sub{font-size:11.5px;opacity:.7;margin-top:2px;}
+.savebar{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.role-pick{display:flex;gap:0;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.3);}
+.role-pick button{background:transparent;color:rgba(255,255,255,.65);border:none;padding:7px 14px;
+  font-size:12.5px;font-weight:800;cursor:pointer;font-family:inherit;}
+.role-pick button.on{background:var(--accent);color:var(--brand);}
+.savebar input{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.3);border-radius:6px;
+  padding:6px 10px;color:#fff;font-size:12.5px;outline:none;width:100px;font-family:inherit;}
+.savebar input::placeholder{color:rgba(255,255,255,.5);}
+#saveBtn{background:var(--accent);color:var(--brand);border:none;border-radius:6px;padding:7px 18px;
+  font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;}
+#saveBtn:disabled{opacity:.5;cursor:wait;}
+#saveMsg{font-size:11px;opacity:.85;width:100%;text-align:right;}
+.wrap{max-width:1100px;margin:0 auto;padding:20px 16px;}
+/* 定調 */
+.frame{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;border-radius:14px;padding:20px 24px;margin-bottom:16px;}
+.frame h2{font-size:15px;margin-bottom:8px;color:var(--accent);}
+.frame .big{font-size:19px;font-weight:800;line-height:1.5;}
+.frame .note{font-size:12.5px;opacity:.8;margin-top:10px;line-height:1.8;}
+/* 總覽 */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;}
+.stat{background:#fff;border-radius:12px;padding:16px 18px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.06);}
+.stat .n{font-size:32px;font-weight:800;color:var(--brand);line-height:1.1;}
+.stat.cut .n{color:var(--warn);}
+.stat.keep .n{color:var(--ok);}
+.stat .l{font-size:12px;color:var(--g500);margin-top:4px;font-weight:700;}
+@media(max-width:640px){.stats{grid-template-columns:1fr;}}
+/* 區塊標題 */
+.sec-t{font-size:16px;font-weight:800;color:var(--brand);margin:26px 0 12px;display:flex;align-items:center;gap:10px;}
+.sec-t .hint{font-size:11.5px;font-weight:400;color:var(--g500);}
+/* 移轉卡 */
+.card{background:#fff;border-radius:12px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden;}
+.card-h{display:flex;align-items:flex-start;gap:12px;padding:14px 18px;background:var(--g50);border-bottom:1px solid var(--g200);}
+.card-no{width:30px;height:30px;border-radius:8px;background:var(--brand);color:#fff;font-size:14px;font-weight:800;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.card-h .t{font-size:15px;font-weight:800;color:var(--brand);}
+.phase{font-size:10.5px;font-weight:800;padding:2px 10px;border-radius:10px;margin-left:auto;flex-shrink:0;}
+.phase.P1{background:#D1FAE5;color:#065F46;}
+.phase.P2{background:#DBEAFE;color:#1E40AF;}
+.phase.P3{background:#EDE9FE;color:#5B21B6;}
+.card-b{padding:14px 18px;}
+.now{font-size:12.5px;color:var(--g600);line-height:1.8;}
+.quote{margin:8px 0 0;padding:8px 12px;background:var(--g50);border-left:3px solid var(--g300);
+  border-radius:0 6px 6px 0;font-size:12px;color:var(--g500);font-style:italic;}
+.arrow{display:grid;grid-template-columns:1fr auto 1.2fr;gap:12px;align-items:center;margin:14px 0 4px;}
+@media(max-width:640px){.arrow{grid-template-columns:1fr;}.arrow .mid{display:none;}}
+.box{border-radius:8px;padding:10px 12px;}
+.box .lbl{font-size:10.5px;font-weight:800;color:var(--g400);margin-bottom:3px;}
+.box .val{font-size:13px;font-weight:700;color:var(--brand);}
+.box.to{background:#EFF6FF;}
+.box.entry{background:#F5F3FF;}
+.mid{font-size:20px;color:var(--g300);text-align:center;}
+.badge{display:inline-block;font-size:10.5px;font-weight:800;padding:2px 9px;border-radius:8px;margin-top:5px;}
+.badge.none{background:#FEE2E2;color:#991B1B;}
+.badge.partial{background:#FEF3C7;color:#92400E;}
+.badge.have{background:#D1FAE5;color:#065F46;}
+/* 填寫欄 */
+.fields{margin-top:12px;border-top:1px dashed var(--g200);padding-top:12px;display:grid;gap:10px;}
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+@media(max-width:640px){.fgrid{grid-template-columns:1fr;}}
+.fld label{font-size:11px;font-weight:800;display:block;margin-bottom:3px;}
+.fld.wf label{color:var(--wf);}
+.fld.vendor label{color:var(--vendor);}
+.fld textarea,.fld input{width:100%;border:1px solid var(--g200);border-radius:6px;padding:7px 10px;font-size:12.5px;
+  font-family:inherit;outline:none;background:var(--g50);color:var(--g700);resize:vertical;}
+.fld textarea{min-height:46px;}
+.fld textarea:focus,.fld input:focus{border-color:var(--accent);background:#fff;}
+.fld textarea:disabled,.fld input:disabled{background:#F1F5F9;color:var(--g400);cursor:not-allowed;border-style:dashed;}
+.owner-tag{font-size:9.5px;font-weight:800;padding:1px 6px;border-radius:5px;margin-left:5px;}
+.owner-tag.wf{background:#DBEAFE;color:var(--wf);}
+.owner-tag.vendor{background:#EDE9FE;color:var(--vendor);}
+/* 核心 / 前置 / 約束 */
+.core{background:#fff;border-radius:12px;padding:6px 18px;box-shadow:0 1px 3px rgba(0,0,0,.06);}
+.core-i{padding:12px 0;border-bottom:1px solid var(--g100);display:flex;gap:12px;align-items:flex-start;}
+.core-i:last-child{border-bottom:none;}
+.core-i .k{width:26px;height:26px;border-radius:50%;background:var(--ok);color:#fff;font-size:12px;font-weight:800;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.core-i .t{font-size:13.5px;font-weight:800;color:var(--brand);}
+.core-i .d{font-size:12px;color:var(--g500);margin-top:2px;line-height:1.7;}
+.flagbadge{display:inline-block;font-size:10px;font-weight:800;background:#FEF3C7;color:#92400E;border-radius:6px;padding:1px 7px;margin-left:6px;}
+.blocker{background:#FFF7ED;border:2px solid #FDBA74;border-radius:12px;padding:18px 22px;margin-bottom:14px;}
+.blocker h3{font-size:15px;color:#9A3412;margin-bottom:8px;}
+.blocker p{font-size:12.5px;color:#9A3412;line-height:1.9;}
+.blocker .key{background:#FFEDD5;border-radius:8px;padding:10px 14px;margin-top:10px;font-size:13px;font-weight:800;color:#7C2D12;}
+.cons{background:#fff;border-radius:12px;padding:6px 18px;box-shadow:0 1px 3px rgba(0,0,0,.06);}
+.cons-i{padding:13px 0;border-bottom:1px solid var(--g100);}
+.cons-i:last-child{border-bottom:none;}
+.cons-i .t{font-size:13.5px;font-weight:800;color:#B45309;}
+.cons-i .d{font-size:12.5px;color:var(--g600);margin-top:3px;line-height:1.8;}
+.cons-i .hit{font-size:11.5px;color:var(--g500);margin-top:5px;padding-left:10px;border-left:2px solid var(--g300);}
+/* 分期 */
+.phases{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+@media(max-width:820px){.phases{grid-template-columns:1fr;}}
+.ph{background:#fff;border-radius:12px;padding:16px 18px;box-shadow:0 1px 3px rgba(0,0,0,.06);border-top:4px solid var(--g300);}
+.ph.p1{border-top-color:var(--ok);}
+.ph.p2{border-top-color:var(--wf);}
+.ph.p3{border-top-color:var(--vendor);}
+.ph h4{font-size:14px;color:var(--brand);margin-bottom:3px;}
+.ph .why{font-size:11.5px;color:var(--g500);margin-bottom:9px;line-height:1.7;}
+.ph ul{list-style:none;font-size:12.5px;color:var(--g600);}
+.ph li{padding:4px 0 4px 16px;position:relative;line-height:1.6;}
+.ph li:before{content:'▸';position:absolute;left:2px;color:var(--g400);}
+.toast{position:fixed;right:18px;bottom:18px;background:var(--brand);color:#fff;border-radius:8px;
+  padding:12px 18px;font-size:13px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.25);display:none;z-index:99;}
+.toast.err{background:var(--err);}
+@media print{
+  body{background:#fff;padding:0;}header{position:static;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .savebar,.toast{display:none;}.card,.core,.cons,.ph,.blocker{break-inside:avoid;box-shadow:none;border:1px solid var(--g200);}
+  .fld textarea,.fld input{background:#fff!important;color:#000!important;border-color:var(--g400)!important;}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🔀 工務作業移轉路線圖</h1>
+    <div class="sub">維夫拉克 × 網聯｜需求規格對焦　—　現行作業逐項移轉，工務回歸核心本業</div>
+  </div>
+  <div class="savebar">
+    <div class="role-pick">
+      <button id="roleWf" class="on" onclick="setRole('wf')">維夫拉克</button>
+      <button id="roleVendor" onclick="setRole('vendor')">網聯</button>
+    </div>
+    <input id="author" placeholder="填寫人" maxlength="12">
+    <button id="saveBtn" onclick="save()">💾 儲存</button>
+    <span id="saveMsg"></span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="frame">
+    <h2>本次對焦的框架</h2>
+    <div class="big">一項移轉 ＝ 移除工務一個動作 ＋ 開一個接手方的入口</div>
+    <div class="note">
+      這不是「做功能提升效率」，是<b>把不該工務做的事，交還給真正該做的人</b>。<br>
+      只做前半（移除動作）＝ 事情丟掉沒人接；只做後半（開入口）＝ 多一個沒人用的頁面。<b>兩者必須成對交付。</b><br>
+      依據：中區工務訪談（115/07/29）。受訪者的支持是條件式的——「任何新增填報，須同時移除一項現行作業」。
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="n">11</div><div class="l">工務現行作業項目</div></div>
+    <div class="stat cut"><div class="n">6</div><div class="l">可移轉出去（本路線圖）</div></div>
+    <div class="stat keep"><div class="n">5</div><div class="l">留下的核心本業</div></div>
+  </div>
+
+  <div class="sec-t">📤 六項移轉<span class="hint">每張卡：現行怎麼做 → 移轉給誰 → 需要什麼入口 → 雙方填寫</span></div>
+  <div id="cards"></div>
+
+  <div class="sec-t">🎯 留下的 5 項核心本業<span class="hint">這些不移轉，是工務該專注的事</span></div>
+  <div class="core" id="core"></div>
+
+  <div class="sec-t">⚠️ 共通前置（給網聯的關鍵訊息）</div>
+  <div class="blocker">
+    <h3>外部帳號與權限體系 —— 目前現況：完全不存在</h3>
+    <p>
+      我方系統盤點結果：鎖店與經銷商在 CRM 內<b>只是建單時的下拉選項與通路標籤</b>，不是帳號；師傅資料表雖允許
+      <code>type='external'</code>，但沒有任何外部帳號，也沒有對應的權限邏輯。目前唯一對外的兩個東西是
+      終端消費者的 LINE 綁定頁，以及一張匿名單向送件的諮詢單（送出後無法查詢）。
+    </p>
+    <div class="key">
+      ⇒ 上表六項移轉中有四項的接手方是外部單位。請<b>不要一項一項各做各的入口</b>——
+      先做一套外部帳號與權限體系（鎖店／經銷商／建商／門廠／社區秘書），後續每項移轉才能掛上去。
+      這是 P2、P3 全部的共同前置。
+    </div>
+  </div>
+
+  <div class="sec-t">🚧 四條設計約束<span class="hint">訪談確認的硬限制，規劃前務必納入</span></div>
+  <div class="cons" id="cons"></div>
+
+  <div class="sec-t">🗓️ 分期建議<span class="hint">不求一次到位；每期完成即可交給業務／工務推廣給需求方</span></div>
+  <div class="phases">
+    <div class="ph p1">
+      <h4>P1　先給工務，純減負</h4>
+      <div class="why">不需要外部單位配合，也不新增任何填報動作。目的是先讓現場感受到「減少」，建立導入信任。</div>
+      <ul>
+        <li>② 產品操作教學 → 知識庫＋簡明說明</li>
+        <li>④ 手寫紀錄簿 → 系統存證＋歷史可查</li>
+      </ul>
+    </div>
+    <div class="ph p2">
+      <h4>P2　開第一批外部入口</h4>
+      <div class="why">前置＝外部帳號體系。此期開始可計算「帶動 N 家中小微企業導入應用」。</div>
+      <ul>
+        <li>③ 直接進線受理 → 鎖店／社區秘書開單</li>
+        <li>① 開孔規格諮詢 → 建商／門廠自助查</li>
+      </ul>
+    </div>
+    <div class="ph p3">
+      <h4>P3　金流與 ERP</h4>
+      <div class="why">牽涉外部系統與料號主檔，依賴最多、風險最高，故排最後。</div>
+      <ul>
+        <li>⑤ 收款／交款／沖帳／保留款</li>
+        <li>⑥ 丈量單＋料號防呆校驗</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="sec-t">📍 尚待確認（本路線圖僅依中區訪談）</div>
+  <div class="cons">
+    <div class="cons-i">
+      <div class="t">北區、南區的職能範圍與本表不同</div>
+      <div class="d">中區工務涵蓋「安裝—交屋—維修」完整流程，是三區中唯一全鏈路的區域；北區與南區主要透過門廠銷售，
+        安裝由門廠師傅執行（裝門與裝鎖為同一人），工務只做維修售服。</div>
+      <div class="hit">影響：第 ② 項核心（安裝執行）在北南可能根本不在我方系統內；角色模型不可依中區寫死。北南對照訪談完成後需回頭修正本表。</div>
+    </div>
+    <div class="cons-i">
+      <div class="t">外包師傅名冊尚未建立</div>
+      <div class="d">受訪者表示對台中地區實際執行安裝之師傅名單並不掌握，公司層級亦無完整外包師傅名冊。</div>
+      <div class="hit">影響：這同時卡住派工系統的基礎資料，以及補助計畫「帶動中小微企業導入應用」的合作成員造冊與結案舉證。屬優先補齊項目。</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL='https://nkyanyjgfrmovjoqevro.supabase.co';
+const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5reWFueWpnZnJtb3Zqb3FldnJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2ODIxMTMsImV4cCI6MjA5NzI1ODExM30.LPnQyceYS7Z1-rlqUtXm3B8dGBOqnmnavTV-PAOSPZ8';
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+// 兩把 key：雙方各寫各的，同時填也不會蓋掉對方
+const WF_KEY='roadmap_offload_wf';
+const VENDOR_KEY='roadmap_offload_vendor';
+
+// ── 六項移轉（現況依 115/07/29 中區工務訪談）──
+const OFFLOADS=[
+  {id:'o1',task:'開孔位置／規格諮詢',phase:'P2',
+   now:'建商與門板廠就開孔高度、與玻璃之相對距離反覆詢問；已提供圖面及維修時特意拍攝之示意照片，並說明應自鎖甲高度起算，惟溝通未能收斂，對方甚而要求更換承辦人員。訪談當日上午，受訪者已退出一處建設公司之溝通群組。',
+   quote:'開孔這件事情怎麼會是找我',
+   to:'建商、門板廠',entry:'線上規格自助查詢頁（依機種查開孔圖、尺寸、高度基準）',status:'none'},
+
+  {id:'o2',task:'產品操作教學（高頻 5 題）',phase:'P1',
+   now:'設定卡誤認為可開門、公務卡未完成設定、只知新增不知刪除、鑰匙轉動前先內推頂住鎖舌、指紋設定範圍過窄——產品上市逾十年仍持續重複發生。工地人員流動頻繁，同一工地交屋期間須對多位不同承辦重複說明。',
+   quote:'現行說明影片冗長，工地於交屋時程壓力下不會搜尋特定段落',
+   to:'住戶、社區秘書、工地人員',entry:'AI 客服知識庫＋簡明版說明（首批內容＝訪談已列的 5 題）',status:'partial'},
+
+  {id:'o3',task:'直接進線受理（管道 4–6）',phase:'P2',
+   now:'工地主任、經銷鎖店、社區秘書直接聯繫工務個人手機，未經系統受理程序。此為工單數與維修料件領用量落差之主要成因，亦使服務量、回應時效與問題分布均無法據實統計。',
+   quote:'工地的報修單太多了……很多東西其實我們是沒有回報的',
+   to:'鎖店、社區秘書、工地主任',entry:'外部帳號報修入口（可自行開單、可查進度）',status:'none'},
+
+  {id:'o4',task:'手寫紀錄簿舉證管理',phase:'P1',
+   now:'累積手寫紀錄簿逾十本（含案號、單號、收費、發票寄送、匯款後五碼、點交品項），主要用途為交付爭議之舉證。曾發生工地事後聲稱未收到門鎖、鑰匙或設定卡之情形（案例為九十二戶、實際安裝九十四組），須調閱簽單逐項核對。',
+   quote:'要有依據啊',
+   to:'系統自動存證',entry:'師傅端歷史案件查詢（照片／簽名／點交品項可回溯調閱）',status:'partial'},
+
+  {id:'o5',task:'現場收款／交款／沖帳／保留款',phase:'P3',
+   now:'發票因工地內部流程需求先行開立 → 工務現場收取現金（多為一千至二千元）→ 因作業排程多於二至三日後返司交付 → 款項交付助理時未產生簽收紀錄 → 三個月至半年後對帳，方發現發票已開而款項未入帳。另維修費若計入工程合約，建商扣留 2–3% 保留款（一千二百元僅數十元）仍須由工務追討。',
+   quote:'我好像已經把錢交給助理了，但助理說沒有',
+   to:'線上支付 ＋ 系統自動追蹤',entry:'代收保管狀態機（現場收款→工務持有→交款簽收→沖帳）＋線上付款＋保留款自動提醒',status:'none'},
+
+  {id:'o6',task:'丈量資訊傳遞與核對',phase:'P3',
+   now:'工地透過 LINE 傳送圖面，告知門厚為 6 至 6.5 公分（此為不同料號，非同一規格）；工務現場實測結果為 A 孔位 8 公分、B 孔位 5.3 公分，與提供資訊均不符。若未複核即依其資料下單，該案場共六十至七十組門鎖將全數錯誤出貨。現行防線完全依賴個人主動性與經驗判斷，未納入標準流程，亦無紀錄。',
+   quote:'如果我沒有去，我就照他給的資料去下單，就錯了',
+   to:'建商填單 ＋ 系統防呆',entry:'線上丈量單＋料號校驗規則（規格不符自動擋下並提示）',status:'none'},
+];
+
+const STATUS_LABEL={none:'❌ 目前不存在',partial:'🟡 有雛形，未完整',have:'✅ 已具備'};
+
+// ── 留下的 5 項核心 ──
+const CORE=[
+  {t:'維修執行',d:'到場診斷、換料、修復。這是本業。'},
+  {t:'安裝執行',d:'中區工務自行執行；北區／南區由門廠師傅執行（裝門與裝鎖同一人）。',flag:'北南待確認'},
+  {t:'現場實地測量',d:'實際到場量測的動作本身無法移轉；但「資料傳遞與核對」可系統化（見移轉第 ⑥ 項）。'},
+  {t:'疑難排解',d:'真正需要經驗判斷的案件——知識庫與 AI 處理不了的那一段。'},
+  {t:'品質問題回饋',d:'如 37 系列（尤以 372）電源板穩定度問題。目前僅能由資深人員解讀領料紀錄察覺，應改為系統化結構回饋設計端。'},
+];
+
+// ── 四條設計約束 ──
+const CONSTRAINTS=[
+  {t:'① 驗收必須是兩段式，不是單點',
+   d:'建商不願於安裝階段驗收（估計僅一至二成配合，且即使配合者於爭議發生時仍未必認列，須逐項簽認）。原因具合理性：工地施工期間人員進出頻繁，並受東北季風、颱風及裝潢碰撞影響，先行驗收等同先行承擔風險。須拆為「安裝時之影像存證（責任釐清用）」與「交屋時之雙方確認（爭議解決用）」。',
+   hit:'交屋可能在安裝後數月 ⇒ 工單須能長期掛著不結案。我方現行師傅端為單點驗收（待到場→已到場→施工完成(待驗收)→已完成），此處需改資料模型，非改介面。'},
+  {t:'② 新增填報，必須同時移除一項現行作業',
+   d:'受訪者對系統導入為條件式支持：「如果導入是對我們的工作鏈有減少的話，那我很希望從我們這邊先導入。如果只是說做測試，我們還要再做一些回報、增加工作，loading 會更重」。建議直接列為本案驗收原則。',
+   hit:'這也正是本路線圖的設計原理——每張卡都必須成對交付。'},
+  {t:'③ 三區職能不同，角色模型不可寫死',
+   d:'中區工務涵蓋安裝執行、工地協調、丈量複核、維修報價與維修售服；北區與南區只做維修售服，安裝由門廠師傅執行。同一套介面服務兩者，必有一方是錯的。',
+   hit:'更關鍵：北南的「安裝」執行者不是我方人員 ⇒ 該環節根本不在我方系統內，會直接影響安裝流程數位化的覆蓋率指標。'},
+  {t:'④ 工地端對 AI 的接受度低於預期',
+   d:'受訪者轉述工地人員反應：文字說明不易理解，直接電話詢問較快，且「他們就覺得說我交屋是最大」。',
+   hit:'平台使用人次之主要來源，應重估為終端住戶、零售散戶與社區秘書，而非工地現場人員。此點直接影響 KPI 目標值的組成假設。'},
+];
+
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+
+// ── 渲染移轉卡 ──
+document.getElementById('cards').innerHTML=OFFLOADS.map((o,i)=>`
+  <div class="card">
+    <div class="card-h">
+      <div class="card-no">${i+1}</div>
+      <div style="flex:1"><div class="t">${esc(o.task)}</div></div>
+      <span class="phase ${o.phase}">${o.phase}</span>
+    </div>
+    <div class="card-b">
+      <div class="now"><b style="color:var(--g700)">工務現在怎麼做：</b>${esc(o.now)}</div>
+      <div class="quote">「${esc(o.quote)}」</div>
+      <div class="arrow">
+        <div class="box to"><div class="lbl">移轉給</div><div class="val">${esc(o.to)}</div></div>
+        <div class="mid">→</div>
+        <div class="box entry"><div class="lbl">需要的入口</div><div class="val">${esc(o.entry)}</div>
+          <span class="badge ${o.status}">${STATUS_LABEL[o.status]}</span></div>
+      </div>
+      <div class="fields">
+        <div class="fld wf"><label>📝 現況補充／優先序調整<span class="owner-tag wf">維夫拉克填</span></label>
+          <textarea data-side="wf" id="${o.id}_current" placeholder="例：這項其實北區也有，但頻率較低…"></textarea></div>
+        <div class="fgrid">
+          <div class="fld vendor"><label>⏱ 工期估計<span class="owner-tag vendor">網聯填</span></label>
+            <input data-side="vendor" id="${o.id}_effort" placeholder="例：3 週"></div>
+          <div class="fld vendor"><label>📊 技術難度<span class="owner-tag vendor">網聯填</span></label>
+            <input data-side="vendor" id="${o.id}_difficulty" placeholder="例：中，需接 ERP 料號"></div>
+        </div>
+        <div class="fld vendor"><label>🔗 前置依賴與備註<span class="owner-tag vendor">網聯填</span></label>
+          <textarea data-side="vendor" id="${o.id}_note" placeholder="例：需先完成外部帳號體系；料號主檔須由我方提供…"></textarea></div>
+      </div>
+    </div>
+  </div>`).join('');
+
+document.getElementById('core').innerHTML=CORE.map((c,i)=>`
+  <div class="core-i">
+    <div class="k">${i+1}</div>
+    <div><div class="t">${esc(c.t)}${c.flag?`<span class="flagbadge">${esc(c.flag)}</span>`:''}</div>
+      <div class="d">${esc(c.d)}</div></div>
+  </div>`).join('');
+
+document.getElementById('cons').innerHTML=CONSTRAINTS.map(c=>`
+  <div class="cons-i">
+    <div class="t">${esc(c.t)}</div>
+    <div class="d">${esc(c.d)}</div>
+    <div class="hit">⇒ ${esc(c.hit)}</div>
+  </div>`).join('');
+
+// ── 身分切換：只能編輯自己那一側，另一側看得到但改不動（避免互相覆蓋）──
+let role=localStorage.getItem('roadmap_role')||'wf';
+function setRole(r){
+  role=r; localStorage.setItem('roadmap_role',r);
+  document.getElementById('roleWf').className=(r==='wf'?'on':'');
+  document.getElementById('roleVendor').className=(r==='vendor'?'on':'');
+  document.querySelectorAll('[data-side]').forEach(el=>{ el.disabled=(el.dataset.side!==r); });
+  document.getElementById('saveBtn').textContent=(r==='wf'?'💾 儲存（維夫拉克）':'💾 儲存（網聯）');
+}
+
+function fieldsOf(side){
+  return side==='wf' ? OFFLOADS.map(o=>o.id+'_current')
+                     : OFFLOADS.flatMap(o=>[o.id+'_effort',o.id+'_difficulty',o.id+'_note']);
+}
+
+// ── 載入：兩把 key 都讀，合併顯示 ──
+async function load(){
+  const {data,error}=await sb.from('config').select('key,value').in('key',[WF_KEY,VENDOR_KEY]);
+  if(error){ showToast('⚠️ 載入失敗：'+error.message,true); return; }
+  let msg=[];
+  (data||[]).forEach(row=>{
+    let saved; try{ saved=JSON.parse(row.value); }catch(e){ console.error('解析失敗',row.key,e); return; }
+    const side=(row.key===WF_KEY)?'wf':'vendor';
+    fieldsOf(side).forEach(fid=>{
+      const el=document.getElementById(fid);
+      if(el && saved.fields && saved.fields[fid]!==undefined) el.value=saved.fields[fid];
+    });
+    if(saved.savedAt) msg.push(`${side==='wf'?'維夫拉克':'網聯'} ${saved.savedAt}｜${saved.author||'—'}`);
+    if(side===role && saved.author) document.getElementById('author').value=saved.author;
+  });
+  if(msg.length) document.getElementById('saveMsg').textContent='上次儲存　'+msg.join('　／　');
+}
+
+// ── 儲存：只寫自己那把 key（顯性失敗）──
+async function save(){
+  const btn=document.getElementById('saveBtn'); btn.disabled=true;
+  const key=(role==='wf')?WF_KEY:VENDOR_KEY;
+  const payload={
+    author:document.getElementById('author').value.trim(),
+    savedAt:new Date().toLocaleString('zh-TW',{hour12:false}),
+    fields:Object.fromEntries(fieldsOf(role).map(fid=>[fid,(document.getElementById(fid)||{}).value?.trim()||''])),
+  };
+  const {error}=await sb.from('config').upsert({key:key,value:JSON.stringify(payload)});
+  btn.disabled=false;
+  if(error){ showToast('⚠️ 儲存失敗：'+error.message,true); return; }
+  showToast('✅ 已儲存（'+(role==='wf'?'維夫拉克':'網聯')+'）');
+  load();
+}
+
+function showToast(msg,isErr){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.className='toast'+(isErr?' err':''); t.style.display='block';
+  setTimeout(()=>{t.style.display='none';},3000);
+}
+
+setRole(role);
+load();
+</script>
+</body>
+</html>
