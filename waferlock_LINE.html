@@ -342,6 +342,10 @@ const CHANNELS = {
   builder:{label:'建案配置',type:'builder',icon:'🏗️',color:'#92400E'},
 };
 
+// 客戶自助訂單進度查詢（track.html 的 LIFF 連結）。立案時一併傳給客戶，
+// 之後他要看進度就不必再問客服。
+const TRACK_LIFF_URL = 'https://liff.line.me/2010432600-UhHB4403';
+
 const PRODUCTS = {
   'L376':{name:'L376 智能電子鎖',price:7990,warranty:36},
   'L396':{name:'L396 進階電子鎖',price:12990,warranty:36},
@@ -1359,7 +1363,11 @@ function AgentPage(){
   const [selDate,setSelDate] = useState('');
   const [selTime,setSelTime] = useState('上午');
   const [caseModal,setCaseModal] = useState(false);
-  const [caseForm,setCaseForm] = useState({type:'電子鎖',issue:'',space:'大門',urgency:'normal',scheduledDate:'',desc:''});
+  // kind：立案要建哪一種單。安裝單是後加的——客戶旅程進度頁以安裝單為主體，
+  // 只能建報修單的話，新客戶下單後永遠不會有進度可看。
+  const CASE_FORM_INIT = {kind:'repair',type:'電子鎖',issue:'',space:'大門',urgency:'normal',scheduledDate:'',desc:'',
+    productId:'L376',qty:1,address:'',note:''};
+  const [caseForm,setCaseForm] = useState(CASE_FORM_INIT);
   const endRef = useRef();
 
   const convs = db.conversations || [];
@@ -1455,9 +1463,35 @@ function AgentPage(){
     setDispModal(null);
   };
 
+  // 安裝單立案。欄位形狀比照 waferlock_crm.html 的 submitInstall（L981 起），
+  // 但不在這裡排師傅——派工要看工務時刻表的時段佔用，那是 CRM 的職責。
+  const createInstallCase=(c)=>{
+    const id='IW'+Date.now();
+    const addr=(caseForm.address||c.address||'').trim();
+    if(!addr){ toast('缺少安裝地址','安裝地址必填，且是客編識別的唯一鍵','warn'); return; }
+    const order={id,wfId:c.wfId,name:c.name,phone:c.phone,address:addr,
+      channel:c.channel||null,productId:caseForm.productId,serialNo:null,locksmithId:null,
+      qty:Number(caseForm.qty)||1,note:caseForm.note||'',
+      status:'pending',createdDate:today(),createdTs:Date.now(),arrivalPushed:false,
+      photos:[],charges:[],history:[{ts:Date.now(),by:'LINE 客服立案',action:'建立安裝工單'}]};
+    const pushMsg={id:'c'+Date.now(),from:'bot',
+      text:`🏠 已為您建立安裝單\n\n單號：${id}\n產品：${PRODUCTS[caseForm.productId]?.name||caseForm.productId}　${order.qty} 樘\n客服將盡快為您安排師傅 🔧\n\n隨時查看進度 👉 ${TRACK_LIFF_URL}`,time:now()};
+    updateDB(prev=>{
+      const convsN=(prev.conversations||[]).map(cv=>cv.wfId===c.wfId
+        ?{...cv,needCase:false,msgs:[...(cv.msgs||[]),pushMsg],lastMsg:'安裝單已建立',lastTime:now()}:cv);
+      return {...prev,installs:{...prev.installs,[id]:order},conversations:convsN};
+    });
+    const cconv=(db.conversations||[]).find(cv=>cv.wfId===c.wfId && String(cv.id).startsWith('U'));
+    if(cconv) pushLine(cconv.id, pushMsg.text);
+    toast('🏠 已立案',`${c.name} 安裝單 ${id} 已建立`,'ok');
+    setCaseModal(false);
+    setCaseForm(CASE_FORM_INIT);
+  };
+
   const createCase=async()=>{
     const c=getCust(active?.wfId);
     if(!c){ toast('無法立案','此對話尚未綁定會員，請先請客戶完成 LINE 綁定','warn'); return; }
+    if(caseForm.kind==='install') return createInstallCase(c);
     const rid=(await sb.rpc('next_case_no',{p_prefix:'R'})).data || ('R-'+Date.now());
     const newRepair={id:rid,wfId:c.wfId,name:c.name,phone:c.phone,
       district:c.district,area:c.area,building:c.address,date:today(),
@@ -1480,7 +1514,7 @@ function AgentPage(){
     if(cconv) pushLine(cconv.id, pushMsg.text);
     toast('📋 已立案',`${c.name} 報修單 ${rid} 已建立`,'ok');
     setCaseModal(false);
-    setCaseForm({type:'電子鎖',issue:'',space:'大門',urgency:'normal',scheduledDate:'',desc:''});
+    setCaseForm(CASE_FORM_INIT);
   };
 
   // Get pending repairs for dispatch button
@@ -1631,11 +1665,55 @@ function AgentPage(){
       {caseModal&&(
         <div className="mo" onClick={e=>e.target===e.currentTarget&&setCaseModal(false)}>
           <div className="mo-box">
-            <h3>📋 客服立案 — 建立報修單</h3>
+            <h3>📋 客服立案 — 建立{caseForm.kind==='install'?'安裝單':'報修單'}</h3>
             <div style={{background:'var(--g50)',borderRadius:7,padding:10,marginBottom:12,fontSize:12}}>
               <div style={{fontWeight:700}}>{getCust(active?.wfId)?.name||'—'}</div>
               <div style={{color:'var(--g500)'}}>{getCust(active?.wfId)?.address||'—'}　{active?.wfId}</div>
             </div>
+            {/* 立案類型：新客戶下單走安裝單，已有鎖出問題走報修單 */}
+            <div className="mf"><label>立案類型</label>
+              <div style={{display:'flex',gap:8}}>
+                {[['repair','🔧 報修單','既有門鎖故障'],['install','🏠 安裝單','新機安裝']].map(([k,label,hint])=>(
+                  <button key={k} onClick={()=>setCaseForm(p=>({...p,kind:k}))}
+                    style={{flex:1,padding:'9px 6px',borderRadius:7,cursor:'pointer',textAlign:'center',
+                      border:caseForm.kind===k?'2px solid var(--brand)':'1px solid var(--g300)',
+                      background:caseForm.kind===k?'#EFF6FF':'#fff',
+                      color:caseForm.kind===k?'var(--brand)':'var(--g500)',fontWeight:700,fontSize:13}}>
+                    {label}<div style={{fontSize:10,fontWeight:400,marginTop:2}}>{hint}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {caseForm.kind==='install'&&<>
+              <div className="mf-row">
+                <div className="mf"><label>產品</label>
+                  <select value={caseForm.productId} onChange={e=>setCaseForm(p=>({...p,productId:e.target.value}))}>
+                    {Object.entries(PRODUCTS).map(([k,v])=><option key={k} value={k}>{v.name}</option>)}
+                  </select>
+                </div>
+                <div className="mf"><label>數量（樘）</label>
+                  <input type="number" min="1" value={caseForm.qty}
+                    onChange={e=>setCaseForm(p=>({...p,qty:e.target.value}))}/>
+                </div>
+              </div>
+              <div className="mf"><label>安裝地址</label>
+                <input value={caseForm.address} onChange={e=>setCaseForm(p=>({...p,address:e.target.value}))}
+                  placeholder={getCust(active?.wfId)?.address||'請輸入安裝地址'}/>
+                <div style={{fontSize:10.5,color:'var(--g400)',marginTop:3}}>留空則沿用客戶主檔地址</div>
+              </div>
+              <div className="mf"><label>備註</label>
+                <input value={caseForm.note} onChange={e=>setCaseForm(p=>({...p,note:e.target.value}))}
+                  placeholder="例：舊鎖需拆除、大樓需登記"/>
+              </div>
+              <div style={{background:'#FFF7ED',border:'1px solid #FED7AA',borderRadius:7,padding:'8px 10px',
+                fontSize:11,color:'#92400E',lineHeight:1.6,marginBottom:12}}>
+                建單後請到 CRM 標記 ERP 出貨並派工。客戶會收到進度查詢連結，
+                但要等師傅接單後才看得到預約時間。
+              </div>
+            </>}
+
+            {caseForm.kind==='repair'&&<>
             <div className="mf"><label>問題類別</label>
               <select value={caseForm.type} onChange={e=>setCaseForm(p=>({...p,type:e.target.value}))}>
                 {['電子鎖','水電工程','廚具設備','弱電工程','油漆工程'].map(v=><option key={v}>{v}</option>)}
@@ -1659,9 +1737,10 @@ function AgentPage(){
             <div className="mf"><label>方便修繕時間</label>
               <input type="datetime-local" value={caseForm.scheduledDate} onChange={e=>setCaseForm(p=>({...p,scheduledDate:e.target.value}))}/>
             </div>
+            </>}
             <div className="mact">
               <button className="cancel" onClick={()=>setCaseModal(false)}>取消</button>
-              <button className="ok" onClick={createCase}>建立報修單（立案）</button>
+              <button className="ok" onClick={createCase}>建立{caseForm.kind==='install'?'安裝單':'報修單'}（立案）</button>
             </div>
           </div>
         </div>
