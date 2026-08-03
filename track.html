@@ -236,6 +236,16 @@ function renderError(msg){
     });
     const data = await resp.json();
 
+    // LIFF 的 ID Token 效期很短，放著沒動一段時間再開就會過期。
+    // 這種情況重新登入一次就好，不該讓客戶看到「身分驗證失敗」然後不知所措。
+    // 用 sessionStorage 記一次，避免設定真的錯掉時無限跳轉。
+    if(!data.ok && data.expired && !sessionStorage.getItem('track_relogin')){
+      sessionStorage.setItem('track_relogin', '1');
+      liff.login({ redirectUri: location.href });
+      return;
+    }
+    sessionStorage.removeItem('track_relogin');
+
     if(!data.ok){ $('out').innerHTML = renderError(data.error || '查詢失敗，請稍後再試。'); return; }
     if(!data.bound){ $('who').textContent = '尚未綁定'; $('out').innerHTML = renderUnbound(); return; }
 

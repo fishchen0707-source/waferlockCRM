@@ -47,19 +47,31 @@ async function rows(path: string): Promise<Record<string, unknown>[]> {
   return Array.isArray(j) ? j : [];
 }
 
-// 伺服器端驗證 LINE ID Token，回傳 LINE userId；驗不過一律 null
-async function verifyIdToken(idToken: string): Promise<string | null> {
+// 伺服器端驗證 LINE ID Token。
+// 回傳 { sub, expired }：sub 為 LINE userId，驗不過為 null；
+// expired 表示「只是 token 過期」，前端可重新登入一次自救。
+async function verifyIdToken(idToken: string): Promise<{ sub: string | null; expired: boolean }> {
   const body = new URLSearchParams({ id_token: idToken, client_id: CHANNEL_ID });
   const r = await fetch("https://api.line.me/oauth2/v2.1/verify", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body,
   });
-  if (!r.ok) { console.log("[LIFF 驗證失敗]", r.status, (await r.text()).slice(0, 200)); return null; }
+  if (!r.ok) {
+    const detail = (await r.text()).slice(0, 300);
+    console.log("[LIFF 驗證失敗]", r.status, detail);
+    // 回傳失敗原因給呼叫端判斷：token 過期是可以自動補救的（前端重登一次），
+    // 設定錯誤則不行。兩者混在同一個 401 會讓人一直重整卻永遠好不了。
+    return { sub: null, expired: /expire/i.test(detail) };
+  }
   const data = await r.json();
   // aud 必須是我們自己的 channel，避免拿別的 channel 簽的 token 來換資料
-  if (!data.sub || (data.aud && data.aud !== CHANNEL_ID)) return null;
-  return String(data.sub);
+  if (data.aud && String(data.aud) !== CHANNEL_ID) {
+    console.log("[LIFF aud 不符] token aud=", data.aud, " 設定的 CHANNEL_ID=", CHANNEL_ID);
+    return { sub: null, expired: false };
+  }
+  if (!data.sub) return { sub: null, expired: false };
+  return { sub: String(data.sub), expired: false };
 }
 
 // 地址只留到行政區，其餘遮蔽。客戶自己知道地址，頁面沒有必要把完整門牌再吐一次。
@@ -123,8 +135,15 @@ Deno.serve(async (req) => {
     const idToken = String(b.idToken || "");
     if (!idToken) return json({ ok: false, error: "缺少 idToken" }, 401);
 
-    const lineUserId = await verifyIdToken(idToken);
-    if (!lineUserId) return json({ ok: false, error: "身分驗證失敗" }, 401);
+    const v = await verifyIdToken(idToken);
+    if (!v.sub) {
+      return json({
+        ok: false,
+        expired: v.expired,
+        error: v.expired ? "登入已逾時，請重新載入" : "身分驗證失敗",
+      }, 401);
+    }
+    const lineUserId = v.sub;
 
     // 客編一律從已驗證的 idToken 反推，不接受前端傳入
     const bind = await rows(`line_users?line_user_id=eq.${encodeURIComponent(lineUserId)}&select=wf_id`);
