@@ -126,11 +126,8 @@ function renderTracking(t){
   </div>`;
 }
 
-function renderConsumer(data){
-  if(!data.orders.length){
-    return `<div class="card"><div class="center">目前沒有訂單資料<br><span style="font-size:11.5px">若您剛下單，資料可能還在處理中</span></div></div>`;
-  }
-  return data.orders.map(o => `<div class="card">
+function renderOrders(orders){
+  return orders.map(o => `<div class="card">
     <div class="ometa"><b>訂單 ${esc(o.id)}</b><span>${esc(o.createdDate || '')}</span></div>
     ${renderStages(o.stages)}
     ${o.address ? `<div class="note">配送地址：${esc(o.address)}</div>` : ''}
@@ -138,24 +135,36 @@ function renderConsumer(data){
   </div>`).join('');
 }
 
-function renderDealer(data){
-  const rowsHtml = data.shipments.map(s => `<tr>
+// 尚未掛到安裝單的託運單。
+// 兩種情況都會走到這裡：經銷商叫貨（本來就沒有安裝流程），
+// 以及消費者的託運單只配對到客編、還沒對上哪一張安裝單。
+// 這段對「所有客戶類型」都要顯示——資料明明在，畫面卻不給看，
+// 客戶只會以為我們沒出貨。
+function renderLooseShipments(shipments){
+  if(!shipments.length) return '';
+  const rowsHtml = shipments.map(s => `<tr>
     <td>${esc(s.shipDate || '')}</td>
     <td>${esc(s.carrier)}</td>
     <td><div class="tn">${esc(s.trackingNo)}</div>
-        <button class="btn ghost" style="margin-top:4px;padding:5px;font-size:11px" onclick="copy('${esc(s.trackingNo)}')">複製</button></td>
+        <div class="row" style="display:flex;gap:6px;margin-top:5px">
+          <button class="btn ghost" style="margin-top:0;padding:5px;font-size:11px" onclick="copy('${esc(s.trackingNo)}')">複製</button>
+          ${s.queryUrl ? `<a class="btn" style="margin-top:0;padding:5px;font-size:11px" href="${esc(s.queryUrl)}" target="_blank" rel="noreferrer">查詢</a>` : ''}
+        </div></td>
     <td>${esc(s.pieces || '')}</td>
   </tr>`).join('');
-  const orders = data.orders.length ? renderConsumer(data) : '';
-  const list = data.shipments.length
-    ? `<div class="card">
-         <div class="ometa"><b>近期出貨</b><span>${data.shipments.length} 筆</span></div>
-         <table><thead><tr><th>日期</th><th>貨運</th><th>託運單號</th><th>件數</th></tr></thead>
-         <tbody>${rowsHtml}</tbody></table>
-         <div class="note">配送狀態請點「複製」後到貨運公司網站查詢。</div>
-       </div>`
-    : '';
-  return (orders + list) || `<div class="card"><div class="center">目前沒有出貨資料</div></div>`;
+  return `<div class="card">
+    <div class="ometa"><b>已出貨</b><span>${shipments.length} 筆</span></div>
+    <table><thead><tr><th>交運日</th><th>貨運</th><th>託運單號</th><th>件數</th></tr></thead>
+    <tbody>${rowsHtml}</tbody></table>
+    <div class="note">已交運給貨運公司。目前的配送位置請複製單號後點「查詢」，在貨運公司頁面查
+      —— 我們這邊只掌握到交運。</div>
+  </div>`;
+}
+
+function renderAll(data){
+  const html = renderOrders(data.orders) + renderLooseShipments(data.shipments);
+  return html || `<div class="card"><div class="center">目前沒有訂單資料<br>
+    <span style="font-size:11.5px">若您剛下單，資料可能還在處理中</span></div></div>`;
 }
 
 function renderUnbound(){
@@ -190,7 +199,9 @@ function renderError(msg){
     if(!data.bound){ $('who').textContent = '尚未綁定'; $('out').innerHTML = renderUnbound(); return; }
 
     $('who').textContent = data.name ? `${data.name} 您好` : '會員';
-    $('out').innerHTML = data.customerType === 'dealer' ? renderDealer(data) : renderConsumer(data);
+    // 不再依 customerType 分岔：兩種客戶都是「有安裝單就畫進度條，有託運單就列出來」，
+    // 差別只在資料多寡。分岔的版面反而造成經銷商以外的人看不到自己的託運單。
+    $('out').innerHTML = renderAll(data);
   }catch(e){
     console.error(e);
     $('out').innerHTML = renderError('載入失敗：' + (e.message || e));
