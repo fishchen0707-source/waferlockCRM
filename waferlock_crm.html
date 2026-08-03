@@ -268,8 +268,8 @@ const appendConvMsg = async (convId, text, {unreadDelta=0}={}) => {
 };
 
 // ── DB 欄位轉換（camelCase <-> snake_case） ──
-const custToDb = c => ({wf_id:c.wfId,name:c.name,phone:c.phone,email:c.email,address:c.address,district:c.district,area:c.area,channel:c.channel,product_id:c.productId,serial_no:c.serialNo,install_date:c.installDate,warranty_months:c.warrantyMonths,warranty_end:c.warrantyEnd,tags:c.tags||[],reg_type:c.regType,reg_date:c.regDate,line_uid:c.lineUid,fb_id:c.fbId,ig_id:c.igId,repair_ids:c.repairIds||[],complaint_ids:c.complaintIds||[],site:c.site,unit:c.unit,order_no:c.orderNo,group_id:c.groupId,project_id:c.projectId,zip:c.zip});
-const dbToCust = r => ({wfId:r.wf_id,name:r.name,phone:r.phone,email:r.email,address:r.address,district:r.district,area:r.area,channel:r.channel,productId:r.product_id,serialNo:r.serial_no,installDate:r.install_date,warrantyMonths:r.warranty_months,warrantyEnd:r.warranty_end,tags:r.tags||[],regType:r.reg_type,regDate:r.reg_date,lineUid:r.line_uid,fbId:r.fb_id,igId:r.ig_id,repairIds:r.repair_ids||[],complaintIds:r.complaint_ids||[],site:r.site,unit:r.unit,orderNo:r.order_no,groupId:r.group_id,projectId:r.project_id,zip:r.zip});
+const custToDb = c => ({wf_id:c.wfId,name:c.name,phone:c.phone,email:c.email,address:c.address,district:c.district,area:c.area,channel:c.channel,product_id:c.productId,serial_no:c.serialNo,install_date:c.installDate,warranty_months:c.warrantyMonths,warranty_end:c.warrantyEnd,tags:c.tags||[],reg_type:c.regType,reg_date:c.regDate,line_uid:c.lineUid,fb_id:c.fbId,ig_id:c.igId,repair_ids:c.repairIds||[],complaint_ids:c.complaintIds||[],site:c.site,unit:c.unit,order_no:c.orderNo,group_id:c.groupId,project_id:c.projectId,zip:c.zip,customer_type:c.customerType||'consumer',dealer_code:c.dealerCode});
+const dbToCust = r => ({wfId:r.wf_id,name:r.name,phone:r.phone,email:r.email,address:r.address,district:r.district,area:r.area,channel:r.channel,productId:r.product_id,serialNo:r.serial_no,installDate:r.install_date,warrantyMonths:r.warranty_months,warrantyEnd:r.warranty_end,tags:r.tags||[],regType:r.reg_type,regDate:r.reg_date,lineUid:r.line_uid,fbId:r.fb_id,igId:r.ig_id,repairIds:r.repair_ids||[],complaintIds:r.complaint_ids||[],site:r.site,unit:r.unit,orderNo:r.order_no,groupId:r.group_id,projectId:r.project_id,zip:r.zip,customerType:r.customer_type||'consumer',dealerCode:r.dealer_code});
 const repairToDb = r => ({id:r.id,wf_id:r.wfId,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,worker_id:r.workerId,scheduled_date:r.scheduledDate,desc:r.desc,contact_name:r.contactName,contact_phone:r.contactPhone,site:r.site,unit:r.unit,handling_unit:r.handlingUnit,note:r.note,warranty_in:r.warrantyIn,created_by:r.createdBy,created_at:r.createdAt,unread:r.unread,arrival_pushed:r.arrivalPushed,rating:r.rating,receipt_no:r.receiptNo,audit_note:r.auditNote,completed_date:r.completedDate,sched_date:r.schedDate,sched_start:r.schedStart,sched_span:r.schedSpan,charges:r.charges||[],charge_total:r.chargeTotal,payment_method:r.paymentMethod,paid:r.paid,txn_id:r.txnId,paid_at:r.paidAt,work_note:r.workNote,warranty_judgment:r.warrantyJudgment,exclude_reason:r.excludeReason,photos:r.photos||[],signature:r.signature,sla_level:r.slaLevel,tenant_type:r.tenantType,landlord_confirmed:r.landlordConfirmed,source_channel:r.sourceChannel,community_note:r.communityNote,zip:r.zip,category2:r.category2,time_range:r.timeRange,qty:r.qty,work_hours:r.workHours,flag_bomber:r.flagBomber,eta_at:r.etaAt,eta_text:r.etaText,accepted_at:r.acceptedAt,arrived_at:r.arrivedAt,est_distance_km:r.estDistanceKm,eta_source:r.etaSource,history:r.history||[],fault_model:r.faultModel,fault_reason_major:r.faultReasonMajor,fault_reason_detail:r.faultReasonDetail,handling_result:r.handlingResult,invoice_type:r.invoiceType,tax_id:r.taxId,invoice_title:r.invoiceTitle});
 const dbToRepair = r => ({id:r.id,wfId:r.wf_id,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,workerId:r.worker_id,scheduledDate:r.scheduled_date,desc:r.desc,contactName:r.contact_name,contactPhone:r.contact_phone,site:r.site,unit:r.unit,handlingUnit:r.handling_unit,note:r.note,warrantyIn:r.warranty_in,createdBy:r.created_by,createdAt:r.created_at,unread:r.unread,arrivalPushed:r.arrival_pushed,rating:r.rating,receiptNo:r.receipt_no,auditNote:r.audit_note,completedDate:r.completed_date,schedDate:r.sched_date,schedStart:r.sched_start,schedSpan:r.sched_span,charges:r.charges||[],chargeTotal:r.charge_total,paymentMethod:r.payment_method,paid:r.paid,txnId:r.txn_id,paidAt:r.paid_at,workNote:r.work_note,warrantyJudgment:r.warranty_judgment,excludeReason:r.exclude_reason,photos:r.photos||[],signature:r.signature,slaLevel:r.sla_level,tenantType:r.tenant_type,landlordConfirmed:r.landlord_confirmed,sourceChannel:r.source_channel,communityNote:r.community_note,zip:r.zip,category2:r.category2,timeRange:r.time_range,qty:r.qty,workHours:r.work_hours,flagBomber:r.flag_bomber,etaAt:r.eta_at,etaText:r.eta_text,acceptedAt:r.accepted_at,arrivedAt:r.arrived_at,estDistanceKm:r.est_distance_km,etaSource:r.eta_source,history:r.history||[],faultModel:r.fault_model,faultReasonMajor:r.fault_reason_major,faultReasonDetail:r.fault_reason_detail,handlingResult:r.handling_result,invoiceType:r.invoice_type,taxId:r.tax_id,invoiceTitle:r.invoice_title});
 const ctToDb = c => ({id:c.id,wf_id:c.wfId,name:c.name,phone:c.phone,date:c.date,created_at:c.createdAt,created_by:c.createdBy,call_channel:c.callChannel,department:c.department,cat1:c.cat1,cat2:c.cat2,cat3:c.cat3,process:c.process,status:c.status,closed_date:c.closedDate,timeline:c.timeline||[]});
@@ -284,6 +284,10 @@ const dbToBooking = b => ({id:b.id,workerId:b.worker_id,date:b.date,hour:b.hour,
 // ── MD 5：集團 → 建案 階層（唯讀參考資料，只在 UI 歸屬時引用，不在前端編輯）──
 const dbToGroup = g => ({id:g.id,name:g.name,note:g.note});
 const dbToProject = p => ({id:p.id,groupId:p.group_id,name:p.name,code:p.code,type:p.type,address:p.address,totalQty:p.total_qty,installedQty:p.installed_qty,pendingQty:p.pending_qty,packagePrice:p.package_price,slaLevel:p.sla_level});
+// ── 貨運託運單（由 shipment-worker 解析 PDF 寫入；CRM 端只做人工配對與發送）──
+// 解析欄位（tracking_no/recipient_* 等）由 worker 產生，前端不編輯，只改配對與推播狀態。
+const dbToShipment = s => ({id:s.id,carrier:s.carrier,trackingNo:s.tracking_no,shipDate:s.ship_date,shipperAccount:s.shipper_account,shipperName:s.shipper_name,station:s.station,orderNo:s.order_no,recipientCode:s.recipient_code,recipientName:s.recipient_name,recipientPhone:s.recipient_phone,recipientAddress:s.recipient_address,addressNorm:s.address_norm,remark:s.remark,pieces:s.pieces,wfId:s.wf_id,installId:s.install_id,matchScore:s.match_score,matchStatus:s.match_status,matchedBy:s.matched_by,notifyStatus:s.notify_status,notifiedAt:s.notified_at,sourceFile:s.source_file,createdAt:s.created_at});
+const shipmentToDb = s => ({id:s.id,wf_id:s.wfId,install_id:s.installId,match_score:s.matchScore,match_status:s.matchStatus,matched_by:s.matchedBy,notify_status:s.notifyStatus,notified_at:s.notifiedAt});
 
 // ── 案件異動紀錄：附加一筆 {ts,by,action} 到物件的 history 陣列 ──
 const pushHist = (obj,by,action) => ({...obj, history:[...(obj.history||[]), {ts:Date.now(), by:by||'未知', action}]});
@@ -328,8 +332,24 @@ async function selectAllRows(table){
   return all;
 }
 
+// 新資料表專用：表還沒建時回空陣列，其餘錯誤照樣往外丟。
+// 為什麼要這個：shipments 是後加的表，若 HTML 先上線而 sql/supabase_shipments.sql 還沒執行，
+// 用 selectAllRows 會讓整個 CRM 卡在載入失敗畫面——為了一個新功能弄垮既有客服作業不划算。
+// 只放行「表不存在」，RLS 擋下、網路錯誤等仍會顯性失敗。
+async function selectOptionalRows(table){
+  try{
+    return await selectAllRows(table);
+  }catch(e){
+    if(/Could not find the table|does not exist|schema cache/i.test(e.message||'')){
+      console.warn(`[${table}] 資料表尚未建立，此功能暫時停用。請在 Supabase SQL Editor 執行 sql/supabase_shipments.sql`);
+      return [];
+    }
+    throw e;
+  }
+}
+
 async function loadFromSupabase(){
-  const [custsData,repairsData,ctData,installData,convData,cfgData,wkData,bkData,grpData,prjData] = await Promise.all([
+  const [custsData,repairsData,ctData,installData,convData,cfgData,wkData,bkData,grpData,prjData,shipData] = await Promise.all([
     selectAllRows('customers'),
     selectAllRows('repairs'),
     selectAllRows('complaints'),
@@ -340,6 +360,7 @@ async function loadFromSupabase(){
     selectAllRows('bookings'),
     selectAllRows('groups'),
     selectAllRows('projects'),
+    selectOptionalRows('shipments'),
   ]);
   const customers = custsData.map(dbToCust);
   const repairs = Object.fromEntries(repairsData.map(r=>[r.id,dbToRepair(r)]));
@@ -350,8 +371,9 @@ async function loadFromSupabase(){
   const bookings = bkData.map(dbToBooking);
   const groups = grpData.map(dbToGroup);
   const projects = prjData.map(dbToProject);
+  const shipments = shipData.map(dbToShipment);
   const wfCounter = parseInt(cfgData.find(c=>c.key==='wf_counter')?.value||'0');
-  return {customers,repairs,complaints,installs,conversations,workers,bookings,groups,projects,wfCounter,version:0};
+  return {customers,repairs,complaints,installs,conversations,workers,bookings,groups,projects,shipments,wfCounter,version:0};
 }
 
 // 回傳 {ok, errors}：Supabase client 預設「失敗不丟例外」，只在回傳值帶 .error，
@@ -388,6 +410,16 @@ async function syncToSupabase(prev,next){
       return !old||JSON.stringify(old)!==JSON.stringify(c);
     });
     if(changedConvs.length>0) await run('conversations', sb.from('conversations').upsert(changedConvs.map(convToDb)));
+    // 託運單刻意用 update 而非 upsert：列一律由 shipment-worker 解析後建立，
+    // CRM 只改配對與推播狀態。若用 upsert，遇上 worker 尚未寫入的競態會插出一列
+    // 只有 id 與配對欄位、其餘全空的殘缺資料。
+    const changedShips=(next.shipments||[]).filter(s=>{
+      const old=(prev.shipments||[]).find(p=>p.id===s.id);
+      return old&&JSON.stringify(old)!==JSON.stringify(s);
+    });
+    for(const s of changedShips){
+      await run('shipments', sb.from('shipments').update(shipmentToDb(s)).eq('id',s.id));
+    }
     if(next.wfCounter!==prev.wfCounter){
       await run('config', sb.from('config').upsert({key:'wf_counter',value:String(next.wfCounter)}));
     }
@@ -419,6 +451,15 @@ const CHANNELS = {
   dealer:{label:'經銷商',type:'offline',icon:'🤝'},
   builder:{label:'建案配置',type:'builder',icon:'🏗️'},
 };
+// 貨運商。查詢頁刻意只給入口網址、不帶單號：兩家的查貨都是 POST 表單，
+// 用網址帶不進單號，做成「直接查詢」的按鈕會點開一片空白，反而更難用。
+// 因此一律「複製單號 ＋ 前往查詢頁」兩步。
+const CARRIERS = {
+  hct:{label:'新竹物流',url:'https://www.hct.com.tw/Search/SearchGoods_Y.aspx'},
+  kerry:{label:'嘉里大榮',url:'https://www.kerrytj.com/zh/search/trace.aspx'},
+};
+const carrierLabel = c => CARRIERS[c]?.label || c || '貨運';
+
 const PRODUCTS = {
   L376:{name:'L376 智能電子鎖',warranty:36},
   L396:{name:'L396 進階電子鎖',warranty:36},
@@ -1383,6 +1424,36 @@ function CRMPage(){
     setShipModal(null); setShipNo(''); setShipDate(todayISO());
   };
 
+  // ── 追蹤號碼發送給客戶（LINE）──
+  // 上線初期刻意由客服點擊觸發，不自動推播：貨運清單上沒有我方單號時只能靠地址比對，
+  // 推錯人等於把別人的收件地址寄出去。等回測誤配率為 0 再開自動。
+  const sendTracking=(sp)=>{
+    const cust=(db.customers||[]).find(c=>c.wfId===sp.wfId);
+    if(!cust){ toast('尚未配對客戶','請先在「託運單配對」頁指定客戶','warn'); return; }
+    if(cust.customerType==='internal'){ toast('內部調撥不發送','此筆為自家調撥，不推播客戶','warn'); return; }
+    const uid=cust.lineUid||lineUidByPhone(cust.phone);
+    if(!uid){ toast('客戶未綁定 LINE','無法主動推播，請用「複製單號」手動傳給客戶','warn'); return; }
+    const cr=CARRIERS[sp.carrier];
+    pushLineTo(uid,`【WAFERLOCK 出貨通知】\n您的商品已於 ${sp.shipDate||''} 交運\n貨運公司：${carrierLabel(sp.carrier)}\n託運單號：${sp.trackingNo}\n\n查詢貨態：${cr?.url||''}`);
+    updateDB(prev=>({...prev,shipments:(prev.shipments||[]).map(s=>
+      s.id===sp.id?{...s,notifyStatus:'sent',notifiedAt:new Date().toISOString()}:s)}));
+    if(sp.installId){
+      updateDB(prev=>{
+        const cur=prev.installs[sp.installId];
+        if(!cur) return prev;
+        return {...prev,installs:{...prev.installs,[sp.installId]:pushHist(cur,currentUser?.name,
+          `發送追蹤號碼｜${carrierLabel(sp.carrier)} ${sp.trackingNo}`)}};
+      });
+    }
+    toast('📤 已發送',`${carrierLabel(sp.carrier)} ${sp.trackingNo}`,'ok');
+  };
+
+  const copyText=(txt,label)=>{
+    navigator.clipboard?.writeText(txt).then(
+      ()=>toast('已複製',label||txt,'ok'),
+      ()=>toast('複製失敗','請手動選取複製','warn'));
+  };
+
   // ── 安裝排程 ──
   const openInstallSchedule=o=>{
     setSchedInstall(o); setHighlightedOrderId(o.id); setDispRegion('central'); setDispSw(''); setDispSd(todayISO()); setDispStart(null); setDispReason('');
@@ -1847,6 +1918,21 @@ function CRMPage(){
       {o.shipmentNo
         ? <div style={{marginTop:6,fontSize:10.5,padding:'5px 9px',background:'#ECFDF5',borderRadius:5,color:'#065F46',fontWeight:700}}>🚚 已出貨　單號 {o.shipmentNo}{o.shippedDate?`　·　${o.shippedDate}`:''}</div>
         : (o.status==='pending'&&!o.workerId&&<div style={{marginTop:6,fontSize:10.5,padding:'5px 9px',background:'#FEF3C7',borderRadius:5,color:'#92400E',fontWeight:700}}>🚚 待出貨 — 完成 ERP 出貨後才能排安裝</div>)}
+      {/* 貨運託運單號（由 shipment-worker 解析貨運單 PDF 後自動掛上）*/}
+      {(()=>{
+        const sp=(db.shipments||[]).find(s=>s.installId===o.id);
+        if(!sp) return null;
+        return (
+          <div style={{marginTop:6,fontSize:10.5,padding:'6px 9px',background:'#EFF6FF',borderRadius:5,color:'#1E40AF',display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+            <span style={{fontWeight:700}}>📦 {carrierLabel(sp.carrier)}　{sp.trackingNo}</span>
+            {sp.notifyStatus==='sent'&&<span style={{fontSize:9.5,color:'#047857',fontWeight:700}}>✓ 已通知客戶</span>}
+            <span style={{flex:1}}/>
+            <button onClick={()=>copyText(sp.trackingNo,'託運單號')} style={{padding:'3px 8px',background:'#DBEAFE',color:'#1E40AF',border:'none',borderRadius:4,fontSize:10,fontWeight:700,cursor:'pointer'}}>複製單號</button>
+            <a href={CARRIERS[sp.carrier]?.url} target="_blank" rel="noreferrer" style={{padding:'3px 8px',background:'#DBEAFE',color:'#1E40AF',borderRadius:4,fontSize:10,fontWeight:700,textDecoration:'none'}}>前往查詢</a>
+            <button onClick={()=>sendTracking(sp)} style={{padding:'3px 8px',background:'var(--brand)',color:'#fff',border:'none',borderRadius:4,fontSize:10,fontWeight:700,cursor:'pointer'}}>{sp.notifyStatus==='sent'?'重新發送':'發送給客戶'}</button>
+          </div>
+        );
+      })()}
       {o.status!=='done'&&o.status!=='failed'&&(
         <div style={{marginTop:8,display:'flex',gap:6,flexWrap:'wrap'}}>
           {(o.status==='pending'||o.status==='arrived')&&!o.shipmentNo&&<button onClick={()=>openShipModal(o)} style={{padding:'5px 12px',background:'#D1FAE5',color:'#065F46',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>🚚 標記出貨</button>}
@@ -3652,6 +3738,208 @@ function GroupProjectPage(){
   );
 }
 
+// ── 託運單配對頁 ──────────────────────────────────────────────
+// 這一頁是整套貨運單自動化的安全閥兼建檔入口。
+// 貨運公司的託運清單上沒有我方出貨單號（2026/07/30 樣本：兩家都有欄位但空著），
+// 所以只能靠地址＋電話模糊比對，一定有配不到的。配不到不是「失敗」——
+// 收貨人多半是鎖店／經銷商，本來就還沒進 CRM 客戶主檔，這裡就是把他們建進來的地方。
+function ShipmentMatchPage(){
+  const {db,updateDB,toast,currentUser,setCrmTarget,setPage} = useContext(Ctx);
+  const [tab,setTab] = useState('pending');   // pending 待確認 / unmatched 對不到 / done 已處理
+  const [q,setQ] = useState('');
+  const [picker,setPicker] = useState(null);  // 正在指定客戶的託運單
+  const [pickQ,setPickQ] = useState('');
+  const [creating,setCreating] = useState(null); // 正在建檔的託運單
+  const [form,setForm] = useState({name:'',phone:'',address:'',customerType:'dealer',dealerCode:''});
+
+  const ships=db.shipments||[];
+  const custByWf=Object.fromEntries((db.customers||[]).map(c=>[c.wfId,c]));
+
+  const buckets={
+    pending:ships.filter(s=>s.matchStatus==='pending'),
+    unmatched:ships.filter(s=>s.matchStatus==='unmatched'),
+    done:ships.filter(s=>['matched','manual','new_customer','ignored'].includes(s.matchStatus)),
+  };
+  const kw=q.trim().toLowerCase();
+  const list=(buckets[tab]||[]).filter(s=>!kw||
+    [s.trackingNo,s.recipientName,s.recipientPhone,s.recipientAddress,s.remark,s.orderNo]
+      .some(v=>String(v||'').toLowerCase().includes(kw)))
+    .sort((a,b)=>String(b.shipDate||'').localeCompare(String(a.shipDate||'')));
+
+  const setStatus=(sp,patch,note)=>{
+    updateDB(prev=>({...prev,shipments:(prev.shipments||[]).map(s=>
+      s.id===sp.id?{...s,...patch,matchedBy:currentUser?.name||'CRM'}:s)}));
+    if(note) toast('✅ 已更新',note,'ok');
+  };
+
+  const assign=(sp,cust)=>{
+    // 順帶找出該客戶「已標記 ERP 出貨、還沒掛過託運單」的安裝單，一起掛上
+    const taken=new Set(ships.filter(s=>s.installId&&s.id!==sp.id).map(s=>s.installId));
+    const ins=Object.values(db.installs||{}).find(o=>o.wfId===cust.wfId&&o.shipmentNo&&!taken.has(o.id));
+    setStatus(sp,{wfId:cust.wfId,installId:ins?.id||null,matchStatus:'manual',matchScore:1},
+      `${sp.trackingNo} → ${cust.name}（${cust.wfId}）`);
+    setPicker(null); setPickQ('');
+  };
+
+  const openCreate=(sp)=>{
+    setCreating(sp);
+    setForm({name:sp.recipientName||'',phone:sp.recipientPhone||'',address:sp.recipientAddress||'',
+      customerType:'dealer',dealerCode:sp.recipientCode||''});
+  };
+
+  const doCreate=async()=>{
+    const name=form.name.trim(), address=form.address.trim();
+    if(!name||!address){ toast('缺少必填','姓名與地址為客編識別唯一鍵，兩者都要填','warn'); return; }
+    const key=custKey(name,address);
+    const exist=(db.customers||[]).find(c=>custKey(c.name,c.address)===key);
+    if(exist){
+      toast('客戶已存在',`${exist.name}（${exist.wfId}）已在系統中，改為直接指定`,'warn');
+      assign(creating,exist); setCreating(null); return;
+    }
+    const wfId=(await sb.rpc('next_wf_id')).data;
+    if(!wfId){ toast('發客編失敗','請稍後再試','err'); return; }
+    const newCust={wfId,name,phone:form.phone.trim(),address,
+      customerType:form.customerType,dealerCode:form.dealerCode.trim()||null,
+      regType:'shipment_intake',regDate:today(),tags:['待整理'],repairIds:[],complaintIds:[]};
+    updateDB(prev=>({...prev,
+      customers:[...(prev.customers||[]),newCust],
+      shipments:(prev.shipments||[]).map(s=>s.id===creating.id
+        ?{...s,wfId,matchStatus:'new_customer',matchScore:1,matchedBy:currentUser?.name||'CRM'}:s),
+    }));
+    toast('✅ 已建立客戶',`${name}｜${wfId}`,'ok');
+    setCreating(null);
+  };
+
+  const pickCandidates=(()=>{
+    const k=pickQ.trim().toLowerCase();
+    if(!k) return [];
+    return (db.customers||[]).filter(c=>
+      [c.name,c.phone,c.address,c.wfId].some(v=>String(v||'').toLowerCase().includes(k))
+    ).slice(0,20);
+  })();
+
+  const TABS=[['pending','待確認',buckets.pending.length],['unmatched','對不到',buckets.unmatched.length],['done','已處理',buckets.done.length]];
+
+  return (
+    <div>
+      <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:14,flexWrap:'wrap'}}>
+        <h2 style={{margin:0,fontSize:18}}>📦 託運單配對</h2>
+        <div style={{display:'flex',gap:6}}>
+          {TABS.map(([k,label,n])=>(
+            <button key={k} onClick={()=>setTab(k)}
+              style={{padding:'5px 12px',borderRadius:6,border:'none',cursor:'pointer',fontSize:12,fontWeight:700,
+                background:tab===k?'var(--brand)':'var(--g100)',color:tab===k?'#fff':'var(--g700)'}}>
+              {label} {n}
+            </button>
+          ))}
+        </div>
+        <input value={q} onChange={e=>setQ(e.target.value)} placeholder="搜尋單號／收貨人／地址／備註"
+          style={{flex:1,minWidth:200,padding:'6px 10px',border:'1px solid var(--g300)',borderRadius:6,fontSize:12}}/>
+      </div>
+
+      {tab!=='done'&&<div style={{fontSize:11.5,color:'var(--g500)',marginBottom:10,lineHeight:1.7}}>
+        貨運公司的託運清單沒有我方出貨單號，只能靠地址與電話比對，因此會有對不到的。
+        對不到多半代表<strong>這位收貨人（鎖店／經銷商／工地）還沒建進客戶主檔</strong>，用「建立新客戶」補上即可。
+      </div>}
+
+      {list.length===0
+        ? <div style={{padding:'40px 0',textAlign:'center',color:'var(--g400)',fontSize:13}}>目前沒有資料</div>
+        : <div style={{display:'flex',flexDirection:'column',gap:8}}>
+            {list.map(sp=>{
+              const cust=sp.wfId?custByWf[sp.wfId]:null;
+              return (
+                <div key={sp.id} style={{border:'1px solid var(--g200)',borderRadius:8,padding:'10px 12px',background:'#fff'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',marginBottom:6}}>
+                    <span style={{fontSize:12,fontWeight:800,color:'var(--brand)'}}>{carrierLabel(sp.carrier)}</span>
+                    <span style={{fontSize:12,fontWeight:700}}>{sp.trackingNo}</span>
+                    <span style={{fontSize:11,color:'var(--g400)'}}>{sp.shipDate}</span>
+                    {sp.pieces&&<span style={{fontSize:11,color:'var(--g400)'}}>{sp.pieces} 件</span>}
+                    {sp.orderNo&&<span style={{fontSize:10.5,background:'#DCFCE7',color:'#166534',padding:'2px 6px',borderRadius:4,fontWeight:700}}>出貨單號 {sp.orderNo}</span>}
+                    {sp.matchScore>0&&<span style={{fontSize:10.5,color:'var(--g400)'}}>信心 {sp.matchScore}</span>}
+                    <span style={{flex:1}}/>
+                    {cust
+                      ? <button onClick={()=>{setCrmTarget(cust.wfId);setPage('crm');}} style={{fontSize:11,background:'none',border:'none',color:'var(--brand)',fontWeight:700,cursor:'pointer'}}>{cust.name}（{cust.wfId}）→</button>
+                      : <span style={{fontSize:11,color:'var(--g400)'}}>尚未配對</span>}
+                  </div>
+                  <div style={{fontSize:11.5,color:'var(--g700)',lineHeight:1.8}}>
+                    <div><strong>{sp.recipientName||'—'}</strong>{sp.recipientCode?`（代號 ${sp.recipientCode}）`:''}　{sp.recipientPhone||''}</div>
+                    <div style={{color:'var(--g500)'}}>{sp.recipientAddress||'—'}</div>
+                    {sp.remark&&<div style={{color:'var(--g400)'}}>備註：{sp.remark}</div>}
+                  </div>
+                  {tab!=='done'&&(
+                    <div style={{marginTop:8,display:'flex',gap:6,flexWrap:'wrap'}}>
+                      <button onClick={()=>{setPicker(sp);setPickQ(sp.recipientName||'');}} style={{padding:'5px 12px',background:'#EDE9FE',color:'#5B21B6',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>🔗 指定到現有客戶</button>
+                      <button onClick={()=>openCreate(sp)} style={{padding:'5px 12px',background:'#D1FAE5',color:'#065F46',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>➕ 建立新客戶</button>
+                      <button onClick={()=>setStatus(sp,{matchStatus:'ignored'},`已忽略 ${sp.trackingNo}`)} style={{padding:'5px 12px',background:'var(--g100)',color:'var(--g500)',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>🚫 忽略（自家調撥／測試）</button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>}
+
+      {/* 指定到現有客戶 */}
+      {picker&&(
+        <div className="modal-bg" onClick={()=>setPicker(null)}>
+          <div className="modal" onClick={e=>e.stopPropagation()}>
+            <h3>🔗 指定到現有客戶</h3>
+            <div style={{fontSize:11.5,color:'var(--g500)',marginBottom:8}}>{carrierLabel(picker.carrier)} {picker.trackingNo}｜{picker.recipientName}｜{picker.recipientAddress}</div>
+            <input autoFocus value={pickQ} onChange={e=>setPickQ(e.target.value)} placeholder="輸入姓名／電話／地址／客編搜尋"
+              style={{width:'100%',padding:'8px 10px',border:'1px solid var(--g300)',borderRadius:6,fontSize:13}}/>
+            <div style={{maxHeight:260,overflowY:'auto',marginTop:8}}>
+              {pickCandidates.length===0
+                ? <div style={{padding:'20px 0',textAlign:'center',color:'var(--g400)',fontSize:12}}>{pickQ?'查無符合的客戶':'請輸入關鍵字'}</div>
+                : pickCandidates.map(c=>(
+                    <div key={c.wfId} onClick={()=>assign(picker,c)}
+                      style={{padding:'8px 10px',borderBottom:'1px solid var(--g100)',cursor:'pointer',fontSize:12}}>
+                      <strong>{c.name}</strong>　<span style={{color:'var(--g400)'}}>{c.wfId}｜{c.phone}</span>
+                      <div style={{color:'var(--g500)',fontSize:11}}>{c.address}</div>
+                    </div>
+                  ))}
+            </div>
+            <div className="modal-actions"><button onClick={()=>setPicker(null)}>取消</button></div>
+          </div>
+        </div>
+      )}
+
+      {/* 建立新客戶 */}
+      {creating&&(
+        <div className="modal-bg" onClick={()=>setCreating(null)}>
+          <div className="modal" onClick={e=>e.stopPropagation()}>
+            <h3>➕ 由託運單建立客戶</h3>
+            <div style={{fontSize:11.5,color:'var(--g500)',marginBottom:10}}>資料已從託運單帶入，確認後建立客戶主檔並自動配對。</div>
+            <label style={{fontSize:11,fontWeight:700}}>客戶類型</label>
+            <select value={form.customerType} onChange={e=>setForm({...form,customerType:e.target.value})}
+              style={{width:'100%',padding:'7px 9px',border:'1px solid var(--g300)',borderRadius:6,fontSize:13,marginBottom:8}}>
+              <option value="dealer">經銷商 / 鎖店</option>
+              <option value="consumer">末端消費者</option>
+              <option value="project">建案 / 工地</option>
+              <option value="internal">內部調撥（不推播）</option>
+            </select>
+            <label style={{fontSize:11,fontWeight:700}}>名稱（必填）</label>
+            <input value={form.name} onChange={e=>setForm({...form,name:e.target.value})}
+              style={{width:'100%',padding:'7px 9px',border:'1px solid var(--g300)',borderRadius:6,fontSize:13,marginBottom:8}}/>
+            <label style={{fontSize:11,fontWeight:700}}>電話</label>
+            <input value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})}
+              style={{width:'100%',padding:'7px 9px',border:'1px solid var(--g300)',borderRadius:6,fontSize:13,marginBottom:8}}/>
+            <label style={{fontSize:11,fontWeight:700}}>地址（必填，客編識別唯一鍵）</label>
+            <input value={form.address} onChange={e=>setForm({...form,address:e.target.value})}
+              style={{width:'100%',padding:'7px 9px',border:'1px solid var(--g300)',borderRadius:6,fontSize:13,marginBottom:8}}/>
+            <label style={{fontSize:11,fontWeight:700}}>貨運收貨人代號（新竹，選填）</label>
+            <input value={form.dealerCode} onChange={e=>setForm({...form,dealerCode:e.target.value})}
+              placeholder="填了以後這家的託運單都能自動配對"
+              style={{width:'100%',padding:'7px 9px',border:'1px solid var(--g300)',borderRadius:6,fontSize:13}}/>
+            <div className="modal-actions">
+              <button onClick={()=>setCreating(null)}>取消</button>
+              <button className="confirm" onClick={doCreate}>建立並配對</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function App(){
   const [page,setPage] = useState('home');
   const [crmTarget,setCrmTarget] = useState(null); // 首頁搜尋→跳 CRM 指定客戶 wfId
@@ -3820,6 +4108,12 @@ function App(){
         } else if(eventType==='DELETE'){
           next={...prev,projects:(prev.projects||[]).filter(p=>p.id!==or.id)};
         }
+      } else if(table==='shipments'){
+        if(eventType==='INSERT'||eventType==='UPDATE'){
+          next={...prev,shipments:[...(prev.shipments||[]).filter(s=>s.id!==nr.id),dbToShipment(nr)]};
+        } else if(eventType==='DELETE'){
+          next={...prev,shipments:(prev.shipments||[]).filter(s=>s.id!==or.id)};
+        }
       } else if(table==='config'){
         if((eventType==='INSERT'||eventType==='UPDATE')&&nr.key==='wf_counter'){
           next={...prev,wfCounter:parseInt(nr.value||'0')};
@@ -3865,6 +4159,10 @@ function App(){
         <button className={`nbtn ${page==='home'||page==='crm'?'on':''}`} onClick={()=>{setPage('home');window.history.replaceState(null,'',location.pathname+location.search);}}>🏠 首頁 / 客戶查詢</button>
         <button className={`nbtn ${page==='schedule'?'on':''}`} onClick={()=>{setPage('schedule');window.history.replaceState(null,'',location.pathname+location.search);}}>📅 工務時刻表</button>
         <button className={`nbtn ${page==='groups'?'on':''}`} onClick={()=>{setPage('groups');window.history.replaceState(null,'',location.pathname+location.search);}}>🏢 集團/建案</button>
+        <button className={`nbtn ${page==='shipments'?'on':''}`} onClick={()=>{setPage('shipments');window.history.replaceState(null,'',location.pathname+location.search);}}>📦 託運單配對{(()=>{
+          const n=(db.shipments||[]).filter(s=>s.matchStatus==='pending'||s.matchStatus==='unmatched').length;
+          return n?<span style={{marginLeft:5,background:'var(--err)',color:'#fff',borderRadius:9,padding:'0 5px',fontSize:9.5,fontWeight:800}}>{n}</span>:null;
+        })()}</button>
         <button className={`nbtn ${page==='workerReport'?'on':''}`} onClick={()=>{setPage('workerReport');window.history.replaceState(null,'',location.pathname+location.search);}}>👷 師傅報表</button>
         <button className={`nbtn ${page==='qcReport'?'on':''}`} onClick={()=>{setPage('qcReport');window.history.replaceState(null,'',location.pathname+location.search);}}>📊 品質與派工報表</button>
         <button className={`nbtn ${page==='csPerfReport'?'on':''}`} onClick={()=>{setPage('csPerfReport');window.history.replaceState(null,'',location.pathname+location.search);}}>🎧 客服績效報表</button>
@@ -3906,6 +4204,7 @@ function App(){
         {page==='crm'&&<CRMPage/>}
         {page==='schedule'&&<SchedulePage/>}
         {page==='groups'&&<GroupProjectPage/>}
+        {page==='shipments'&&<ShipmentMatchPage/>}
         {page==='workerReport'&&<WorkerReportPage/>}
         {page==='qcReport'&&<QcReportPage/>}
         {page==='csPerfReport'&&<CsPerfReportPage/>}

@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>WAFERLOCK 訂單進度查詢</title>
+<!--
+  客戶自助訂單進度查詢（LIFF）
+
+  ⚠ 安全鐵則：本頁**刻意不引入 supabase-js、不持有 anon key**。
+     所有資料一律經 Edge Function track-query 取得，由伺服器端驗證 LIFF idToken
+     後才回傳「該使用者自己的」資料。
+     專案現況 RLS 全開，若這頁直接查 Supabase，等於把 customers 表公開到網際網路上。
+     維護時請勿為了「方便」加回 supabase-js。
+-->
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:'Noto Sans TC',-apple-system,sans-serif}
+body{background:#EEF2F7;color:#1E293B;padding:16px;max-width:520px;margin:0 auto}
+.card{background:#fff;border-radius:14px;padding:18px;box-shadow:0 1px 3px rgba(0,0,0,.08);margin-bottom:12px}
+.hd{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.hd .ic{width:38px;height:38px;background:#0F2744;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:19px}
+.hd h1{font-size:16px;font-weight:700}
+.hd p{font-size:11px;color:#64748B}
+.center{text-align:center;color:#64748B;font-size:13px;padding:34px 0}
+.btn{display:block;width:100%;margin-top:10px;padding:12px;background:#38BDF8;color:#0F2744;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;text-align:center;text-decoration:none}
+.btn.ghost{background:#F1F5F9;color:#334155}
+.msg{padding:10px 12px;border-radius:8px;font-size:13px;line-height:1.6}
+.msg.fail{background:#FEE2E2;color:#991B1B}
+
+/* 訂單卡 */
+.ometa{display:flex;justify-content:space-between;align-items:baseline;font-size:11.5px;color:#64748B;margin-bottom:14px}
+.ometa b{color:#0F2744;font-size:13px}
+
+/* 進度條：圓點 + 連接線 */
+.steps{display:flex;align-items:flex-start;margin:4px 0 2px}
+.step{flex:1;text-align:center;position:relative}
+.step .dot{width:30px;height:30px;border-radius:50%;margin:0 auto 6px;display:flex;align-items:center;justify-content:center;
+  font-size:14px;background:#E2E8F0;color:#94A3B8;border:2px solid #E2E8F0;position:relative;z-index:1}
+.step.on .dot{background:#fff;border-color:#EF4444;color:#EF4444}
+.step.now .dot{background:#EF4444;border-color:#EF4444;color:#fff;box-shadow:0 0 0 4px rgba(239,68,68,.15)}
+.step .lb{font-size:10.5px;line-height:1.35;color:#94A3B8}
+.step.on .lb,.step.now .lb{color:#EF4444;font-weight:700}
+.step .at{display:block;font-size:9.5px;color:#94A3B8;font-weight:400;margin-top:2px}
+/* 連接線：畫在圓點垂直中心，左右各延伸到相鄰格 */
+.step::before,.step::after{content:'';position:absolute;top:14px;height:3px;background:#E2E8F0}
+.step::before{left:0;width:50%}
+.step::after{right:0;width:50%}
+.step:first-child::before,.step:last-child::after{display:none}
+.step.on::before,.step.now::before{background:#EF4444}
+.step.on::after{background:#EF4444}
+
+/* 貨態 */
+.track{margin-top:14px;background:#F8FAFC;border-radius:10px;padding:12px}
+.track .no{font-size:15px;font-weight:800;letter-spacing:.5px;color:#0F2744;margin:2px 0 8px;word-break:break-all}
+.track .cr{font-size:11.5px;color:#64748B}
+.track .row{display:flex;gap:8px}
+.track .row .btn{margin-top:0;flex:1;padding:9px;font-size:13px}
+.note{font-size:10.5px;color:#94A3B8;margin-top:8px;line-height:1.6}
+
+/* 經銷商清單 */
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{text-align:left;color:#64748B;font-weight:600;padding:6px 4px;border-bottom:1px solid #E2E8F0;font-size:11px}
+td{padding:8px 4px;border-bottom:1px solid #F1F5F9;vertical-align:top}
+td .tn{font-weight:700;color:#0F2744;word-break:break-all}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#0F2744;color:#fff;
+  padding:9px 16px;border-radius:20px;font-size:12.5px;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="hd"><div class="ic">📦</div><div><h1>訂單進度查詢</h1><p id="who">連結中…</p></div></div>
+</div>
+<div id="out"><div class="center">載入中…</div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+// 本頁專屬的 LIFF ID。一個 LIFF app 只對應一個 Endpoint URL，
+// 所以不能沿用 liff-bind.html 的 2010432600-XRCwdf5J，必須另開一個指向 track.html。
+// 前綴 2010432600 是同一個 LINE Login channel，因此 track-query 驗 idToken 用的
+// LINE_LOGIN_CHANNEL_ID 不變。
+const LIFF_ID = '2010432600-UhHB4403';
+const TRACK_API = 'https://nkyanyjgfrmovjoqevro.supabase.co/functions/v1/track-query';
+const BIND_URL = './liff-bind.html?next=track';  // 綁完會帶使用者跳回本頁
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function toast(text){
+  const t = $('toast');
+  t.textContent = text; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+function copy(text){
+  navigator.clipboard?.writeText(text).then(
+    () => toast('已複製單號 ' + text),
+    () => toast('複製失敗，請長按選取'));
+}
+
+function renderStages(stages){
+  // 最後一個已完成的階段標成 now（目前進度），其餘已完成標 on
+  let lastDone = -1;
+  stages.forEach((s, i) => { if(s.done) lastDone = i; });
+  return `<div class="steps">${stages.map((s, i) => {
+    const cls = i === lastDone ? 'now' : (s.done ? 'on' : '');
+    const icon = s.done ? '✓' : (i + 1);
+    return `<div class="step ${cls}">
+      <div class="dot">${icon}</div>
+      <div class="lb">${esc(s.label)}${s.done && s.at ? `<span class="at">${esc(s.at)}</span>` : ''}</div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function renderTracking(t){
+  if(!t) return '';
+  return `<div class="track">
+    <div class="cr">${esc(t.carrier)}${t.shipDate ? '　交運 ' + esc(t.shipDate) : ''}</div>
+    <div class="no">${esc(t.trackingNo)}</div>
+    <div class="row">
+      <button class="btn ghost" onclick="copy('${esc(t.trackingNo)}')">複製單號</button>
+      ${t.queryUrl ? `<a class="btn" href="${esc(t.queryUrl)}" target="_blank" rel="noreferrer">前往查詢</a>` : ''}
+    </div>
+    <div class="note">已交運給${esc(t.carrier)}。目前的配送位置請點「前往查詢」，在貨運公司頁面貼上單號查詢
+      —— 我們這邊只掌握到交運，之後的即時貨態要向貨運公司查。</div>
+  </div>`;
+}
+
+function renderConsumer(data){
+  if(!data.orders.length){
+    return `<div class="card"><div class="center">目前沒有訂單資料<br><span style="font-size:11.5px">若您剛下單，資料可能還在處理中</span></div></div>`;
+  }
+  return data.orders.map(o => `<div class="card">
+    <div class="ometa"><b>訂單 ${esc(o.id)}</b><span>${esc(o.createdDate || '')}</span></div>
+    ${renderStages(o.stages)}
+    ${o.address ? `<div class="note">配送地址：${esc(o.address)}</div>` : ''}
+    ${renderTracking(o.tracking)}
+  </div>`).join('');
+}
+
+function renderDealer(data){
+  const rowsHtml = data.shipments.map(s => `<tr>
+    <td>${esc(s.shipDate || '')}</td>
+    <td>${esc(s.carrier)}</td>
+    <td><div class="tn">${esc(s.trackingNo)}</div>
+        <button class="btn ghost" style="margin-top:4px;padding:5px;font-size:11px" onclick="copy('${esc(s.trackingNo)}')">複製</button></td>
+    <td>${esc(s.pieces || '')}</td>
+  </tr>`).join('');
+  const orders = data.orders.length ? renderConsumer(data) : '';
+  const list = data.shipments.length
+    ? `<div class="card">
+         <div class="ometa"><b>近期出貨</b><span>${data.shipments.length} 筆</span></div>
+         <table><thead><tr><th>日期</th><th>貨運</th><th>託運單號</th><th>件數</th></tr></thead>
+         <tbody>${rowsHtml}</tbody></table>
+         <div class="note">配送狀態請點「複製」後到貨運公司網站查詢。</div>
+       </div>`
+    : '';
+  return (orders + list) || `<div class="card"><div class="center">目前沒有出貨資料</div></div>`;
+}
+
+function renderUnbound(){
+  return `<div class="card">
+    <div class="msg fail">尚未完成 LINE 綁定，無法查詢您的訂單。</div>
+    <a class="btn" href="${BIND_URL}">前往綁定會員</a>
+    <div class="note">綁定後即可隨時查看訂單進度與託運單號，出貨時也會主動通知您。</div>
+  </div>`;
+}
+
+function renderError(msg){
+  return `<div class="card"><div class="msg fail">${esc(msg)}</div>
+    <button class="btn ghost" onclick="location.reload()">重新載入</button></div>`;
+}
+
+(async function main(){
+  try{
+    await liff.init({ liffId: LIFF_ID });
+    if(!liff.isLoggedIn()){ liff.login(); return; }
+
+    const idToken = liff.getIDToken();
+    if(!idToken){ $('out').innerHTML = renderError('取不到 LINE 身分資訊，請關閉後重新從 LINE 開啟。'); return; }
+
+    const resp = await fetch(TRACK_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken }),
+    });
+    const data = await resp.json();
+
+    if(!data.ok){ $('out').innerHTML = renderError(data.error || '查詢失敗，請稍後再試。'); return; }
+    if(!data.bound){ $('who').textContent = '尚未綁定'; $('out').innerHTML = renderUnbound(); return; }
+
+    $('who').textContent = data.name ? `${data.name} 您好` : '會員';
+    $('out').innerHTML = data.customerType === 'dealer' ? renderDealer(data) : renderConsumer(data);
+  }catch(e){
+    console.error(e);
+    $('out').innerHTML = renderError('載入失敗：' + (e.message || e));
+  }
+})();
+</script>
+</body>
+</html>

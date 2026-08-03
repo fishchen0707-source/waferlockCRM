@@ -190,6 +190,11 @@ async function doBind(){
     const { data:c }=await sb.from('customers').select('*').eq('wf_id',wfId).maybeSingle();
     $('bindForm').style.display='none';
     showResult(c, isNew?'🎉 綁定成功（新會員）':'🎉 綁定成功（已連動既有客戶）');
+    // 從訂單進度查詢頁導過來綁定的，綁完直接送回去，不要讓人自己找路
+    if(new URLSearchParams(location.search).get('next')==='track'){
+      $('result').insertAdjacentHTML('beforeend',
+        '<a class="btn" style="display:block;text-align:center;text-decoration:none;margin-top:14px" href="./track.html">📦 查看我的訂單進度</a>');
+    }
   }catch(e){ const m=$('bindMsg'); m.className='msg fail show'; m.textContent='綁定失敗：'+e.message; $('submitBind').disabled=false; }
 }
 
