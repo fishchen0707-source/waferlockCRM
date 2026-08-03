@@ -10,17 +10,19 @@
 //   一律經本函式以 service role 取數。
 //
 // 身分怎麼確認：
-//   前端用 liff.getIDToken() 取得 LINE ID Token → 本函式在**伺服器端**向
-//   https://api.line.me/oauth2/v2.1/verify 驗證真偽並取出 sub（LINE userId）。
+//   前端用 liff.getAccessToken() 取得 LINE access token → 本函式在**伺服器端**
+//   先向 https://api.line.me/oauth2/v2.1/verify 確認這張 token 發給我們這個 channel，
+//   再用它向 https://api.line.me/v2/profile 換回 userId。
 //   **絕不信任前端傳來的 userId 或客編**——那等於沒有驗證。
+//   （原本用 ID token，但那份憑證 LIFF SDK 不會續期，客戶隔一小時再開就過期。）
 //
 // 回傳前一律做欄位白名單過濾：地址遮蔽到行政區，不含金額、統編、他人資料。
 //
-// 部署：Supabase Edge Function「track-query」（Verify JWT 關閉，身分由 LIFF idToken 驗證）
+// 部署：Supabase Edge Function「track-query」（Verify JWT 關閉，身分由 LIFF access token 驗證）
 // 需要密鑰（Supabase → Edge Functions → Secrets）：
 //   LINE_LOGIN_CHANNEL_ID   LIFF ID 的前半段（例：2010432600-XRCwdf5J → 2010432600）
 //
-// 請求：POST { idToken }
+// 請求：POST { accessToken }
 // 回應：{ ok:true, bound:true, customerType, orders:[...] }
 //       { ok:true, bound:false }        ← 尚未綁定，前端引導去 liff-bind.html
 //       { ok:false, error }
@@ -47,31 +49,42 @@ async function rows(path: string): Promise<Record<string, unknown>[]> {
   return Array.isArray(j) ? j : [];
 }
 
-// 伺服器端驗證 LINE ID Token。
-// 回傳 { sub, expired }：sub 為 LINE userId，驗不過為 null；
-// expired 表示「只是 token 過期」，前端可重新登入一次自救。
-async function verifyIdToken(idToken: string): Promise<{ sub: string | null; expired: boolean }> {
-  const body = new URLSearchParams({ id_token: idToken, client_id: CHANNEL_ID });
-  const r = await fetch("https://api.line.me/oauth2/v2.1/verify", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body,
-  });
-  if (!r.ok) {
-    const detail = (await r.text()).slice(0, 300);
-    console.log("[LIFF 驗證失敗]", r.status, detail);
-    // 回傳失敗原因給呼叫端判斷：token 過期是可以自動補救的（前端重登一次），
-    // 設定錯誤則不行。兩者混在同一個 401 會讓人一直重整卻永遠好不了。
+// 伺服器端驗證 LINE 身分，回傳 { sub, expired }。sub 為 LINE userId。
+//
+// 為什麼用 access token 而不是 ID token：
+//   ID token 是登入當下簽發的靜態憑證，LIFF SDK **不會**幫它續期，
+//   客戶隔一小時再開頁就必然拿到過期的 token（實測 log：IdToken expired）。
+//   改用 access token，SDK 會自動保持有效，不必每次開頁都跳一次登入。
+//
+// 安全性不變，甚至更嚴謹——userId 是拿 token 去跟 LINE 換回來的，
+// 不是前端自己宣稱的；且先驗過 client_id 確認這張 token 是發給我們這個 channel。
+async function verifyLineUser(accessToken: string): Promise<{ sub: string | null; expired: boolean }> {
+  // 1) 這張 token 是不是發給我們這個 channel
+  const vr = await fetch(
+    `https://api.line.me/oauth2/v2.1/verify?access_token=${encodeURIComponent(accessToken)}`,
+  );
+  if (!vr.ok) {
+    const detail = (await vr.text()).slice(0, 300);
+    console.log("[LINE token 驗證失敗]", vr.status, detail);
+    // 區分「過期」與「設定錯誤」：前者前端重登一次可自救，後者重整一萬次也沒用
     return { sub: null, expired: /expire/i.test(detail) };
   }
-  const data = await r.json();
-  // aud 必須是我們自己的 channel，避免拿別的 channel 簽的 token 來換資料
-  if (data.aud && String(data.aud) !== CHANNEL_ID) {
-    console.log("[LIFF aud 不符] token aud=", data.aud, " 設定的 CHANNEL_ID=", CHANNEL_ID);
+  const v = await vr.json();
+  if (String(v.client_id) !== CHANNEL_ID) {
+    console.log("[LINE client_id 不符] token=", v.client_id, " 設定=", CHANNEL_ID);
     return { sub: null, expired: false };
   }
-  if (!data.sub) return { sub: null, expired: false };
-  return { sub: String(data.sub), expired: false };
+
+  // 2) 向 LINE 換取 userId。絕不採信前端傳來的 userId。
+  const pr = await fetch("https://api.line.me/v2/profile", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!pr.ok) {
+    console.log("[LINE profile 取得失敗]", pr.status, (await pr.text()).slice(0, 200));
+    return { sub: null, expired: false };
+  }
+  const p = await pr.json();
+  return { sub: p.userId ? String(p.userId) : null, expired: false };
 }
 
 // 地址只留到行政區，其餘遮蔽。客戶自己知道地址，頁面沒有必要把完整門牌再吐一次。
@@ -132,10 +145,10 @@ Deno.serve(async (req) => {
 
   try {
     const b = await req.json();
-    const idToken = String(b.idToken || "");
-    if (!idToken) return json({ ok: false, error: "缺少 idToken" }, 401);
+    const accessToken = String(b.accessToken || "");
+    if (!accessToken) return json({ ok: false, error: "缺少 accessToken" }, 401);
 
-    const v = await verifyIdToken(idToken);
+    const v = await verifyLineUser(accessToken);
     if (!v.sub) {
       return json({
         ok: false,
@@ -145,7 +158,7 @@ Deno.serve(async (req) => {
     }
     const lineUserId = v.sub;
 
-    // 客編一律從已驗證的 idToken 反推，不接受前端傳入
+    // 客編一律從 LINE 換回來的 userId 反推，不接受前端傳入
     const bind = await rows(`line_users?line_user_id=eq.${encodeURIComponent(lineUserId)}&select=wf_id`);
     const wfId = bind[0]?.wf_id as string | undefined;
     if (!wfId) return json({ ok: true, bound: false });
