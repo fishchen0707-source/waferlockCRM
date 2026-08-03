@@ -74,21 +74,40 @@ const CARRIERS: Record<string, { label: string; url: string }> = {
   kerry: { label: "嘉里大榮", url: "https://www.kerrytj.com/zh/search/trace.aspx" },
 };
 
-// 進度階段。刻意只有五段：本系統的「安裝完成」與「驗收」是同一個動作寫入
-// （waferlock_crm.html 完工驗收同時寫 status='done' 與 verify），
-// 硬拆成兩格會多出一盞永遠不會單獨亮的燈。
-// 另外沒有「已送達」——沒有貨運公司 API 就不假裝知道貨到了沒。
-function buildStages(ins: Record<string, any>, sp: Record<string, any> | undefined) {
-  const shipped = !!(ins.shipment_no || ins.shipped_date);
-  const handed = !!sp?.tracking_no;
-  const booked = !!(ins.sched_date || ins.worker_id);
-  const done = ins.status === "done";
+// 安裝旅程六段。
+//
+// 這頁是給末端消費者看的，而消費者不會收到包裹——鎖是寄到鎖店（師傅）那裡，
+// 師傅再帶去客戶家安裝。所以進度條講的是「我的鎖什麼時候裝好」，不是物流軌跡；
+// 託運單號對消費者不但沒用，還會讓他以為東西寄錯地方（見下方 customer_type 分流）。
+//
+// 每一格都對得上真實欄位，沒有永遠不會亮的燈：
+//   已下單     安裝單存在
+//   備貨中     shipment_no（ERP 已出貨到師傅端）
+//   委派師傅中  worker_id（客服指派並排定時段）
+//   師傅接單    accepted_at（師傅端按下接單，sql/supabase_installs_accept.sql 新增）
+//   安裝完成    status installed（師傅施工完）
+//   驗收完成    status done（客服驗收、保固生效）
+//
+// 刻意不做「師傅到場」圓點——arrived 有資料，但改以第 4 格的補充文字呈現，
+// 六格已經是手機寬度的極限。
+function fmtSlot(ins: Record<string, any>): string | null {
+  if (!ins.sched_date) return null;
+  const start = Number(ins.sched_start ?? 9);
+  const span = Number(ins.sched_span ?? 2);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${ins.sched_date} ${pad(start)}:00–${pad(start + span)}:00`;
+}
+
+function buildStages(ins: Record<string, any>) {
+  const st = String(ins.status || "");
   return [
-    { key: "created", label: "訂單成立", done: true, at: ins.created_date || null },
-    { key: "shipped", label: "已出貨", done: shipped, at: ins.shipped_date || null },
-    { key: "handed", label: "已交運", done: handed, at: sp?.ship_date || null },
-    { key: "booked", label: "預約安裝", done: booked, at: ins.sched_date || null },
-    { key: "done", label: "完工驗收", done, at: ins.completed_date || null },
+    { key: "created", label: "已下單", done: true, at: ins.created_date || null },
+    { key: "stock", label: "備貨中", done: !!ins.shipment_no, at: ins.shipped_date || null },
+    { key: "assign", label: "委派師傅中", done: !!ins.worker_id, at: null },
+    // at 刻意留空：預約時段另外用醒目的區塊呈現，塞進圓點標籤底下會把那一格撐高一倍
+    { key: "accept", label: "師傅接單", done: !!ins.accepted_at, at: null },
+    { key: "installed", label: "安裝完成", done: st === "installed" || st === "done", at: null },
+    { key: "verified", label: "驗收完成", done: st === "done", at: ins.completed_date || null },
   ];
 }
 
@@ -116,17 +135,29 @@ Deno.serve(async (req) => {
     const cust = custs[0] || {};
     const customerType = (cust.customer_type as string) || "consumer";
 
+    // 託運單號只給經銷商（鎖店）——他們才是實際收貨人，單號對他們有用。
+    // 末端消費者收不到包裹，給他單號只會造成「東西怎麼寄到別人那裡」的誤會。
+    // 這個分流刻意做在後端：consumer 的回應裡連 tracking_no 欄位都不存在，
+    // 而不是送到前端再用 CSS 藏起來——藏起來的資料仍然外流。
+    const isDealer = customerType === "dealer";
+
     const q = encodeURIComponent(wfId);
-    const [installs, shipments] = await Promise.all([
-      rows(`installs?wf_id=eq.${q}&select=id,created_date,status,shipment_no,shipped_date,sched_date,worker_id,completed_date,address,product_id,qty&order=created_date.desc&limit=100`),
-      rows(`shipments?wf_id=eq.${q}&select=carrier,tracking_no,ship_date,install_id,pieces&order=ship_date.desc&limit=200`),
+    const [installs, shipments, workers] = await Promise.all([
+      rows(`installs?wf_id=eq.${q}&select=id,created_date,status,shipment_no,shipped_date,sched_date,sched_start,sched_span,worker_id,accepted_at,completed_date,warranty_end,address,product_id,qty&order=created_date.desc&limit=100`),
+      isDealer
+        ? rows(`shipments?wf_id=eq.${q}&select=carrier,tracking_no,ship_date,install_id,pieces&order=ship_date.desc&limit=200`)
+        : Promise.resolve([]),
+      rows(`workers?select=id,name&limit=500`),
     ]);
+
+    const workerName = new Map<string, string>();
+    for (const w of workers) workerName.set(String(w.id), String(w.name || ""));
 
     const shipByInstall = new Map<string, Record<string, any>>();
     for (const s of shipments) if (s.install_id) shipByInstall.set(String(s.install_id), s);
 
     const orders = installs.map((ins: Record<string, any>) => {
-      const sp = shipByInstall.get(String(ins.id));
+      const sp = isDealer ? shipByInstall.get(String(ins.id)) : undefined;
       const cr = sp ? CARRIERS[String(sp.carrier)] : undefined;
       return {
         id: ins.id,
@@ -134,14 +165,20 @@ Deno.serve(async (req) => {
         address: maskAddress(String(ins.address || "")),
         productId: ins.product_id || null,
         qty: ins.qty || null,
-        stages: buildStages(ins, sp),
+        // 客戶最想知道的一件事：師傅哪天來。接單後才給——沒接單的預約時間不算數。
+        slot: ins.accepted_at ? fmtSlot(ins) : null,
+        worker: ins.accepted_at ? (workerName.get(String(ins.worker_id)) || null) : null,
+        arrived: ins.status === "arrived",
+        failed: ins.status === "failed",
+        warrantyEnd: ins.status === "done" ? (ins.warranty_end || null) : null,
+        stages: buildStages(ins),
         tracking: sp
           ? { carrier: cr?.label || sp.carrier, trackingNo: sp.tracking_no, queryUrl: cr?.url || null, shipDate: sp.ship_date }
           : null,
       };
     });
 
-    // 沒掛到安裝單的託運單（例如經銷商叫貨，沒有安裝流程）另外列，避免資料憑空消失
+    // 沒掛到安裝單的託運單（經銷商叫貨，本來就沒有安裝流程）另外列，避免資料憑空消失
     const looseShipments = shipments
       .filter((s: Record<string, any>) => !s.install_id)
       .map((s: Record<string, any>) => ({

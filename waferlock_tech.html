@@ -430,7 +430,10 @@ function installCard(o,kind){
     <div class="crow">📦 ${prod}${o.serial_no?` (${o.serial_no})`:''}</div>
     ${sched?`<div class="crow" style="color:#7C3AED;font-weight:600">${sched}</div>`:''}
     <div class="crow" style="font-weight:700;color:#5B21B6">狀態：${sLabel}</div>
-    ${kind==='mine'&&o.status==='pending'?`<button class="btn go" style="background:#7C3AED;color:#fff;margin-top:10px" onclick="arriveInstall('${o.id}')">📍 標記到場（推播通知）</button>`:''}
+    ${kind==='mine'&&o.accepted_at?`<div class="crow" style="color:#10B981;font-weight:700">✅ 已接單</div>`:''}
+    ${kind==='mine'&&o.status==='pending'&&!o.accepted_at?`<button class="btn go" style="background:#10B981;color:#fff;margin-top:10px" onclick="acceptInstall('${o.id}')">✋ 接下這張安裝單</button>
+      <div style="font-size:11px;color:#94A3B8;margin-top:5px;line-height:1.5">接單後客戶會收到通知，進度頁也會顯示預約時間。接單前無法標記到場。</div>`:''}
+    ${kind==='mine'&&o.status==='pending'&&o.accepted_at?`<button class="btn go" style="background:#7C3AED;color:#fff;margin-top:10px" onclick="arriveInstall('${o.id}')">📍 標記到場（推播通知）</button>`:''}
     ${kind==='mine'&&o.status==='arrived'?`<button class="btn done" style="margin-top:10px" onclick="installedInstall('${o.id}')">🔧 標記施工完成</button>`:''}
     ${kind==='mine'&&o.status==='installed'&&!hasDocs?`<button class="btn done" style="background:#7C3AED;margin-top:10px" onclick="openInstallReport('${o.id}')">📸 上傳照片 + 客戶簽名</button>`:''}
     ${kind==='mine'&&o.status==='installed'&&hasDocs?`<div style="margin-top:8px;font-size:12px;color:#10B981;font-weight:700">✅ 已上傳照片與簽名，等待 CRM 完工驗收</div>`:''}
@@ -500,6 +503,17 @@ async function confirmAccept(){
 }
 
 // ───── 安裝動作 ─────
+// 接單：安裝單本來沒有這一步（CRM 指派後就直接出現在清單裡），但客戶進度頁需要
+// 一個「師傅確實接下了」的證據，否則客戶只看得到「委派師傅中」而不知道有沒有人接。
+// 比照維修單的 confirmAccept()，但不做 ETA——installs 沒有 eta_* 欄位。
+async function acceptInstall(id){
+  const o=cases.installs.find(x=>x.id===id); if(!o)return;
+  const {error}=await sb.from('installs').update({accepted_at:new Date().toISOString()}).eq('id',id);
+  if(error){ alert('接單失敗：'+error.message); return; }   // 顯性失敗，不要靜默吞掉
+  const when=o.sched_date?`${o.sched_date} ${String(o.sched_start||9).padStart(2,'0')}:00起`:'';
+  pushByPhone(o.phone,`🧰 安裝通知\n\n${worker.name} 師傅已接下您的安裝單${when?`\n預約時間：${when}`:''}\n屆時將前往為您安裝 🔧`);
+  await loadCases();
+}
 async function arriveInstall(id){
   const o=cases.installs.find(x=>x.id===id); if(!o)return;
   await sb.from('installs').update({status:'arrived'}).eq('id',id);

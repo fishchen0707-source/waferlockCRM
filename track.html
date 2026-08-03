@@ -31,23 +31,33 @@ body{background:#EEF2F7;color:#1E293B;padding:16px;max-width:520px;margin:0 auto
 .ometa{display:flex;justify-content:space-between;align-items:baseline;font-size:11.5px;color:#64748B;margin-bottom:14px}
 .ometa b{color:#0F2744;font-size:13px}
 
-/* 進度條：圓點 + 連接線 */
-.steps{display:flex;align-items:flex-start;margin:4px 0 2px}
-.step{flex:1;text-align:center;position:relative}
-.step .dot{width:30px;height:30px;border-radius:50%;margin:0 auto 6px;display:flex;align-items:center;justify-content:center;
-  font-size:14px;background:#E2E8F0;color:#94A3B8;border:2px solid #E2E8F0;position:relative;z-index:1}
+/* 進度條：圓形圖示 + 連接線。六格要塞進手機寬度，尺寸都壓到剛好可讀 */
+.steps{display:flex;align-items:flex-start;margin:6px 0 2px}
+.step{flex:1;text-align:center;position:relative;min-width:0}
+.step .dot{width:34px;height:34px;border-radius:50%;margin:0 auto 6px;display:flex;align-items:center;justify-content:center;
+  background:#F1F5F9;color:#94A3B8;border:2px solid #E2E8F0;position:relative;z-index:1}
+.step .dot svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round;display:block}
 .step.on .dot{background:#fff;border-color:#EF4444;color:#EF4444}
 .step.now .dot{background:#EF4444;border-color:#EF4444;color:#fff;box-shadow:0 0 0 4px rgba(239,68,68,.15)}
-.step .lb{font-size:10.5px;line-height:1.35;color:#94A3B8}
+.step .lb{font-size:9.5px;line-height:1.3;color:#94A3B8;padding:0 1px;word-break:keep-all}
 .step.on .lb,.step.now .lb{color:#EF4444;font-weight:700}
-.step .at{display:block;font-size:9.5px;color:#94A3B8;font-weight:400;margin-top:2px}
-/* 連接線：畫在圓點垂直中心，左右各延伸到相鄰格 */
-.step::before,.step::after{content:'';position:absolute;top:14px;height:3px;background:#E2E8F0}
+.step .at{display:block;font-size:9px;color:#94A3B8;font-weight:400;margin-top:2px}
+/* 連接線：畫在圓點垂直中心（34px 的一半 + 2px 邊框），左右各延伸到相鄰格 */
+.step::before,.step::after{content:'';position:absolute;top:16px;height:3px;background:#E2E8F0}
 .step::before{left:0;width:50%}
 .step::after{right:0;width:50%}
 .step:first-child::before,.step:last-child::after{display:none}
 .step.on::before,.step.now::before{background:#EF4444}
 .step.on::after{background:#EF4444}
+
+/* 預約時間：整頁最重要的一行字，客戶開這頁十之八九就是要看這個 */
+.slot{margin-top:14px;background:#FEF2F2;border:1px solid #FECACA;border-radius:10px;padding:11px 13px}
+.slot .t{font-size:10.5px;color:#B91C1C;font-weight:700;letter-spacing:.5px}
+.slot .v{font-size:16px;font-weight:800;color:#0F2744;margin-top:3px}
+.slot .w{font-size:11.5px;color:#64748B;margin-top:3px}
+.badge{display:inline-block;margin-top:8px;background:#DCFCE7;color:#166534;font-size:11px;font-weight:700;padding:3px 9px;border-radius:10px}
+.failed{margin-top:12px;background:#FEF2F2;border:1px solid #FECACA;border-radius:10px;padding:11px 13px;font-size:12.5px;color:#991B1B;line-height:1.6}
 
 /* 貨態 */
 .track{margin-top:14px;background:#F8FAFC;border-radius:10px;padding:12px}
@@ -98,15 +108,27 @@ function copy(text){
     () => toast('複製失敗，請長按選取'));
 }
 
+// 六格的線條圖示。內嵌 SVG 而非外部圖檔或字型：這頁在 LINE 內開，
+// 少一個外部請求就少一次載入失敗的機會。stroke 用 currentColor，
+// 顏色由 .step / .step.on / .step.now 的 color 決定，圖示本身不帶顏色。
+const ICONS = {
+  created:  '<path d="M7 3h7l4 4v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 16h4"/>',
+  stock:    '<path d="M3 8l9-4 9 4v8l-9 4-9-4z"/><path d="M3 8l9 4 9-4"/><path d="M12 12v8"/>',
+  assign:   '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.4 2.7-6 6-6"/><path d="M14 17h7M18.5 14l3 3-3 3"/>',
+  accept:   '<circle cx="10" cy="8" r="3.2"/><path d="M4 20c0-3.4 2.7-6 6-6"/><path d="M14 17.8l2.2 2.2L21 15"/>',
+  installed:'<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.7-3.7a6 6 0 0 1-7.9 7.9l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 7.9-7.9l-3.7 3.7z"/>',
+  verified: '<path d="M12 3l8 3v6c0 4.9-3.4 8.4-8 9.5C7.4 20.4 4 16.9 4 12V6z"/><path d="M9 12l2.2 2.2L15.5 10"/>',
+};
+
 function renderStages(stages){
   // 最後一個已完成的階段標成 now（目前進度），其餘已完成標 on
   let lastDone = -1;
   stages.forEach((s, i) => { if(s.done) lastDone = i; });
   return `<div class="steps">${stages.map((s, i) => {
     const cls = i === lastDone ? 'now' : (s.done ? 'on' : '');
-    const icon = s.done ? '✓' : (i + 1);
+    const path = ICONS[s.key] || '';
     return `<div class="step ${cls}">
-      <div class="dot">${icon}</div>
+      <div class="dot"><svg viewBox="0 0 24 24" aria-hidden="true">${path}</svg></div>
       <div class="lb">${esc(s.label)}${s.done && s.at ? `<span class="at">${esc(s.at)}</span>` : ''}</div>
     </div>`;
   }).join('')}</div>`;
@@ -127,12 +149,31 @@ function renderTracking(t){
 }
 
 function renderOrders(orders){
-  return orders.map(o => `<div class="card">
-    <div class="ometa"><b>訂單 ${esc(o.id)}</b><span>${esc(o.createdDate || '')}</span></div>
-    ${renderStages(o.stages)}
-    ${o.address ? `<div class="note">配送地址：${esc(o.address)}</div>` : ''}
-    ${renderTracking(o.tracking)}
-  </div>`).join('');
+  return orders.map(o => {
+    if(o.failed){
+      return `<div class="card">
+        <div class="ometa"><b>訂單 ${esc(o.id)}</b><span>${esc(o.createdDate || '')}</span></div>
+        <div class="failed">此筆安裝未能完成。請聯繫客服為您重新安排，造成不便敬請見諒。</div>
+      </div>`;
+    }
+    // 預約時間只在師傅接單後才顯示——師傅還沒接單就先報時間，臨時換人會變成失信
+    const slot = o.slot ? `<div class="slot">
+        <div class="t">預約安裝時間</div>
+        <div class="v">${esc(o.slot)}</div>
+        ${o.worker ? `<div class="w">負責師傅：${esc(o.worker)}</div>` : ''}
+        ${o.arrived ? `<span class="badge">師傅已到場</span>` : ''}
+      </div>` : '';
+    const warranty = o.warrantyEnd
+      ? `<div class="note">🛡️ 保固至 ${esc(o.warrantyEnd)}</div>` : '';
+    return `<div class="card">
+      <div class="ometa"><b>訂單 ${esc(o.id)}</b><span>${esc(o.createdDate || '')}</span></div>
+      ${renderStages(o.stages)}
+      ${slot}
+      ${o.address ? `<div class="note">安裝地址：${esc(o.address)}</div>` : ''}
+      ${warranty}
+      ${renderTracking(o.tracking)}
+    </div>`;
+  }).join('');
 }
 
 // 尚未掛到安裝單的託運單。
