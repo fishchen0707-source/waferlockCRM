@@ -647,17 +647,24 @@ function PhotoUpload({photos,setPhotos,folder}){
 }
 
 function WorkOrderModal({mode,record,warrantyIn,onClose,onSubmit}){
+  // 師傅在現場已拍照／已請客戶簽名，資料存在工單上。這裡是「客服審核」不是「重新蒐證」——
+  // 現場證據以唯讀呈現（避免誤刪），photos state 只放客服另外補充的照片，送出時兩者合併。
+  const fieldPhotos = record?.photos||[];
+  const fieldSig = record?.signature||null;
   const [photos,setPhotos]=useState([]);
   const [sig,setSig]=useState(null);
-  const [note,setNote]=useState('');
+  // 施工摘要與收費品項同樣可能已由師傅現場回報，帶入既有值；空白送出會把師傅記的金額洗成 0
+  const [note,setNote]=useState(record?.workNote||'');
   const [auditNote,setAuditNote]=useState('');
-  const [chargeRows,setChargeRows]=useState([]);
+  const [chargeRows,setChargeRows]=useState(()=>(record?.charges||[]).map(c=>({category:c.category||'',item:c.item||'',qty:c.qty??1,price:c.price??0,gift:!!c.gift})));
   const [wj,setWj]=useState(warrantyIn?'in':'out'); // in / out / in_excluded
   const [excl,setExcl]=useState('');
   const [v,setV]=useState({s1:false,s2:false,s3:false});
   const [taught,setTaught]=useState(false);
   const [receiptNo,setReceiptNo]=useState(null);
-  const [pay,setPay]=useState(warrantyIn?'free':'cash');
+  const [pay,setPay]=useState(record?.paymentMethod||(warrantyIn?'free':'cash'));
+  // 師傅現場已收款就沿用原交易，不再重新產生交易編號（避免同一筆款出現兩個編號）
+  const alreadyPaid = !!(record?.paid && record?.txnId);
   // 開票資訊（發票實際由 TipTop 開立，這裡蒐集開票需要的三欄，隨工單存檔供請款用）
   const [invType,setInvType]=useState('electronic'); // electronic 電子 / duplicate 二聯 / triplicate 三聯
   const [taxId,setTaxId]=useState('');
@@ -665,8 +672,11 @@ function WorkOrderModal({mode,record,warrantyIn,onClose,onSubmit}){
   const chargeable = wj!=='in';
   const total=chargesTotal(chargeRows);
   const submit=async()=>{
-    if(!sig){alert('請完成客戶簽名');return;}
-    if(photos.length===0){alert('請至少上傳一張現場照片');return;}
+    // 師傅已回傳的現場證據可直接採認，不要求客服重拍重簽（客戶早已離場）
+    const allPhotos=[...fieldPhotos,...photos];
+    const finalSig=fieldSig||sig;
+    if(!finalSig){alert('尚無客戶簽名：師傅未回傳簽名，請於下方補簽或請師傅重新回報');return;}
+    if(allPhotos.length===0){alert('尚無現場照片：師傅未回傳照片，請於下方補上傳');return;}
     if(mode==='repair'&&wj==='in_excluded'&&!excl.trim()){alert('「保內但不保固」需填寫原因');return;}
     if(mode==='repair'&&chargeable&&normCharges(chargeRows).length===0){alert('需收費案件請填寫收費品項');return;}
     if(mode==='install'&&!(v.s1&&v.s2&&v.s3)){alert('請完成三項驗收確認');return;}
@@ -676,8 +686,10 @@ function WorkOrderModal({mode,record,warrantyIn,onClose,onSubmit}){
     try{ const {data}=await sb.rpc('next_case_no',{p_prefix:'SR'}); rno=data; }catch(e){ rno='SR'+Date.now(); }
     setReceiptNo(rno);
     const payMethod=(mode==='repair'&&wj==='in')?'free':pay;
-    const txn=mockPayment(payMethod, total);
-    onSubmit({photos,signature:sig,note,auditNote,charges:normCharges(chargeRows),total,verify:v,taught,receiptNo:rno,warrantyJudgment:wj,excludeReason:excl.trim(),paymentMethod:txn.method,paid:txn.paid,txnId:txn.txnId,paidAt:txn.paidAt,
+    const txn=alreadyPaid
+      ? {method:record.paymentMethod||payMethod, paid:true, txnId:record.txnId, paidAt:record.paidAt}
+      : mockPayment(payMethod, total);
+    onSubmit({photos:allPhotos,signature:finalSig,note,auditNote,charges:normCharges(chargeRows),total,verify:v,taught,receiptNo:rno,warrantyJudgment:wj,excludeReason:excl.trim(),paymentMethod:txn.method,paid:txn.paid,txnId:txn.txnId,paidAt:txn.paidAt,
       invoiceType:invType,taxId:invType==='triplicate'?taxId.trim():'',invoiceTitle:invType==='triplicate'?invTitle.trim():''});
   };
   return(
@@ -730,7 +742,9 @@ function WorkOrderModal({mode,record,warrantyIn,onClose,onSubmit}){
                     style={{padding:'6px 14px',borderRadius:6,border:`1px solid ${pay===k?'var(--brand)':'var(--g200)'}`,background:pay===k?'var(--brand)':'#fff',color:pay===k?'#fff':'var(--g600)',fontSize:12,fontWeight:700,cursor:'pointer'}}>{l}</button>
                 ))}
               </div>
-              <div style={{fontSize:11.5,color:'var(--g400)',marginTop:6}}>💳 金額 ${total}；送出後將模擬完成收款並產生交易編號（之後串接金流 API）。</div>
+              {alreadyPaid
+                ? <div style={{fontSize:11.5,color:'var(--ok)',fontWeight:700,marginTop:6}}>✅ 師傅現場已收款 ${total}　交易編號 {record.txnId}（沿用原交易，不再重複產生）</div>
+                : <div style={{fontSize:11.5,color:'var(--g400)',marginTop:6}}>💳 金額 ${total}；送出後將模擬完成收款並產生交易編號（之後串接金流 API）。</div>}
             </>}
         </div>
         <div className="wo-sec"><label>🧾 開票資訊（發票由 ERP 開立，此處先記錄）</label>
@@ -749,10 +763,39 @@ function WorkOrderModal({mode,record,warrantyIn,onClose,onSubmit}){
             </div>
           )}
         </div>
-        <div className="wo-sec"><label>現場照片</label><PhotoUpload photos={photos} setPhotos={setPhotos} folder={`${mode==='install'?'installs':'repairs'}/${record?.id||'misc'}`}/></div>
+        <div className="wo-sec">
+          <label>現場照片</label>
+          {fieldPhotos.length>0&&(
+            <div style={{marginBottom:8}}>
+              <div style={{fontSize:11.5,color:'var(--ok)',fontWeight:700,marginBottom:5}}>📸 師傅現場回傳（{fieldPhotos.length} 張）— 點圖放大檢視</div>
+              <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                {fieldPhotos.map((src,i)=>(
+                  <a key={i} href={src} target="_blank" rel="noopener noreferrer" title="點開看原圖"
+                    style={{display:'block',width:74,height:74,borderRadius:6,border:'1px solid var(--g200)',
+                      backgroundImage:`url(${src})`,backgroundSize:'cover',backgroundPosition:'center'}}/>
+                ))}
+              </div>
+            </div>
+          )}
+          <div style={{fontSize:11,color:'var(--g500)',marginBottom:4}}>{fieldPhotos.length>0?'如需補充照片：':'師傅未回傳照片，請補上傳：'}</div>
+          <PhotoUpload photos={photos} setPhotos={setPhotos} folder={`${mode==='install'?'installs':'repairs'}/${record?.id||'misc'}`}/>
+        </div>
         <div className="wo-sec"><label>處理說明</label><textarea value={note} onChange={e=>setNote(e.target.value)} rows={2} style={{width:'100%',border:'1px solid var(--g200)',borderRadius:5,padding:'7px 10px',fontSize:12.5,outline:'none',resize:'vertical',fontFamily:'inherit'}} placeholder="維修 / 安裝內容摘要"/></div>
         <div className="wo-sec"><label>🔎 稽核備註（內部用，不對客戶顯示）</label><textarea value={auditNote} onChange={e=>setAuditNote(e.target.value)} rows={2} style={{width:'100%',border:'1px dashed var(--g300)',borderRadius:5,padding:'7px 10px',fontSize:12,outline:'none',resize:'vertical',fontFamily:'inherit',background:'var(--g50)'}} placeholder="內部稽核說明、異常記錄..."/></div>
-        <div className="wo-sec"><label>客戶簽名驗收</label><SignaturePad onChange={setSig}/></div>
+        <div className="wo-sec"><label>客戶簽名驗收</label>
+          {fieldSig
+            ? <div>
+                <div style={{fontSize:11.5,color:'var(--ok)',fontWeight:700,marginBottom:5}}>✍️ 客戶已於現場簽名（師傅回傳）</div>
+                <a href={fieldSig} target="_blank" rel="noopener noreferrer" title="點開看原圖">
+                  <img src={fieldSig} alt="客戶簽名"
+                    style={{width:'100%',maxHeight:120,objectFit:'contain',border:'1px solid var(--g200)',borderRadius:6,background:'#F8FAFC',display:'block'}}/>
+                </a>
+              </div>
+            : <div>
+                <div style={{fontSize:11.5,color:'var(--warn)',fontWeight:700,marginBottom:5}}>⚠️ 師傅未回傳簽名，如為客服代結案請於此補簽</div>
+                <SignaturePad onChange={setSig}/>
+              </div>}
+        </div>
         {receiptNo&&<div style={{marginTop:8,padding:'6px 10px',background:'#EFF6FF',borderRadius:6,fontSize:11.5,color:'var(--accent)',fontWeight:700}}>📋 簽收單號：{receiptNo}</div>}
 
         <div className="mact"><button className="cancel" onClick={onClose}>取消</button><button className="confirm" onClick={submit}>{mode==='install'?'確認驗收 + 保固登錄':'簽收結案'}</button></div>
