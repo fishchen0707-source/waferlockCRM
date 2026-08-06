@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>五大 Agent 串接圖 — 中間兩格怎麼接起來</title>
+<style>
+:root{--brand:#0F2744;--brand2:#1E3A5F;--purple:#7C3AED;--purple2:#A78BFA;--orange:#EA580C;--orange2:#FB923C;
+  --ok:#10B981;--err:#EF4444;--warn:#F59E0B;
+  --g50:#F8FAFC;--g100:#F1F5F9;--g200:#E2E8F0;--g300:#CBD5E1;--g400:#94A3B8;--g500:#64748B;--g600:#475569;--g700:#334155;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Noto Sans TC',system-ui,-apple-system,"Microsoft JhengHei",sans-serif;background:#F0F4F8;color:var(--g700);
+  line-height:1.65;padding-bottom:60px;-webkit-font-smoothing:antialiased;}
+header{background:var(--brand);color:#fff;padding:16px 24px;box-shadow:0 2px 10px rgba(15,39,68,.2);}
+header h1{font-size:18px;font-weight:800;}
+header .sub{font-size:12px;opacity:.72;margin-top:3px;}
+.wrap{max-width:1180px;margin:0 auto;padding:20px 16px;}
+.key{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;border-radius:14px;padding:20px 24px;margin-bottom:16px;}
+.key h2{font-size:14px;color:#93C5FD;margin-bottom:8px;}
+.key .big{font-size:20px;font-weight:800;line-height:1.5;}
+.key .note{font-size:12.5px;opacity:.85;margin-top:10px;line-height:1.85;}
+.card{background:#fff;border-radius:14px;padding:18px;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:16px;overflow-x:auto;}
+.card h3{font-size:15px;color:var(--brand);margin-bottom:4px;}
+.card .cap{font-size:11.5px;color:var(--g500);margin-bottom:12px;}
+svg{display:block;min-width:1080px;}
+.sec-t{font-size:16px;font-weight:800;color:var(--brand);margin:24px 0 10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.sec-t .hint{font-size:11.5px;font-weight:400;color:var(--g500);}
+table{border-collapse:collapse;width:100%;font-size:12.5px;background:#fff;}
+th,td{border:1px solid var(--g200);padding:9px 10px;text-align:left;vertical-align:top;}
+th{background:var(--g50);color:var(--g600);font-weight:800;font-size:11.5px;}
+td.n{text-align:center;font-weight:800;color:#fff;width:34px;}
+td.n.now{background:var(--orange);}
+td.n.later{background:var(--g400);}
+td.k{font-weight:700;color:var(--brand);width:19%;}
+.tag{display:inline-block;font-size:10px;font-weight:800;padding:2px 8px;border-radius:8px;white-space:nowrap;}
+.tag.now{background:#FFEDD5;color:#9A3412;}
+.tag.erp{background:#F1F5F9;color:var(--g500);}
+.tag.acct{background:#EDE9FE;color:var(--purple);}
+.grp{background:var(--g50);font-weight:800;color:var(--brand);font-size:12.5px;}
+.gate{background:#FFF7ED;border:2px solid #FDBA74;border-radius:12px;padding:16px 20px;margin-bottom:14px;}
+.gate h3{font-size:14.5px;color:#9A3412;margin-bottom:6px;}
+.gate p{font-size:12.5px;color:#9A3412;line-height:1.85;}
+.gate .fix{background:#FFEDD5;border-radius:8px;padding:11px 15px;margin-top:9px;font-size:12.5px;color:#7C2D12;line-height:1.8;}
+.order{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+@media(max-width:820px){.order{grid-template-columns:1fr;}}
+.ph{background:#fff;border-radius:12px;padding:16px 18px;box-shadow:0 1px 3px rgba(0,0,0,.06);border-top:4px solid var(--g300);}
+.ph.p1{border-top-color:var(--orange);} .ph.p2{border-top-color:var(--purple);} .ph.p3{border-top-color:var(--g400);}
+.ph h4{font-size:14px;color:var(--brand);margin-bottom:3px;}
+.ph .why{font-size:11.5px;color:var(--g500);margin-bottom:8px;line-height:1.7;}
+.ph ul{list-style:none;font-size:12.5px;}
+.ph li{padding:3px 0 3px 17px;position:relative;line-height:1.6;color:var(--g600);}
+.ph li:before{content:'▸';position:absolute;left:2px;color:var(--g400);}
+.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:11.5px;color:var(--g600);margin-bottom:10px;}
+.legend span{display:flex;align-items:center;gap:6px;}
+.sw{width:26px;height:0;border-top-width:3px;display:inline-block;}
+@media print{body{background:#fff;}.card{box-shadow:none;border:1px solid var(--g200);}}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🔗 五大 Agent 串接圖 —— 中間兩格怎麼接起來</h1>
+  <div class="sub">AI 決策 Agent（揀料出貨）與 AI 服務 Agent（安裝驗收）的下游流程接線規格</div>
+</header>
+
+<div class="wrap">
+
+  <div class="key">
+    <h2>先講結論</h2>
+    <div class="big">要接的 11 條線裡，有 8 條不需要等 ERP。<br>現在就能把「服務流」整段串起來。</div>
+    <div class="note">
+      五大 Agent 本來就是一條鏈：<b>客服受理 → 會員建單 → 決策揀料出貨 → 服務派工安裝 → 保固再購</b>。
+      中間兩格沒接下游，等於「從訂單到交付」這一段是斷的——這正是現況圖痛點 3 說的「前台互動與 ERP 交易斷鏈」。<br>
+      真正卡 ERP 的只有<b>訂單流</b>那幾條（庫存、交期、出貨確認）；<b>服務流</b>（派工、回報、驗收、保固起算、代收核銷）完全不碰 ERP，可以先接。
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>串接後的資料流</h3>
+    <div class="cap">橘色虛線＝本次要接的線（不需 ERP）　灰色虛線＝需要 ERP 或外部帳號　實線＝原本就有</div>
+    <div class="legend">
+      <span><i class="sw" style="border-top:3px solid #7C3AED"></i> 原有</span>
+      <span><i class="sw" style="border-top:3px dashed #EA580C"></i> 要接・可立即做</span>
+      <span><i class="sw" style="border-top:3px dashed #94A3B8"></i> 要接・卡 ERP／外部帳號</span>
+    </div>
+
+    <svg viewBox="0 0 1120 560" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="aP" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto">
+          <path d="M0,0 L8,3 L0,6 z" fill="#7C3AED"/></marker>
+        <marker id="aO" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto">
+          <path d="M0,0 L8,3 L0,6 z" fill="#EA580C"/></marker>
+        <marker id="aG" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto">
+          <path d="M0,0 L8,3 L0,6 z" fill="#94A3B8"/></marker>
+      </defs>
+
+      <!-- 上排：客戶／通路、供應商 -->
+      <rect x="40" y="24" width="418" height="46" rx="9" fill="#B45309"/>
+      <text x="249" y="53" text-anchor="middle" fill="#fff" font-size="15" font-weight="700">客戶 ／ 全通路（B2B＋B2C）</text>
+
+      <rect x="478" y="24" width="200" height="46" rx="9" fill="#B45309"/>
+      <text x="578" y="53" text-anchor="middle" fill="#fff" font-size="15" font-weight="700">供應商</text>
+
+      <!-- Customer 360 -->
+      <rect x="40" y="112" width="1040" height="44" rx="9" fill="#EDE9FE" stroke="#A78BFA" stroke-width="2"/>
+      <text x="560" y="140" text-anchor="middle" fill="#5B21B6" font-size="14" font-weight="800">Customer 360 Data Platform（五大 Agent 資料互通）</text>
+
+      <!-- 五大 Agent -->
+      <!-- A1 客服 -->
+      <rect x="40" y="200" width="196" height="82" rx="10" fill="#7C3AED"/>
+      <text x="138" y="228" text-anchor="middle" fill="#fff" font-size="14" font-weight="800">AI 客服 Agent</text>
+      <text x="138" y="250" text-anchor="middle" fill="#DDD6FE" font-size="11.5">售前諮詢・報修受理</text>
+      <text x="138" y="268" text-anchor="middle" fill="#DDD6FE" font-size="11">24 小時・知識檢索</text>
+      <!-- A2 會員 -->
+      <rect x="252" y="200" width="196" height="82" rx="10" fill="#7C3AED"/>
+      <text x="350" y="228" text-anchor="middle" fill="#fff" font-size="14" font-weight="800">AI 會員 Agent</text>
+      <text x="350" y="250" text-anchor="middle" fill="#DDD6FE" font-size="11.5">成交開單</text>
+      <text x="350" y="268" text-anchor="middle" fill="#DDD6FE" font-size="11">會員綁定・訂單建檔</text>
+      <!-- A3 決策（要接） -->
+      <rect x="464" y="200" width="196" height="82" rx="10" fill="#fff" stroke="#EA580C" stroke-width="2.5" stroke-dasharray="7 4"/>
+      <text x="562" y="228" text-anchor="middle" fill="#9A3412" font-size="14" font-weight="800">AI 決策 Agent</text>
+      <text x="562" y="250" text-anchor="middle" fill="#B45309" font-size="11.5">揀料出貨</text>
+      <text x="562" y="268" text-anchor="middle" fill="#B45309" font-size="11">備品・訂單・交期</text>
+      <!-- A4 服務（要接） -->
+      <rect x="676" y="200" width="196" height="82" rx="10" fill="#fff" stroke="#EA580C" stroke-width="2.5" stroke-dasharray="7 4"/>
+      <text x="774" y="228" text-anchor="middle" fill="#9A3412" font-size="14" font-weight="800">AI 服務 Agent</text>
+      <text x="774" y="250" text-anchor="middle" fill="#B45309" font-size="11.5">安裝驗收・派工</text>
+      <text x="774" y="268" text-anchor="middle" fill="#B45309" font-size="11">技師回報・驗收標準化</text>
+      <!-- A5 保固 -->
+      <rect x="888" y="200" width="192" height="82" rx="10" fill="#7C3AED"/>
+      <text x="984" y="228" text-anchor="middle" fill="#fff" font-size="14" font-weight="800">AI 保固／再購</text>
+      <text x="984" y="250" text-anchor="middle" fill="#DDD6FE" font-size="11.5">保固維修</text>
+      <text x="984" y="268" text-anchor="middle" fill="#DDD6FE" font-size="11">狀態判讀・售後推播</text>
+
+      <!-- Customer360 垂直連線 -->
+      <line x1="138" y1="156" x2="138" y2="200" stroke="#A78BFA" stroke-width="2"/>
+      <line x1="350" y1="156" x2="350" y2="200" stroke="#A78BFA" stroke-width="2"/>
+      <line x1="562" y1="156" x2="562" y2="200" stroke="#A78BFA" stroke-width="2"/>
+      <line x1="774" y1="156" x2="774" y2="200" stroke="#A78BFA" stroke-width="2" stroke-dasharray="6 4"/>
+      <line x1="984" y1="156" x2="984" y2="200" stroke="#A78BFA" stroke-width="2"/>
+      <circle cx="774" cy="178" r="11" fill="#EA580C"/><text x="774" y="182" text-anchor="middle" fill="#fff" font-size="11" font-weight="800">7</text>
+
+      <!-- 客戶 → A1 -->
+      <line x1="138" y1="70" x2="138" y2="108" stroke="#7C3AED" stroke-width="2.5" marker-end="url(#aP)"/>
+
+      <!-- A3 → 供應商 -->
+      <line x1="578" y1="196" x2="578" y2="160" stroke="#EA580C" stroke-width="2.5" stroke-dasharray="6 4"/>
+      <line x1="578" y1="108" x2="578" y2="74" stroke="#EA580C" stroke-width="2.5" stroke-dasharray="6 4" marker-end="url(#aO)"/>
+      <circle cx="600" cy="92" r="11" fill="#EA580C"/><text x="600" y="96" text-anchor="middle" fill="#fff" font-size="11" font-weight="800">3</text>
+
+      <!-- Agent 之間橫向連線 -->
+      <line x1="236" y1="241" x2="252" y2="241" stroke="#7C3AED" stroke-width="3" marker-end="url(#aP)"/>
+      <line x1="448" y1="241" x2="464" y2="241" stroke="#EA580C" stroke-width="3" stroke-dasharray="6 4" marker-end="url(#aO)"/>
+      <circle cx="456" cy="316" r="11" fill="#EA580C"/><text x="456" y="320" text-anchor="middle" fill="#fff" font-size="11" font-weight="800">1</text>
+      <line x1="456" y1="284" x2="456" y2="305" stroke="#EA580C" stroke-width="1.5" stroke-dasharray="3 3"/>
+
+      <line x1="660" y1="241" x2="676" y2="241" stroke="#94A3B8" stroke-width="3" stroke-dasharray="6 4" marker-end="url(#aG)"/>
+      <circle cx="668" cy="316" r="11" fill="#94A3B8"/><text x="668" y="320" text-anchor="middle" fill="#fff" font-size="11" font-weight="800">4</text>
+      <line x1="668" y1="284" x2="668" y2="305" stroke="#94A3B8" stroke-width="1.5" stroke-dasharray="3 3"/>
+
+      <line x1="872" y1="241" x2="888" y2="241" stroke="#EA580C" stroke-width="3" stroke-dasharray="6 4" marker-end="url(#aO)"/>
+      <circle cx="880" cy="316" r="11" fill="#EA580C"/><text x="880" y="320" text-anchor="middle" fill="#fff" font-size="11" font-weight="800">9</text>
+      <line x1="880" y1="284" x2="880" y2="305" stroke="#EA580C" stroke-width="1.5" stroke-dasharray="3 3"/>
+
+      <!-- A1 → A4 跨接（報修自動開單）走下方繞行 -->
+      <path d="M 100 282 L 100 350 L 700 350 L 700 286" fill="none" stroke="#EA580C" stroke-width="2.5" stroke-dasharray="6 4" marker-end="url(#aO)"/>
+      <circle cx="400" cy="350" r="11" fill="#EA580C"/><text x="400" y="354" text-anchor="middle" fill="#fff" font-size="11" font-weight="800">6</text>
+      <text x="424" y="372" fill="#9A3412" font-size="11" font-weight="700">報修需求自動開單</text>
+
+      <!-- 下排 -->
+      <rect x="464" y="404" width="196" height="52" rx="9" fill="#F1F5F9" stroke="#CBD5E1" stroke-width="2"/>
+      <text x="562" y="428" text-anchor="middle" fill="#64748B" font-size="13" font-weight="800">TIPTOP ERP</text>
+      <text x="562" y="446" text-anchor="middle" fill="#94A3B8" font-size="10.5">庫存・交期・出貨（本期未串）</text>
+
+      <rect x="676" y="404" width="196" height="52" rx="9" fill="#B45309"/>
+      <text x="774" y="428" text-anchor="middle" fill="#fff" font-size="13" font-weight="800">師傅 ／ 配合鎖店</text>
+      <text x="774" y="446" text-anchor="middle" fill="#FDE68A" font-size="10.5">全台約 140 位</text>
+
+      <rect x="888" y="404" width="192" height="52" rx="9" fill="#1E40AF"/>
+      <text x="984" y="428" text-anchor="middle" fill="#fff" font-size="13" font-weight="800">金流 ／ 財務</text>
+      <text x="984" y="446" text-anchor="middle" fill="#BFDBFE" font-size="10.5">代收核銷・月結對帳</text>
+
+      <rect x="40" y="404" width="196" height="52" rx="9" fill="#B45309"/>
+      <text x="138" y="428" text-anchor="middle" fill="#fff" font-size="13" font-weight="800">實體員工</text>
+      <text x="138" y="446" text-anchor="middle" fill="#FDE68A" font-size="10.5">決策・例外・稽核</text>
+
+      <!-- ERP → A3 -->
+      <line x1="540" y1="400" x2="540" y2="286" stroke="#94A3B8" stroke-width="2.5" stroke-dasharray="6 4" marker-end="url(#aG)"/>
+      <circle cx="518" cy="318" r="11" fill="#94A3B8"/><text x="518" y="322" text-anchor="middle" fill="#fff" font-size="11" font-weight="800">2</text>
+
+      <!-- A4 ↔ 師傅 -->
+      <line x1="750" y1="286" x2="750" y2="400" stroke="#EA580C" stroke-width="2.5" stroke-dasharray="6 4" marker-end="url(#aO)"/>
+      <line x1="800" y1="400" x2="800" y2="286" stroke="#EA580C" stroke-width="2.5" stroke-dasharray="6 4" marker-end="url(#aO)"/>
+      <circle cx="726" cy="376" r="11" fill="#EA580C"/><text x="726" y="380" text-anchor="middle" fill="#fff" font-size="11" font-weight="800">8</text>
+
+      <!-- 師傅 → 金流（代收繳回） -->
+      <line x1="872" y1="430" x2="888" y2="430" stroke="#EA580C" stroke-width="2.5" stroke-dasharray="6 4" marker-end="url(#aO)"/>
+      <circle cx="880" cy="482" r="11" fill="#EA580C"/><text x="880" y="486" text-anchor="middle" fill="#fff" font-size="11" font-weight="800">10</text>
+      <line x1="880" y1="458" x2="880" y2="471" stroke="#EA580C" stroke-width="1.5" stroke-dasharray="3 3"/>
+
+      <!-- 師傅 → A3 備品 -->
+      <path d="M 676 430 L 620 430 L 620 300 L 620 286" fill="none" stroke="#94A3B8" stroke-width="2.5" stroke-dasharray="6 4" marker-end="url(#aG)"/>
+      <circle cx="642" cy="376" r="11" fill="#94A3B8"/><text x="642" y="380" text-anchor="middle" fill="#fff" font-size="11" font-weight="800">5</text>
+
+      <!-- A4 → 實體員工（逾時警示廣播） -->
+      <path d="M 700 286 L 700 490 L 138 490 L 138 460" fill="none" stroke="#EA580C" stroke-width="2.5" stroke-dasharray="6 4" marker-end="url(#aO)"/>
+      <circle cx="420" cy="490" r="11" fill="#EA580C"/><text x="420" y="494" text-anchor="middle" fill="#fff" font-size="11" font-weight="800">11</text>
+      <text x="444" y="510" fill="#9A3412" font-size="11" font-weight="700">逾時警示・廣播全體客服</text>
+
+      <!-- A1 ↔ 實體員工 轉真人 -->
+      <line x1="138" y1="282" x2="138" y2="400" stroke="#7C3AED" stroke-width="2.5" marker-end="url(#aP)"/>
+      <text x="152" y="326" fill="#6D28D9" font-size="11" font-weight="700">轉真人</text>
+    </svg>
+  </div>
+
+  <div class="gate">
+    <h3>⚠️ 第 4 條「出貨確認」是唯一擋住服務流的那道閘門——但它有過渡解法</h3>
+    <p>
+      安裝派工必須先確認貨已出（不然師傅到現場沒東西可裝）。這個確認資料在 ERP 裡，而 ERP 本期不串。
+      表面上看，這會讓整條服務流卡住。
+    </p>
+    <div class="fix">
+      <b>但我方 MVP 現在就是這樣做的：</b>安裝單有一道「ERP 出貨閘門」——助理手動填入 TIPTOP 出貨單號與日期後，
+      排程派工才解鎖。<b>先照這個做法，人工填單號當橋接</b>，服務流就能立刻整段串起來；等 ERP 串好，同一個欄位改成自動寫入即可，
+      <b>流程不用重做</b>。這是「不等 ERP 也能上線」的關鍵。
+    </div>
+  </div>
+
+  <div class="sec-t">📋 11 條連線規格<span class="hint">每條寫明：什麼事觸發 → 傳什麼 → 對方做什麼</span></div>
+  <table>
+    <tr><th style="width:34px">#</th><th style="width:19%">連線</th><th>觸發 → 傳遞 → 對方做什麼</th><th style="width:130px">前置條件</th></tr>
+
+    <tr><td colspan="4" class="grp">訂單流 —— AI 決策 Agent（揀料出貨）的上下游</td></tr>
+    <tr><td class="n now">1</td><td class="k">AI 會員 → AI 決策</td>
+      <td>訂單建檔完成 → 傳品項、數量、交期需求、安裝地址 → 決策 Agent 產生揀料需求並判斷可否如期出貨</td>
+      <td><span class="tag now">可立即做</span></td></tr>
+    <tr><td class="n later">2</td><td class="k">ERP → AI 決策</td>
+      <td>查詢當下 → 回傳即時庫存、預計進貨日、交期 → 決策 Agent 判斷缺料與否</td>
+      <td><span class="tag erp">需 ERP 唯讀</span></td></tr>
+    <tr><td class="n now">3</td><td class="k">AI 決策 → 供應商</td>
+      <td>判定缺料 → 送出採購/製造需求 → 供應商回交期，寫回訂單</td>
+      <td><span class="tag now">可立即做</span></td></tr>
+    <tr><td class="n later">4</td><td class="k">AI 決策 → AI 服務<br>（安裝閘門）</td>
+      <td>出貨完成（出貨單號＋日期）→ 傳出貨資訊 → 服務 Agent 才解鎖「可排安裝」</td>
+      <td><span class="tag erp">需 ERP</span><br><span class="tag now">可人工橋接</span></td></tr>
+    <tr><td class="n later">5</td><td class="k">師傅／鎖店 → AI 決策</td>
+      <td>現場發現備品不足 → 回報缺件與規格 → 決策 Agent 補料並<b>同步通知客服改期</b>（北區痛點：鎖店沒備品退回，客服不知情）</td>
+      <td><span class="tag acct">需外部帳號</span></td></tr>
+
+    <tr><td colspan="4" class="grp">服務流 —— AI 服務 Agent（安裝驗收）的上下游　<span style="font-weight:400;color:#9A3412">這一整組都不需要 ERP</span></td></tr>
+    <tr><td class="n now">6</td><td class="k">AI 客服 → AI 服務</td>
+      <td>受理報修並判定需到府 → 傳客戶、地址、故障描述、機種 → 服務 Agent 自動開派工單進未處理池</td>
+      <td><span class="tag now">可立即做</span></td></tr>
+    <tr><td class="n now">7</td><td class="k">Customer 360 ↔ AI 服務</td>
+      <td>開單當下 → 帶入客戶主檔、產品序號、<b>保固狀態</b>、歷次維修 → 服務 Agent 據以判斷派自有工務或委鎖店</td>
+      <td><span class="tag now">可立即做</span></td></tr>
+    <tr><td class="n now">8</td><td class="k">AI 服務 ↔ 師傅端</td>
+      <td>去程：派工單（時段、地址、機種、<b>預估費用</b>）→ 師傅確認<br>回程：到場、施工、照片、簽名、收費品項、保固判定 → 寫回工單</td>
+      <td><span class="tag now">可立即做</span></td></tr>
+    <tr><td class="n now">9</td><td class="k">AI 服務 → AI 保固</td>
+      <td>驗收完成 → 傳安裝日、序號、<b>保固起算基準</b> → 保固 Agent 建立保固並排定到期提醒與再購推播</td>
+      <td><span class="tag now">可立即做</span></td></tr>
+    <tr><td class="n now">10</td><td class="k">師傅 → 金流／財務</td>
+      <td>現場代收 → 記錄金額與方式（<b>現金為預設</b>）→ 進入「代收保管中」→ 繳回時財務簽收核銷，未繳回可追蹤</td>
+      <td><span class="tag now">可立即做</span></td></tr>
+    <tr><td class="n now">11</td><td class="k">AI 服務 → 全體客服</td>
+      <td>派單後逾時未接、或師傅退回 → <b>廣播給所有客服</b>（非只通知承辦人，他可能在外面跑）→ 客服介入改派</td>
+      <td><span class="tag now">可立即做</span></td></tr>
+  </table>
+
+  <div class="sec-t">🗓️ 建議接線順序</div>
+  <div class="order">
+    <div class="ph p1">
+      <h4>先接：服務流（6→7→8→9→11）</h4>
+      <div class="why">完全不碰 ERP、不需外部帳號。接完就是一條可運作的「報修→派工→回報→驗收→保固」閉環，也直接解掉中區與北區訪談的主要痛點。</div>
+      <ul>
+        <li>⑥ 報修自動開單</li>
+        <li>⑦ 帶入客戶與保固資訊</li>
+        <li>⑧ 派工含費用／師傅回報</li>
+        <li>⑨ 驗收 → 保固起算</li>
+        <li>⑪ 逾時警示廣播</li>
+      </ul>
+    </div>
+    <div class="ph p2">
+      <h4>再接：金流與訂單前段（10→1→3）</h4>
+      <div class="why">代收核銷不依賴 ERP，可跟服務流一起做。訂單觸發揀料只需要 Agent 之間傳訊，也不必等 ERP。</div>
+      <ul>
+        <li>⑩ 代收保管 → 繳回核銷</li>
+        <li>① 訂單成立 → 觸發揀料</li>
+        <li>③ 缺料 → 供應商</li>
+      </ul>
+    </div>
+    <div class="ph p3">
+      <h4>最後：ERP 與外部帳號（2→4→5）</h4>
+      <div class="why">依賴外部系統與帳號體系。第 4 條可先用人工填出貨單號橋接，不阻擋前面兩批。</div>
+      <ul>
+        <li>② ERP 庫存交期唯讀</li>
+        <li>④ 出貨確認自動化</li>
+        <li>⑤ 鎖店回報備品（需帳號）</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="sec-t">📌 畫這張圖時要一起改的三件事</div>
+  <table>
+    <tr><th style="width:22%">項目</th><th>說明</th></tr>
+    <tr><td class="k">兩格改成「建置中」不是灰</td>
+      <td>灰色在圖例裡對應「非本計畫」，容易被誤讀成排除在外。建議改為<b>虛線外框＋「本期串接」標記</b>，語意才對得上。</td></tr>
+    <tr><td class="k">保固起算不是單一基準</td>
+      <td>第 ⑨ 條要傳的是「保固<b>起算基準</b>」而非固定日期——零售用登錄日、經銷用出貨日、合約案用使照日、分批出貨用大貨日。北區訪談已否定「統一登錄制」。</td></tr>
+    <tr><td class="k">140 位師傅要落成名冊</td>
+      <td>第 ⑤、⑧ 條都以師傅端為節點，但中區訪談指出公司層級無完整外包師傅名冊。名冊不建，這兩條接不上；建了則同時是補助案「帶動中小微企業導入」的現成名單。</td></tr>
+  </table>
+
+</div>
+</body>
+</html>
