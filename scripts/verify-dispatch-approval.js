@@ -29,13 +29,16 @@ const appended = [];
 function makeSheet(name, head, dataRows, headerRow) {
   headerRow = headerRow || 2;
   const grid = [];
-  for (let i = 1; i < headerRow; i++) grid.push(head.map(() => ''));
-  grid.push(head.slice());
-  (dataRows || []).forEach(r => grid.push(r));
+  if (head) {                                   // head=null：全空分頁（insertSheet 用）
+    for (let i = 1; i < headerRow; i++) grid.push(head.map(() => ''));
+    grid.push(head.slice());
+    (dataRows || []).forEach(r => grid.push(r));
+  }
   return {
     _name: name, _grid: grid,
     getName: () => name,
-    getLastColumn: () => head.length,
+    // 由 grid 實算，動態建立的分頁（出貨明細）appendRow 之後才有欄寬
+    getLastColumn: () => grid.reduce((m, r) => Math.max(m, (r || []).length), 0),
     getLastRow: () => grid.length,
     setFrozenRows: () => {},
     appendRow: r => { appended.push({ sheet: name, row: r }); grid.push(r); },
@@ -60,7 +63,7 @@ let SHEETS = [];
 const ss = {
   getSheets: () => SHEETS,
   getSheetByName: n => SHEETS.find(s => s._name === n) || null,
-  insertSheet: n => { const s = makeSheet(n, [], [], 1); s._grid = []; SHEETS.push(s); return s; },
+  insertSheet: n => { const s = makeSheet(n, null); SHEETS.push(s); return s; },
 };
 const sandbox = {
   PropertiesService: { getScriptProperties: () => ({ getProperty: k => (k in props ? props[k] : null) }) },
@@ -639,6 +642,166 @@ ok(G.codeOf_('先寄未裝') === '', '非單號格式應取不到代碼');
   ok(calls === 0, '退回不可通知助理，實際發了 ' + calls + ' 次');
 
   sandbox.UrlFetchApp.fetch = origFetch;
+})();
+
+console.log('【13】助理出貨頁與出貨登錄');
+(function () {
+  props.DISPATCH_SHEET_NAME = '*';
+  props.DISPATCH_SUB_APPROVERS = 'sub@waferlock.com';
+  props.DISPATCH_BOSS_APPROVERS = 'boss@waferlock.com';
+  props.DISPATCH_ASSISTANTS = 'vivi@waferlock.com, wendy@waferlock.com';
+  props.DISPATCH_WAREHOUSE_WEBHOOK = 'https://example.test/hook';
+
+  const origFetch = sandbox.UrlFetchApp.fetch;
+  let sent = [];
+  sandbox.UrlFetchApp.fetch = (u, o) => {
+    sent.push(String((o && o.payload) || ''));
+    return { getResponseCode: () => 200, getContentText: () => 'ok' };
+  };
+  const asUser = e => { sandbox.Session.getActiveUser = () => ({ getEmail: () => e }); };
+
+  // 業務分頁：一列已核准、一列未核准
+  const head = HEADS['零售-Sammi'];
+  const mkRow = (no, approval) => {
+    const r = head.map(() => '');
+    r[0] = new Date(2026, 7, 5); r[1] = no; r[2] = '阿明'; r[3] = '王小姐';
+    r[4] = '竹北案'; r[5] = 'L396'; r[6] = 3;
+    r[head.indexOf('主管KEY英文名押日期')] = approval;
+    return r;
+  };
+  const reset = () => {
+    SHEETS = [makeSheet('零售-Sammi', head, [
+      mkRow('LS-260805-01', '✅ boss 2026-08-05'),
+      mkRow('LS-260805-02', ''),
+    ], 2), rosterSheet];
+    CACHE = {}; appended.length = 0; sent = [];
+  };
+
+  // ── 待出貨清單：只有已核准的會進來 ──
+  reset();
+  let rows = G.getShippable_();
+  ok(rows.length === 1, '待出貨清單應只有 1 筆已核准的，實得 ' + rows.length);
+  ok(rows[0].orderNo === 'LS-260805-01', '應是已核准的那筆');
+  ok(rows[0].customer === '王小姐' && rows[0].project === '竹北案',
+     '待出貨清單要帶客戶與案名，否則助理還是得回試算表找');
+
+  // 「核准」二字不算核准——簽核欄是自由文字，只認 ✅ 前綴
+  ok(G.isApproved_('✅ boss') === true, '✅ 開頭視為已核准');
+  ok(G.isApproved_('核准') === false, '純文字「核准」不可視為已核准（舊資料是手打的）');
+  ok(G.isApproved_('❌ 退回：型號錯') === false, '退回不可視為已核准');
+
+  // ── 權限：不在助理名單就不能寫 ──
+  reset();
+  asUser('someone@waferlock.com');
+  let r = G.submitShipment({ shipNo: 'W5501-260807001', items: 'L396 *1' });
+  ok(!r.ok && r.message.indexOf('助理名單') >= 0, '非助理應被擋下｜' + r.message);
+  ok(appended.length === 0, '被擋下時不可寫入任何列');
+  ok(sent.length === 0, '被擋下時不可發通知');
+
+  // ── 必填 ──
+  asUser('vivi@waferlock.com');
+  reset();
+  ok(!G.submitShipment({ items: 'x' }).ok, '缺出貨單號應失敗');
+  ok(!G.submitShipment({ shipNo: 'W5501-1' }).ok, '缺出貨品項應失敗');
+  ok(appended.length === 0, '必填未過時不可寫入');
+
+  // ── 正常登錄 ──
+  reset();
+  r = G.submitShipment({
+    shipNo: 'W5501-260807001', orderId: 'W5301-260807001',
+    dispatchNo: 'LS-260805-01', customer: '王小姐', project: '竹北案',
+    items: 'L396-1E17E1 *1', toName: '宇泰鎖印 李建男',
+    toPhone: '0912345678', toAddr: '新竹市光復路一段1號',
+    invoice: '三聯', note: '不附出貨單',
+  });
+  ok(r.ok, '助理登錄出貨應成功｜' + r.message);
+
+  const shipSheet = SHEETS.find(s => s._name === '出貨明細');
+  ok(!!shipSheet, '出貨明細分頁應自動建立');
+  const sHead = shipSheet._grid[0];
+  const at = n => sHead.indexOf(n);
+  const line = appended.filter(a => a.sheet === '出貨明細').pop().row;
+  ok(line[at('出貨單號')] === 'W5501-260807001', '出貨單號應寫在出貨單號欄');
+  ok(line[at('貨指寄-地址')] === '新竹市光復路一段1號',
+     '貨指寄-地址必須落到正確欄位——這是目前唯一沒進任何系統的關鍵資訊');
+  ok(line[at('登錄人')] === 'vivi@waferlock.com',
+     '登錄人取自 Google 帳號，不可由表單傳入');
+  ok(line[at('倉庫核單狀態')] === '待核', '新登錄的預設狀態應為待核');
+
+  // 表頭定位而非固定順序：插一欄之後仍要寫對位置
+  ok(at('出貨單號') >= 0 && at('發票別') >= 0, '出貨明細表頭應含全部欄位');
+
+  // ── 回寫業務分頁 ──
+  const biz = SHEETS.find(s => s._name === '零售-Sammi');
+  const backCol = head.indexOf('10999沖帳出貨單號');
+  ok(biz._grid[2][backCol] === 'W5501-260807001',
+     '出貨單號應回寫業務分頁，讓業務在看慣的地方也看得到');
+
+  // ── 通知倉庫 ──
+  ok(sent.length === 1, '登錄成功應通知倉庫一次，實際 ' + sent.length + ' 次');
+  ok(sent[0].indexOf('W5501-260807001') >= 0, '通知內容應含出貨單號');
+  ok(sent[0].indexOf('新竹市光復路一段1號') >= 0,
+     '通知內容應含貨指寄地址，倉庫才知道寄哪裡');
+
+  // ── 已登錄過的不再出現在待出貨 ──
+  CACHE = {};
+  rows = G.getShippable_();
+  ok(rows.length === 0, '已登錄出貨的發包單不應再出現在待出貨清單，實得 ' + rows.length);
+
+  // ── 重複出貨單號 ──
+  sent = []; const before = appended.length;
+  r = G.submitShipment({ shipNo: 'W5501-260807001', items: 'L396 *1' });
+  ok(!r.ok && r.message.indexOf('已經登錄過') >= 0, '重複出貨單號應被擋｜' + r.message);
+  ok(appended.length === before, '重複時不可再寫一列');
+  ok(sent.length === 0, '重複時不可再通知倉庫');
+
+  // ── 沒有發包單號也要能登錄（約一半的出貨是這種） ──
+  sent = [];
+  r = G.submitShipment({
+    shipNo: 'W5506-260807009', items: '弱電料件 *20',
+    toName: '倉庫自取', invoice: '電子發票',
+  });
+  ok(r.ok, '沒有發包單號的料件出貨必須能登錄，否則這張表只涵蓋一半｜' + r.message);
+  const l2 = appended.filter(a => a.sheet === '出貨明細').pop().row;
+  ok(l2[at('發包單號')] === '', '無發包單時該欄留空，留空是正常狀態不是漏填');
+  ok(sent.length === 1, '無發包單的出貨一樣要通知倉庫');
+
+  // ── 出貨頁畫面 ──
+  reset();
+  asUser('vivi@waferlock.com');
+  const html = G.renderShipPage_('vivi@waferlock.com', G.rolesFor_('vivi@waferlock.com'))._h;
+  ok(html.indexOf('submitShipment') >= 0, '出貨頁應呼叫 submitShipment');
+  ok(html.indexOf('LS-260805-01') >= 0, '出貨頁應列出待出貨的發包單號');
+  ok(html.indexOf('LS-260805-02') < 0, '未核准的不可出現在出貨頁');
+  ok(html.indexOf('尚未設定 DISPATCH_ASSISTANTS') < 0, '已設名單就不該顯示警告');
+  INVOICE_CHECK: {
+    ok(html.indexOf('三聯') >= 0 && html.indexOf('出貨待驗無發票') >= 0,
+       '發票別下拉應含全部選項');
+  }
+
+  // 沒設助理名單 → 開放但要警告，不可靜默放行
+  delete props.DISPATCH_ASSISTANTS;
+  CACHE = {};
+  const roles2 = G.rolesFor_('anyone@waferlock.com');
+  ok(roles2.assistant === true, '未設名單時應開放（否則沒人進得去）');
+  ok(roles2.assistantUnrestricted === true, '未設名單必須標記，畫面要示警');
+  const html2 = G.renderShipPage_('anyone@waferlock.com', roles2)._h;
+  ok(html2.indexOf('尚未設定 DISPATCH_ASSISTANTS') >= 0, '未設名單時畫面應顯示警告');
+  props.DISPATCH_ASSISTANTS = 'vivi@waferlock.com';
+
+  // ── ?page= 不是權限依據 ──
+  asUser('outsider@waferlock.com');
+  props.DISPATCH_ASSISTANTS = 'vivi@waferlock.com';
+  CACHE = {};
+  const h3 = G.doGet({ parameter: { page: 'ship' } })._h;
+  ok(h3.indexOf('submitShipment') < 0,
+     '非助理即使把網址改成 page=ship 也不能拿到出貨表單');
+  // 而且真的呼叫後端也要被擋（畫面藏起來不算權限）
+  r = G.submitShipment({ shipNo: 'W5501-999', items: 'x' });
+  ok(!r.ok, '前端藏起來不算權限，後端必須自己再擋一次');
+
+  sandbox.UrlFetchApp.fetch = origFetch;
+  asUser('boss@waferlock.com');
 })();
 
 console.log('\n' + (fail ? '❌' : '✅') + ' 通過 ' + pass + '／失敗 ' + fail);

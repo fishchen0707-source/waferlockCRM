@@ -96,6 +96,48 @@ var COL_R_TYPE       = '類別';
 var COL_R_ASSIST     = '對應助理';
 var COL_R_ASSIST_MAIL= '助理email';
 
+// ── 出貨明細（獨立分頁，不是加在各業務分頁上）──────────────────
+//
+// 為什麼獨立一張表，而不是在 17 個業務分頁各加 10 欄：
+//  1. 加欄要改 17 個分頁，而那些分頁本來就有 4 種格式，改起來一定有人漏。
+//  2. **一次發包可能對到多次出貨**（分批出貨）。掛在發包列上裝不下第二次，
+//     而且工資欄會跟著重複，有被重複計價的風險——那是會出錯付錢的地方。
+//     獨立一張表，同一個發包單號可以有多列出貨，天然解掉這個問題。
+//  3. **約一半的出貨沒有發包單**（弱電料件、鎖胚、建案整批）。
+//     那些單在業務分頁上根本沒有列可以掛，只能另開一張表收。
+var SHIPMENT_SHEET = '出貨明細';
+var COL_S_AT        = '登錄時間';
+var COL_S_SHIP_NO   = '出貨單號';
+var COL_S_ORDER_ID  = '訂單編號';
+var COL_S_DISPATCH  = '發包單號';      // 料件出貨可留空
+var COL_S_CUSTOMER  = '客戶';
+var COL_S_PROJECT   = '案名';
+var COL_S_ITEMS     = '出貨品項';      // 從 TipTop 整段複製貼上
+var COL_S_TO_NAME   = '貨指寄-收件人';
+var COL_S_TO_PHONE  = '貨指寄-電話';
+var COL_S_TO_ADDR   = '貨指寄-地址';
+var COL_S_INVOICE   = '發票別';
+var COL_S_NOTE      = '出貨備註';
+var COL_S_BY        = '登錄人';
+var COL_S_WH_STATUS = '倉庫核單狀態';   // 倉庫核單頁用（下一階段）
+var COL_S_WH_BY     = '倉庫核單人';
+var COL_S_WH_AT     = '倉庫核單時間';
+var COL_S_WH_NOTE   = '問題說明';
+
+var SHIPMENT_HEADERS = [
+  COL_S_AT, COL_S_SHIP_NO, COL_S_ORDER_ID, COL_S_DISPATCH, COL_S_CUSTOMER, COL_S_PROJECT,
+  COL_S_ITEMS, COL_S_TO_NAME, COL_S_TO_PHONE, COL_S_TO_ADDR, COL_S_INVOICE, COL_S_NOTE,
+  COL_S_BY, COL_S_WH_STATUS, COL_S_WH_BY, COL_S_WH_AT, COL_S_WH_NOTE
+];
+
+var INVOICE_OPTIONS = ['出貨待驗無發票', '電子發票', '二聯', '三聯'];
+
+// 業務分頁上既有的出貨單號欄（欄名有 4 種寫法）。助理填完後回寫一份，
+// 讓業務在原本的分頁上也看得到出貨進度。
+var COL_SHIP_NO_BACK = '出貨單號';
+var COL_ALIAS_BACK = ['10999沖帳出貨單號', '沖轉出貨單號', '出貨沖轉單號',
+                      '10999出貨沖轉單號', '出貨單號'];
+
 var AUDIT_SHEET = '簽核紀錄';     // 稽核軌跡（不存在會自動建立）
 var MAX_SCAN_HEADER_ROWS = 10;    // 自動偵測表頭時最多往下找幾列
 
@@ -105,13 +147,43 @@ var ORDER_NO_RE = /^[A-Za-z]{2}-\d{6}-\d+/;
 
 // ────────────────────────────────────────────── 網頁進入點
 
-function doGet() {
+/**
+ * 唯一進入點，依**登入身分的角色**決定顯示哪一頁。
+ *
+ * ⚠ 網址參數 `?page=` 只用來「在你有權限的頁面之間切換」，**不是權限依據**。
+ *   參數是使用者可以隨手改的；擋人的一律是角色名單。改了參數但沒有該角色，
+ *   看到的是「沒有權限」，不是那一頁。
+ */
+function doGet(e) {
   var email = currentUserEmail_();
   if (!email) {
     return htmlPage_(errorBlock_(
       '無法辨識您的身分',
       '請確認：①用公司 Google 帳號登入 ②部署設定的「具有存取權的使用者」是「機構內的任何人」，' +
       '不是「知道連結的任何人」。取不到身分就不能簽核，這是刻意的防護。'
+    ));
+  }
+
+  var roles = rolesFor_(email);
+  var canApprove = roles.sub || roles.boss;
+  var want = String((e && e.parameter && e.parameter.page) || '').trim();
+
+  // 預設頁：有簽核權就先看簽核（那是有時效的），否則看出貨
+  var page = want || (canApprove ? 'approve' : 'ship');
+
+  if (page === 'ship') {
+    if (!roles.assistant) {
+      return htmlPage_(errorBlock_('您沒有出貨登錄權限',
+        email + ' 不在助理名單中（指令碼屬性 DISPATCH_ASSISTANTS）。'));
+    }
+    return renderShipPage_(email, roles);
+  }
+
+  if (!canApprove) {
+    return htmlPage_(errorBlock_(
+      '您沒有簽核權限',
+      email + ' 不在副主管或主管的簽核名單中。若這不正確，' +
+      '請確認指令碼屬性 DISPATCH_SUB_APPROVERS／DISPATCH_BOSS_APPROVERS 是否包含您的帳號。'
     ));
   }
 
@@ -125,16 +197,144 @@ function doGet() {
     return htmlPage_(errorBlock_('讀取試算表失敗', String(err)));
   }
 
-  var allow = stagesFor_(email);
-  if (!allow.sub && !allow.boss) {
-    return htmlPage_(errorBlock_(
-      '您沒有簽核權限',
-      email + ' 不在副主管或主管的簽核名單中。若這不正確，' +
-      '請確認指令碼屬性 DISPATCH_SUB_APPROVERS／DISPATCH_BOSS_APPROVERS 是否包含您的帳號。'
-    ));
+  return htmlPage_(navBlock_('approve', roles) +
+    listBlock_(email, data, { sub: roles.sub, boss: roles.boss,
+      unrestricted: roles.approverUnrestricted }, { at: dataAt, cached: fromCache }));
+}
+
+function renderShipPage_(email, roles) {
+  var rows = [], at = '', cached = false;
+  try {
+    var res = getShippableCached_();
+    rows = res.rows; at = res.at; cached = res.cached;
+  } catch (err) {
+    return htmlPage_(navBlock_('ship', roles) +
+      errorBlock_('讀取待出貨清單失敗', String(err)));
+  }
+  return htmlPage_(navBlock_('ship', roles) +
+    shipBlock_(email, rows, roles, { at: at, cached: cached }));
+}
+
+function shipBlock_(email, rows, roles, meta) {
+  var head =
+    '<div class="hd"><div class="ic">📦</div><div>' +
+    '<h1>出貨登錄</h1><p>' + esc_(email) + '</p></div></div>' +
+    '<div id="msg"></div>' +
+    (roles.assistantUnrestricted
+      ? '<div class="msg warn">⚠ 尚未設定 DISPATCH_ASSISTANTS，目前任何人都能登錄出貨。</div>'
+      : '');
+
+  // 上半：已核准待出貨（點一下把資料帶進表單，省去重打客戶案名）
+  var list = '';
+  if (rows.length) {
+    var items = '';
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      items +=
+        '<div class="pick" onclick="fill(' + i + ')">' +
+          '<b>' + esc_(r.orderNo) + '</b>　' + esc_(r.customer || '—') +
+          (r.project ? '（' + esc_(r.project) + '）' : '') +
+          '<div class="sub">' + esc_(r.sheet) + '｜' + esc_(r.worker || '—') +
+            '｜' + esc_(r.model || '—') + (r.qty ? ' × ' + esc_(r.qty) : '') + '</div>' +
+        '</div>';
+    }
+    list =
+      '<div class="card">' +
+        '<div class="ometa"><b>已核准待出貨</b><span>' + rows.length + ' 筆</span></div>' +
+        '<div class="note">點一下把資料帶進下方表單。' +
+          '沒有發包單的出貨（弱電料件、鎖胚、建案整批）不會出現在這裡，直接填下方表單即可。</div>' +
+        items +
+      '</div>';
+  } else {
+    list = '<div class="card"><div class="center">目前沒有已核准待出貨的發包單<br>' +
+      '<span style="font-size:11.5px">沒有發包單的出貨直接填下方表單</span></div></div>';
   }
 
-  return htmlPage_(listBlock_(email, data, allow, { at: dataAt, cached: fromCache }));
+  var invOpts = '<option value=""></option>';
+  for (var v = 0; v < INVOICE_OPTIONS.length; v++) {
+    invOpts += '<option>' + esc_(INVOICE_OPTIONS[v]) + '</option>';
+  }
+
+  var form =
+    '<div class="card">' +
+      '<div class="ometa"><b>登錄出貨</b></div>' +
+      fld_('shipNo', '出貨單號 *', 'W5501-260807001') +
+      fld_('orderId', '訂單編號', 'W5301-260807001') +
+      fld_('dispatchNo', '發包單號', '沒有發包單就留空') +
+      '<div class="two">' + fld_('customer', '客戶', '') + fld_('project', '案名／通路', '') + '</div>' +
+      '<label>出貨品項 *</label>' +
+      '<textarea id="items" rows="5" placeholder="從 TipTop 整段複製貼上，含料號與數量"></textarea>' +
+      '<div class="two">' + fld_('toName', '貨指寄－收件人', '例：宇泰鎖印 李建男') +
+        fld_('toPhone', '貨指寄－電話', '') + '</div>' +
+      fld_('toAddr', '貨指寄－地址', '') +
+      '<div class="two">' +
+        '<div><label>發票別</label><select id="invoice">' + invOpts + '</select></div>' +
+        fld_('note', '出貨備註', '例：不附出貨單、指定週六到貨') +
+      '</div>' +
+      '<div class="row" style="margin-top:12px">' +
+        '<button class="ok" id="sub" onclick="send()">📦 登錄並通知倉庫</button>' +
+      '</div>' +
+    '</div>';
+
+  var footer = '<div class="note">清單資料時間 ' + esc_(meta.at) +
+    (meta.cached ? '（快取）' : '') + '　·　登錄人取自您的 Google 帳號，無法修改。</div>';
+
+  var script =
+    '<script>' +
+    'var ROWS=' + JSON.stringify(rows.map(function (r) {
+      return { orderNo: r.orderNo, customer: r.customer, project: r.project };
+    })) + ';' +
+    'function g(id){return document.getElementById(id);}' +
+    'function show(t,c){g("msg").innerHTML=\'<div class="msg \'+c+\'">\'+t+\'</div>\';window.scrollTo(0,0);}' +
+    'function fill(i){var r=ROWS[i];g("dispatchNo").value=r.orderNo;' +
+      'g("customer").value=r.customer||"";g("project").value=r.project||"";' +
+      'g("shipNo").focus();}' +
+    'function send(){' +
+      'var b=g("sub");var old=b.textContent;' +
+      'var f={shipNo:g("shipNo").value,orderId:g("orderId").value,' +
+        'dispatchNo:g("dispatchNo").value,customer:g("customer").value,' +
+        'project:g("project").value,items:g("items").value,toName:g("toName").value,' +
+        'toPhone:g("toPhone").value,toAddr:g("toAddr").value,' +
+        'invoice:g("invoice").value,note:g("note").value};' +
+      'if(!f.shipNo.trim()){show("出貨單號為必填","fail");return;}' +
+      'if(!f.items.trim()){show("出貨品項為必填","fail");return;}' +
+      'b.disabled=true;b.textContent="處理中…";' +
+      'google.script.run' +
+        '.withSuccessHandler(function(res){b.disabled=false;b.textContent=old;' +
+          'if(res.ok){show(res.message,"done");' +
+            '["shipNo","orderId","dispatchNo","customer","project","items",' +
+             '"toName","toPhone","toAddr","note"].forEach(function(k){g(k).value="";});' +
+            'g("invoice").value="";}' +
+          'else{show(res.message,"fail");}})' +
+        '.withFailureHandler(function(e){b.disabled=false;b.textContent=old;' +
+          'show("連線失敗："+e.message,"fail");})' +
+        '.submitShipment(f);' +
+    '}' +
+    '</script>';
+
+  return head + list + form + footer + script;
+}
+
+function fld_(id, label, ph) {
+  return '<div><label>' + esc_(label) + '</label>' +
+    '<input id="' + id + '" placeholder="' + esc_(ph || '') + '"></div>';
+}
+
+/** 頁面切換列。只列出這個身分真的有權限的頁，不給看得到卻點不進去的東西。 */
+function navBlock_(current, roles) {
+  var tabs = [];
+  if (roles.sub || roles.boss) tabs.push(['approve', '簽核']);
+  if (roles.assistant) tabs.push(['ship', '出貨登錄']);
+  if (tabs.length < 2) return '';
+
+  var html = '<div class="nav">';
+  for (var i = 0; i < tabs.length; i++) {
+    var on = tabs[i][0] === current;
+    html += on
+      ? '<span class="tab on">' + esc_(tabs[i][1]) + '</span>'
+      : '<a class="tab" href="?page=' + tabs[i][0] + '">' + esc_(tabs[i][1]) + '</a>';
+  }
+  return html + '</div>';
 }
 
 /**
@@ -163,6 +363,24 @@ function stagesFor_(email) {
     sub: inList_(subRaw, email),
     boss: inList_(bossRaw, email),
     unrestricted: false
+  };
+}
+
+/**
+ * 這個人有哪些角色。與 stagesFor_ 分開，因為簽核與出貨是兩套名單。
+ * 沒設 DISPATCH_ASSISTANTS 時，助理頁對所有人開放但會顯示警告——
+ * 導入初期不要因為名單沒設好就整個不能用，但也不能假裝有管控。
+ */
+function rolesFor_(email) {
+  var props = PropertiesService.getScriptProperties();
+  var stages = stagesFor_(email);
+  var assistRaw = String(props.getProperty('DISPATCH_ASSISTANTS') || '').trim();
+  return {
+    sub: stages.sub,
+    boss: stages.boss,
+    approverUnrestricted: stages.unrestricted,
+    assistant: assistRaw ? inList_(assistRaw, email) : true,
+    assistantUnrestricted: !assistRaw
   };
 }
 
@@ -857,6 +1075,267 @@ function fmtMoney_(v) {
   return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
+// ────────────────────────────────────────────── 出貨登錄
+
+var SHIP_CACHE_KEY = 'dispatch_shippable_v1';
+
+/** 已核准？簽核欄以 ✅ 開頭。刻意不比對「核准」二字——舊資料是人工手打的自由文字。 */
+function isApproved_(v) {
+  return /^✅/.test(String(v || '').trim());
+}
+
+/** 取得（必要時建立）出貨明細分頁，回傳 {sheet, col} */
+function openShipmentSheet_() {
+  var id = PropertiesService.getScriptProperties().getProperty('DISPATCH_SHEET_ID');
+  if (!id) throw new Error('未設定指令碼屬性 DISPATCH_SHEET_ID');
+  var ss = SpreadsheetApp.openById(id);
+  var sheet = ss.getSheetByName(SHIPMENT_SHEET);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHIPMENT_SHEET);
+    sheet.appendRow(SHIPMENT_HEADERS);
+    sheet.setFrozenRows(1);
+  }
+  var lastCol = Math.max(sheet.getLastColumn(), 1);
+  var head = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  var col = {};
+  for (var i = 0; i < head.length; i++) {
+    var key = normHeader_(head[i]);
+    if (key && !col[key]) col[key] = i + 1;
+  }
+  return { ss: ss, sheet: sheet, col: col };
+}
+
+/** 已經登錄過出貨的發包單號集合（同一發包單號可有多筆出貨，這裡只用來標示「已出過」） */
+function shippedDispatchNos_() {
+  var s = openShipmentSheet_();
+  var last = s.sheet.getLastRow();
+  var c = s.col[COL_S_DISPATCH];
+  var set = {};
+  if (!c || last < 2) return set;
+  var vals = s.sheet.getRange(2, c, last - 1, 1).getValues();
+  for (var i = 0; i < vals.length; i++) {
+    var v = String(vals[i][0] || '').trim();
+    if (v) set[v] = (set[v] || 0) + 1;
+  }
+  return set;
+}
+
+/**
+ * 待出貨清單：主管已核准、但還沒登錄過出貨的發包單。
+ *
+ * ⚠ 目前只涵蓋「有發包單」的那一半。約有一半的出貨是弱電料件、鎖胚、建案整批，
+ *   在業務分頁上根本沒有列——那些要靠出貨頁下方的「直接登錄」新增，
+ *   不會出現在這個清單裡。這是資料現況的限制，不是漏做。
+ */
+function getShippable_() {
+  var env = openSheets_();
+  var shipped = shippedDispatchNos_();
+  var out = [];
+
+  for (var k = 0; k < env.list.length; k++) {
+    var ctx = env.list[k];
+    if (!ctx.usable) continue;
+    var startRow = ctx.headerRow + 1;
+    var lastRow = ctx.lastRow || ctx.sheet.getLastRow();
+    if (lastRow < startRow) continue;
+
+    var width = ctx.lastCol || ctx.sheet.getLastColumn();
+    var values = ctx.sheet.getRange(startRow, 1, lastRow - startRow + 1, width).getValues();
+    var row, raw, pick;
+    raw = function (name) { var c = ctx.col[name]; return c ? row[c - 1] : ''; };
+    pick = function (name) { var v = raw(name); return String(v == null ? '' : v).trim(); };
+
+    for (var i = 0; i < values.length; i++) {
+      row = values[i];
+      var no = pick(COL_ORDER_NO);
+      if (!no || !ORDER_NO_RE.test(no)) continue;
+      if (!isApproved_(pick(COL_APPROVAL))) continue;   // 還沒核准的不能出貨
+      if (shipped[no]) continue;                        // 已登錄過
+
+      out.push({
+        orderNo: no,
+        applyAt: fmtDate_(raw(COL_APPLY_AT)),
+        worker: pick(COL_WORKER),
+        customer: pick(COL_CUSTOMER),
+        project: pick(COL_PROJECT),
+        model: pick(COL_MODEL),
+        qty: pick(COL_QTY),
+        note: pick(COL_NOTE),
+        sheet: ctx.name,
+        row: startRow + i
+      });
+    }
+  }
+  return out;
+}
+
+function getShippableCached_() {
+  var cache = CacheService.getScriptCache();
+  try {
+    var hit = cache.get(SHIP_CACHE_KEY);
+    if (hit) {
+      var obj = JSON.parse(hit);
+      if (obj && obj.rows) return { rows: obj.rows, at: obj.at, cached: true };
+    }
+  } catch (err) {
+    Logger.log('讀取待出貨快取失敗，改為即時掃描：' + err);
+  }
+
+  var rows = getShippable_();
+  var at = Utilities.formatDate(new Date(), TZ, 'HH:mm');
+  try {
+    var payload = JSON.stringify({ rows: rows, at: at });
+    if (payload.length <= CACHE_MAX_BYTES) {
+      cache.put(SHIP_CACHE_KEY, payload, CACHE_TTL);
+    } else {
+      Logger.log('⚠ 待出貨清單 ' + payload.length + ' bytes 超過快取上限，本次未寫入。');
+    }
+  } catch (err) {
+    Logger.log('寫入待出貨快取失敗：' + err);
+  }
+  return { rows: rows, at: at, cached: false };
+}
+
+/**
+ * 登錄一筆出貨。
+ *
+ * dispatchNo 可留空——約一半的出貨（弱電料件、鎖胚、建案整批）沒有發包單，
+ * 那些單如果不能登錄，這張表就只涵蓋一半的出貨，等於沒有取代 Teams。
+ */
+function submitShipment(form) {
+  var email = currentUserEmail_();
+  if (!email) return { ok: false, message: '無法辨識身分，未寫入任何資料。' };
+  if (!rolesFor_(email).assistant) {
+    return { ok: false, message: '您（' + email + '）不在助理名單中，未寫入任何資料。' };
+  }
+
+  form = form || {};
+  var shipNo = String(form.shipNo || '').trim();
+  var items = String(form.items || '').trim();
+  if (!shipNo) return { ok: false, message: '出貨單號為必填。' };
+  if (!items) return { ok: false, message: '出貨品項為必填（可從 TipTop 整段複製貼上）。' };
+
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(20000); }
+  catch (err) { return { ok: false, message: '系統忙碌中，請稍候再試。' }; }
+
+  try {
+    var s = openShipmentSheet_();
+
+    // 同一張出貨單號重複登錄多半是手滑或重複送出，擋下來並告知已存在
+    var last = s.sheet.getLastRow();
+    var cNo = s.col[COL_S_SHIP_NO];
+    if (cNo && last >= 2) {
+      var exist = s.sheet.getRange(2, cNo, last - 1, 1).getValues();
+      for (var i = 0; i < exist.length; i++) {
+        if (String(exist[i][0] || '').trim() === shipNo) {
+          return { ok: false, message: '出貨單號 ' + shipNo + ' 已經登錄過了（第 ' + (i + 2) + ' 列）。' };
+        }
+      }
+    }
+
+    var stamp = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm');
+    var rec = {};
+    rec[COL_S_AT] = stamp;
+    rec[COL_S_SHIP_NO] = shipNo;
+    rec[COL_S_ORDER_ID] = String(form.orderId || '').trim();
+    rec[COL_S_DISPATCH] = String(form.dispatchNo || '').trim();
+    rec[COL_S_CUSTOMER] = String(form.customer || '').trim();
+    rec[COL_S_PROJECT] = String(form.project || '').trim();
+    rec[COL_S_ITEMS] = items;
+    rec[COL_S_TO_NAME] = String(form.toName || '').trim();
+    rec[COL_S_TO_PHONE] = String(form.toPhone || '').trim();
+    rec[COL_S_TO_ADDR] = String(form.toAddr || '').trim();
+    rec[COL_S_INVOICE] = String(form.invoice || '').trim();
+    rec[COL_S_NOTE] = String(form.note || '').trim();
+    rec[COL_S_BY] = email;
+    rec[COL_S_WH_STATUS] = '待核';
+
+    // 依表頭文字定位寫入，不用固定順序——之後有人在出貨明細插欄也不會錯位
+    var width = Math.max(s.sheet.getLastColumn(), SHIPMENT_HEADERS.length);
+    var line = [];
+    for (var w = 0; w < width; w++) line.push('');
+    for (var key in rec) {
+      var c = s.col[key];
+      if (c) line[c - 1] = rec[key];
+    }
+    s.sheet.appendRow(line);
+
+    // 回寫出貨單號到業務分頁，讓業務在原本看慣的地方也看得到進度。
+    // 失敗不影響主要登錄——出貨明細才是這筆資料的家。
+    if (rec[COL_S_DISPATCH]) {
+      try { writeBackShipNo_(rec[COL_S_DISPATCH], shipNo); }
+      catch (e2) { Logger.log('回寫業務分頁出貨單號失敗（不影響登錄）：' + e2); }
+    }
+
+    SpreadsheetApp.flush();
+    try { CacheService.getScriptCache().remove(SHIP_CACHE_KEY); } catch (e3) {}
+
+    try { notifyWarehouse_(rec); }
+    catch (e4) { Logger.log('通知倉庫失敗（出貨已登錄成功）：' + e4); }
+
+    return { ok: true, message: '已登錄出貨單 ' + shipNo + '，已通知倉庫撿料。' };
+  } catch (err) {
+    return { ok: false, message: '寫入失敗：' + err };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** 把出貨單號回寫到業務分頁既有的出貨單號欄（欄名有 4 種寫法，靠別名找） */
+function writeBackShipNo_(dispatchNo, shipNo) {
+  var env = openSheets_();
+  var hit = findByOrderNo_(env, dispatchNo);
+  if (!hit) return;
+  var ctx = hit.ctx, target = 0;
+  for (var i = 0; i < COL_ALIAS_BACK.length; i++) {
+    var c = ctx.col[normHeader_(COL_ALIAS_BACK[i])];
+    if (c) { target = c; break; }
+  }
+  if (!target) return;   // 該分頁沒有這欄就算了，不是錯誤
+  var cur = String(ctx.sheet.getRange(hit.row, target).getValue() || '').trim();
+  ctx.sheet.getRange(hit.row, target).setValue(cur ? cur + '／' + shipNo : shipNo);
+}
+
+/** 通知倉庫撿料 */
+function notifyWarehouse_(rec) {
+  var webhook = PropertiesService.getScriptProperties()
+    .getProperty('DISPATCH_WAREHOUSE_WEBHOOK');
+  if (!webhook) return { sent: false, reason: '未設定 DISPATCH_WAREHOUSE_WEBHOOK' };
+
+  var lines = ['*待撿料出貨*', ''];
+  lines.push('出貨單號：' + rec[COL_S_SHIP_NO]);
+  if (rec[COL_S_ORDER_ID]) lines.push('訂單編號：' + rec[COL_S_ORDER_ID]);
+  if (rec[COL_S_CUSTOMER]) {
+    lines.push('客戶：' + rec[COL_S_CUSTOMER] +
+      (rec[COL_S_PROJECT] ? '（' + rec[COL_S_PROJECT] + '）' : ''));
+  }
+  lines.push('');
+  lines.push('出貨項目：');
+  lines.push(rec[COL_S_ITEMS]);
+  if (rec[COL_S_TO_NAME] || rec[COL_S_TO_ADDR]) {
+    lines.push('');
+    lines.push('貨指寄：');
+    if (rec[COL_S_TO_NAME]) lines.push(rec[COL_S_TO_NAME] +
+      (rec[COL_S_TO_PHONE] ? '　' + rec[COL_S_TO_PHONE] : ''));
+    if (rec[COL_S_TO_ADDR]) lines.push(rec[COL_S_TO_ADDR]);
+  }
+  if (rec[COL_S_INVOICE]) { lines.push(''); lines.push('發票：' + rec[COL_S_INVOICE]); }
+  if (rec[COL_S_NOTE]) lines.push('備註：' + rec[COL_S_NOTE]);
+  lines.push('');
+  lines.push('登錄：' + rec[COL_S_BY] + '　' + rec[COL_S_AT]);
+
+  var resp = UrlFetchApp.fetch(webhook, {
+    method: 'post',
+    contentType: 'application/json; charset=UTF-8',
+    payload: JSON.stringify({ text: lines.join('\n') }),
+    muteHttpExceptions: true
+  });
+  var ok = resp.getResponseCode() >= 200 && resp.getResponseCode() < 300;
+  if (!ok) Logger.log('通知倉庫失敗 HTTP ' + resp.getResponseCode());
+  return { sent: ok };
+}
+
 // ────────────────────────────────────────────── 人員代碼對照 ／ 核准後通知助理
 
 /**
@@ -1074,6 +1553,21 @@ function htmlPage_(bodyHtml) {
     '.center{text-align:center;color:#64748B;font-size:13px;padding:36px 0}' +
     '.msg{padding:10px 12px;border-radius:8px;font-size:13px;line-height:1.6;margin-bottom:10px}' +
     '.msg.fail{background:#FEE2E2;color:#991B1B}.msg.done{background:#D1FAE5;color:#065F46}' +
+    '.msg.warn{background:#FEF3C7;color:#92400E}' +
+    '.nav{display:flex;gap:6px;margin-bottom:12px}' +
+    '.tab{padding:6px 16px;border-radius:7px;font-size:13px;font-weight:700;' +
+      'text-decoration:none;background:#fff;color:#64748B;border:1px solid #E2E8F0}' +
+    '.tab.on{background:#0F2744;color:#fff;border-color:#0F2744}' +
+    'label{display:block;font-size:11.5px;font-weight:700;color:#475569;margin:10px 0 3px}' +
+    'input,select,textarea{width:100%;border:1px solid #E2E8F0;border-radius:7px;' +
+      'padding:8px 10px;font-size:13.5px;font-family:inherit;outline:none}' +
+    'input:focus,select:focus,textarea:focus{border-color:#38BDF8}' +
+    'textarea{resize:vertical;font-family:ui-monospace,monospace;font-size:12.5px}' +
+    '.two{display:flex;gap:10px}.two>div{flex:1;min-width:0}' +
+    '.pick{padding:9px 11px;border:1px solid #E2E8F0;border-radius:8px;margin-top:6px;' +
+      'cursor:pointer;font-size:13px}' +
+    '.pick:hover{background:#F8FAFC;border-color:#38BDF8}' +
+    '.pick .sub{font-size:11px;color:#94A3B8;margin-top:2px}' +
     '.note{font-size:11px;color:#94A3B8;margin-top:8px;line-height:1.6}' +
     '.sec{font-size:12.5px;font-weight:700;color:#0F2744;margin:14px 0 7px;' +
       'display:flex;align-items:baseline;gap:7px}' +
