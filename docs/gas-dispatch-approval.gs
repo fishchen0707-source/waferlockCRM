@@ -1742,6 +1742,66 @@ function jsq_(s) {
  * 手動執行這支，確認設定是否齊全（部署前先跑一次，省得部署完才發現漏設）。
  * 在編輯器選這個函式按「執行」，看執行記錄。
  */
+/**
+ * 出貨頁自檢。唯讀，不會寫入任何資料、不會發任何通知。
+ * 另開一支而不是塞進 checkSetup()——checkSetup 已經要掃 18 個分頁，
+ * 再加一次完整掃描會讓每天的例行自檢變成兩倍時間。
+ */
+function checkShipSetup() {
+  var props = PropertiesService.getScriptProperties();
+
+  var raw = String(props.getProperty('DISPATCH_ASSISTANTS') || '').trim();
+  if (!raw) {
+    Logger.log('❌ DISPATCH_ASSISTANTS 未設定 → 出貨頁目前對所有人開放（畫面會示警）');
+  } else {
+    Logger.log('DISPATCH_ASSISTANTS = ' + raw.split(/[,;\s]+/).filter(String).join('、'));
+  }
+  Logger.log('DISPATCH_WAREHOUSE_WEBHOOK = ' +
+    (props.getProperty('DISPATCH_WAREHOUSE_WEBHOOK') ? '已設定' : '❌ 未設定（登錄後不會通知倉庫）'));
+
+  var me = currentUserEmail_();
+  var roles = rolesFor_(me);
+  var canApprove = roles.sub || roles.boss;
+  Logger.log('目前登入 ' + me + '｜可看頁面：' +
+    (canApprove ? '簽核 ' : '') + (roles.assistant ? '出貨' : '') +
+    (canApprove || roles.assistant ? '' : '（無，會看到「無權限」畫面）'));
+
+  try {
+    var s = openShipmentSheet_();
+    var last = s.sheet.getLastRow();
+    Logger.log('✅ 出貨明細分頁存在，目前 ' + Math.max(last - 1, 0) + ' 筆資料');
+
+    var missing = [];
+    for (var i = 0; i < SHIPMENT_HEADERS.length; i++) {
+      if (!s.col[normHeader_(SHIPMENT_HEADERS[i])]) missing.push(SHIPMENT_HEADERS[i]);
+    }
+    if (missing.length) {
+      Logger.log('⚠ 出貨明細缺欄位：' + missing.join('、') +
+        ' → 這些欄位的內容會被丟掉（寫入依表頭文字定位，找不到就不寫）');
+    } else {
+      Logger.log('　 欄位齊全（' + SHIPMENT_HEADERS.length + ' 欄）');
+    }
+  } catch (err) {
+    Logger.log('❌ 出貨明細分頁檢查失敗：' + err);
+    return;
+  }
+
+  try {
+    var rows = getShippable_();
+    Logger.log('待出貨（已核准、尚未登錄出貨）：' + rows.length + ' 筆');
+    for (var k = 0; k < Math.min(rows.length, 5); k++) {
+      Logger.log('　• ' + rows[k].orderNo + '｜' + rows[k].sheet + '｜' +
+        (rows[k].customer || '—') + '｜' + (rows[k].project || '—'));
+    }
+    if (rows.length > 5) Logger.log('　…其餘 ' + (rows.length - 5) + ' 筆略');
+    if (!rows.length) {
+      Logger.log('　 清單空的不一定是壞掉：簽核欄必須是 ✅ 開頭才算已核准（手打「核准」不算）。');
+    }
+  } catch (e2) {
+    Logger.log('❌ 待出貨清單讀取失敗：' + e2);
+  }
+}
+
 function checkSetup() {
   var props = PropertiesService.getScriptProperties();
   Logger.log('DISPATCH_SHEET_ID   = ' + (props.getProperty('DISPATCH_SHEET_ID') || '❌ 未設定'));
