@@ -1,0 +1,467 @@
+/**
+ * ============================================================
+ * WAFERLOCK — 發包簽核 GAS Web App（主管核准／退回）
+ * ============================================================
+ * 用途：主管開啟本網頁 → 看到待核的發包項目 → 按核准或退回 →
+ *       系統把「真實 Google 帳號 + 時間」寫回工資發包申請單，並留一筆稽核紀錄。
+ *
+ * 為什麼一定要用 GAS Web App，不能用一般 HTML 網頁：
+ *   Web App 可以取得 Session.getActiveUser().getEmail()，也就是登入者的
+ *   Google Workspace 帳號，**無法偽造**。
+ *   對照專案裡既有的互動網頁（我方主張與網聯對照.html、四階段掛鉤對焦.html…），
+ *   它們的填寫人是 <input> 手打、anon key 硬編在前端，任何人改個名字就能冒名。
+ *   簽核如果照抄那個模式，會比現在「主管手打英文名」更危險——因為看起來像有驗證力。
+ *
+ * 為什麼簽核欄位要設「受保護範圍」：
+ *   只把手打改成按鈕、但欄位還是人人可編輯的話，簽核依然可以被任意竄改，
+ *   等於沒做。受保護範圍 + 本 Web App 以擁有者身分執行，才是真正的閘門。
+ *
+ * ── 一次性設定（依序做完，缺一不可）──────────────────────────
+ * 1. 專案設定 → 指令碼屬性（Script Properties）新增：
+ *      DISPATCH_SHEET_ID   = <工資發包申請單的試算表 ID>
+ *        取得方式：打開試算表，網址 .../spreadsheets/d/<這一段就是 ID>/edit
+ *      DISPATCH_SHEET_NAME = <工作表分頁名稱>（例：工資發包申請單）
+ *    （可選）DISPATCH_HEADER_ROW = <表頭在第幾列>，未設定會自動偵測（找含「發包單號」的列）
+ *
+ * 2. 試算表設定「受保護範圍」（資料 → 保護工作表和範圍）：
+ *      把「主管簽核」「案件狀態」兩欄設為僅擁有者可編輯。
+ *      沒做這步，簽核就沒有效力——詳見 docs/發包試算表_欄位規格.md。
+ *
+ * 3. 部署（部署 → 新增部署作業 → 類型選「網頁應用程式」）：
+ *      執行身分：**我（擁有者）**      ← 才有權寫入受保護範圍
+ *      具有存取權的使用者：**機構內的任何人**  ← 才拿得到 getActiveUser()
+ *      ⚠ 千萬不要選「知道連結的任何人」，那樣會拿不到登入身分，簽核者無法辨識。
+ *      部署後把網址記下來，填進 gas-dispatch-notify.gs 的 DISPATCH_WEBAPP_URL 屬性。
+ *
+ * 注意：執行環境為 Google V8，僅能用 GAS 內建服務（SpreadsheetApp / HtmlService /
+ *       LockService / PropertiesService / Session）；時間一律 Asia/Taipei。
+ * ============================================================
+ */
+
+var TZ = 'Asia/Taipei';
+
+// 欄位以「表頭文字」比對，不寫死欄位代號——之後有人在中間插欄也不會錯位
+var COL_ORDER_NO  = '發包單號';
+var COL_APPLY_AT  = '發包申請日期';
+var COL_WORKER    = '承包商';
+var COL_CUSTOMER  = '客戶';
+var COL_PROJECT   = '案名';
+var COL_MODEL     = '型號';
+var COL_QTY       = '本次請款數量';
+var COL_PRICE     = '承包總價';
+var COL_DISPATCHER= '發包人員';
+var COL_NOTE      = '補充說明';
+var COL_APPROVAL  = '主管簽核';   // 建議改成這個欄名；下方 ALIAS 仍認得舊名，不強迫先改
+var COL_STATUS    = '案件狀態';   // 新增欄，取代「黃色標示」
+
+// 舊表頭相容：欄位還沒改名也能運作，避免「非得先改試算表才能用」的導入門檻
+var COL_ALIAS = {};
+COL_ALIAS[COL_APPROVAL] = ['主管KEY英文名押日期', '主管簽核', '主管核准'];
+
+var AUDIT_SHEET = '簽核紀錄';     // 稽核軌跡（不存在會自動建立）
+var MAX_SCAN_HEADER_ROWS = 10;    // 自動偵測表頭時最多往下找幾列
+
+// ────────────────────────────────────────────── 網頁進入點
+
+function doGet() {
+  var email = currentUserEmail_();
+  if (!email) {
+    return htmlPage_(errorBlock_(
+      '無法辨識您的身分',
+      '請確認：①用公司 Google 帳號登入 ②部署設定的「具有存取權的使用者」是「機構內的任何人」，' +
+      '不是「知道連結的任何人」。取不到身分就不能簽核，這是刻意的防護。'
+    ));
+  }
+
+  var data;
+  try {
+    data = getPending_();
+  } catch (err) {
+    return htmlPage_(errorBlock_('讀取試算表失敗', String(err)));
+  }
+
+  return htmlPage_(listBlock_(email, data));
+}
+
+// ────────────────────────────────────────────── 給前端 google.script.run 呼叫
+
+/**
+ * 寫入簽核結果。回傳 {ok, message}。
+ * 前端不傳簽核者是誰——一律由伺服器端從登入身分取得，避免被竄改。
+ */
+function submitDecision(orderNo, decision, note) {
+  var email = currentUserEmail_();
+  if (!email) return { ok: false, message: '無法辨識身分，未寫入任何資料。' };
+
+  orderNo = String(orderNo || '').trim();
+  if (!orderNo) return { ok: false, message: '缺少發包單號。' };
+  if (decision !== 'approve' && decision !== 'reject') {
+    return { ok: false, message: '未知的動作：' + decision };
+  }
+  note = String(note || '').trim();
+  if (decision === 'reject' && !note) {
+    return { ok: false, message: '退回必須填寫原因，讓業務知道要改什麼。' };
+  }
+
+  // 多位主管可能同時操作，寫入一律加鎖
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(20000);
+  } catch (err) {
+    return { ok: false, message: '系統忙碌中（有人正在寫入），請稍候再試一次。' };
+  }
+
+  try {
+    var ctx = openSheet_();
+    var hit = findRowByOrderNo_(ctx, orderNo);
+    if (!hit) return { ok: false, message: '找不到發包單號 ' + orderNo + '，可能已被刪除。' };
+
+    // 重讀一次當下的簽核狀態：避免兩位主管同時開著頁面、後按的人覆蓋前一位
+    var already = String(ctx.sheet.getRange(hit.row, hit.col[COL_APPROVAL]).getValue() || '').trim();
+    if (already) {
+      return { ok: false, message: '這筆已經被處理過了：' + already + '（畫面請重新整理）' };
+    }
+
+    var stamp = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm');
+    var mark = (decision === 'approve')
+      ? '✅ 核准 ' + email + ' ' + stamp
+      : '❌ 退回 ' + email + ' ' + stamp + '｜' + note;
+
+    ctx.sheet.getRange(hit.row, hit.col[COL_APPROVAL]).setValue(mark);
+    if (hit.col[COL_STATUS]) {
+      ctx.sheet.getRange(hit.row, hit.col[COL_STATUS])
+        .setValue(decision === 'approve' ? '已核准' : '已退回');
+    }
+
+    // 稽核軌跡：O 欄只留最後狀態，這裡留完整歷程（誰、何時、做了什麼、為什麼）
+    appendAudit_(ctx.ss, {
+      at: stamp, who: email, orderNo: orderNo,
+      action: decision === 'approve' ? '核准' : '退回',
+      note: note, row: hit.row
+    });
+
+    SpreadsheetApp.flush();
+    return { ok: true, message: (decision === 'approve' ? '已核准 ' : '已退回 ') + orderNo };
+  } catch (err) {
+    return { ok: false, message: '寫入失敗：' + err };   // 顯性失敗，不靜默吞掉
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** 前端「重新整理」用：只回資料不重畫整頁 */
+function refreshPending() {
+  if (!currentUserEmail_()) return { ok: false, rows: [] };
+  try {
+    return { ok: true, rows: getPending_() };
+  } catch (err) {
+    return { ok: false, rows: [], message: String(err) };
+  }
+}
+
+// ────────────────────────────────────────────── 試算表存取
+
+function openSheet_() {
+  var props = PropertiesService.getScriptProperties();
+  var id = props.getProperty('DISPATCH_SHEET_ID');
+  var name = props.getProperty('DISPATCH_SHEET_NAME');
+  if (!id) throw new Error('未設定指令碼屬性 DISPATCH_SHEET_ID');
+  if (!name) throw new Error('未設定指令碼屬性 DISPATCH_SHEET_NAME');
+
+  var ss = SpreadsheetApp.openById(id);
+  var sheet = ss.getSheetByName(name);
+  if (!sheet) throw new Error('找不到工作表「' + name + '」，請確認 DISPATCH_SHEET_NAME 是否正確');
+
+  var headerRow = Number(props.getProperty('DISPATCH_HEADER_ROW') || 0) || detectHeaderRow_(sheet);
+  var col = headerMap_(sheet, headerRow);
+  applyAliases_(col);
+  if (!col[COL_ORDER_NO]) {
+    throw new Error('表頭第 ' + headerRow + ' 列找不到「' + COL_ORDER_NO + '」欄，請檢查欄位名稱');
+  }
+  return { ss: ss, sheet: sheet, headerRow: headerRow, col: col };
+}
+
+/** 自動找出表頭在第幾列：往下掃，第一個含「發包單號」的列就是 */
+function detectHeaderRow_(sheet) {
+  var rows = Math.min(MAX_SCAN_HEADER_ROWS, sheet.getLastRow());
+  if (rows < 1) throw new Error('工作表是空的');
+  var values = sheet.getRange(1, 1, rows, sheet.getLastColumn()).getValues();
+  for (var r = 0; r < values.length; r++) {
+    for (var c = 0; c < values[r].length; c++) {
+      if (normHeader_(values[r][c]) === COL_ORDER_NO) return r + 1;
+    }
+  }
+  throw new Error('前 ' + rows + ' 列都找不到「' + COL_ORDER_NO + '」，無法判斷表頭位置。' +
+                  '可設定 DISPATCH_HEADER_ROW 指定列號。');
+}
+
+/** 表頭文字 → 欄號（1-based）。表頭常有換行與多餘空白，統一正規化後比對。 */
+function headerMap_(sheet, headerRow) {
+  var last = sheet.getLastColumn();
+  var head = sheet.getRange(headerRow, 1, 1, last).getValues()[0];
+  var map = {};
+  for (var i = 0; i < head.length; i++) {
+    var key = normHeader_(head[i]);
+    if (key && !map[key]) map[key] = i + 1;
+  }
+  return map;
+}
+
+function normHeader_(v) {
+  return String(v == null ? '' : v).replace(/[\s　]+/g, '').trim();
+}
+
+/** 標準欄名找不到時，改用別名補上（讓舊表頭也能運作） */
+function applyAliases_(col) {
+  for (var std in COL_ALIAS) {
+    if (col[std]) continue;
+    var list = COL_ALIAS[std];
+    for (var i = 0; i < list.length; i++) {
+      var key = normHeader_(list[i]);
+      if (col[key]) { col[std] = col[key]; break; }
+    }
+  }
+}
+
+/** 撈出待核清單：有發包單號、且主管簽核欄還是空的 */
+function getPending_() {
+  var ctx = openSheet_();
+  var startRow = ctx.headerRow + 1;
+  var lastRow = ctx.sheet.getLastRow();
+  if (lastRow < startRow) return [];
+
+  var width = ctx.sheet.getLastColumn();
+  var values = ctx.sheet.getRange(startRow, 1, lastRow - startRow + 1, width).getValues();
+  var out = [];
+
+  for (var i = 0; i < values.length; i++) {
+    var row = values[i];
+    var pick = function (name) {
+      var c = ctx.col[name];
+      return c ? String(row[c - 1] == null ? '' : row[c - 1]).trim() : '';
+    };
+
+    var orderNo = pick(COL_ORDER_NO);
+    // 最上面那幾列會寫「先寄未裝」「先寄門廠/宇泰」而不是單號——那是狀態註記，還不能簽核
+    if (!orderNo || !/^[A-Za-z]{2}-\d{6}-\d+/.test(orderNo)) continue;
+    if (pick(COL_APPROVAL)) continue;   // 已處理過
+
+    out.push({
+      orderNo: orderNo,
+      applyAt: fmtCell_(pick(COL_APPLY_AT)),
+      worker: pick(COL_WORKER),
+      customer: pick(COL_CUSTOMER),
+      project: pick(COL_PROJECT),
+      model: pick(COL_MODEL),
+      qty: pick(COL_QTY),
+      price: pick(COL_PRICE),
+      dispatcher: pick(COL_DISPATCHER),
+      note: pick(COL_NOTE),
+      row: startRow + i
+    });
+  }
+  return out;
+}
+
+function findRowByOrderNo_(ctx, orderNo) {
+  var startRow = ctx.headerRow + 1;
+  var lastRow = ctx.sheet.getLastRow();
+  if (lastRow < startRow) return null;
+  var c = ctx.col[COL_ORDER_NO];
+  var vals = ctx.sheet.getRange(startRow, c, lastRow - startRow + 1, 1).getValues();
+  for (var i = 0; i < vals.length; i++) {
+    if (String(vals[i][0] || '').trim() === orderNo) {
+      return { row: startRow + i, col: ctx.col };
+    }
+  }
+  return null;
+}
+
+function fmtCell_(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, TZ, 'yyyy-MM-dd');
+  return String(v || '');
+}
+
+// ────────────────────────────────────────────── 稽核軌跡
+
+function appendAudit_(ss, rec) {
+  var sh = ss.getSheetByName(AUDIT_SHEET);
+  if (!sh) {
+    sh = ss.insertSheet(AUDIT_SHEET);
+    sh.appendRow(['時間', '操作者', '發包單號', '動作', '說明', '試算表列號']);
+    sh.setFrozenRows(1);
+  }
+  sh.appendRow([rec.at, rec.who, rec.orderNo, rec.action, rec.note, rec.row]);
+}
+
+// ────────────────────────────────────────────── 身分
+
+/**
+ * 取得登入者的 Google 帳號。取不到就回空字串，呼叫端必須拒絕動作。
+ * 取不到的常見原因：部署時「具有存取權的使用者」選成「知道連結的任何人」。
+ */
+function currentUserEmail_() {
+  try {
+    return Session.getActiveUser().getEmail() || '';
+  } catch (err) {
+    return '';
+  }
+}
+
+// ────────────────────────────────────────────── 畫面
+
+function htmlPage_(bodyHtml) {
+  var css =
+    '*{box-sizing:border-box;margin:0;padding:0;font-family:"Noto Sans TC",-apple-system,sans-serif}' +
+    'body{background:#EEF2F7;color:#1E293B;padding:16px;max-width:760px;margin:0 auto}' +
+    '.hd{display:flex;align-items:center;gap:10px;margin-bottom:14px}' +
+    '.hd .ic{width:38px;height:38px;background:#0F2744;border-radius:9px;display:flex;' +
+      'align-items:center;justify-content:center;font-size:19px}' +
+    '.hd h1{font-size:17px;font-weight:700}.hd p{font-size:11.5px;color:#64748B}' +
+    '.card{background:#fff;border-radius:12px;padding:14px 16px;margin-bottom:10px;' +
+      'box-shadow:0 1px 3px rgba(0,0,0,.08)}' +
+    '.top{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:8px}' +
+    '.no{font-size:15px;font-weight:800;color:#0F2744}' +
+    '.date{font-size:11.5px;color:#94A3B8}' +
+    '.who{margin-left:auto;font-size:11.5px;color:#64748B}' +
+    'table{width:100%;border-collapse:collapse;font-size:12.5px;margin-bottom:10px}' +
+    'th{text-align:left;color:#64748B;font-weight:600;padding:4px 8px 4px 0;width:78px;' +
+      'vertical-align:top;white-space:nowrap}' +
+    'td{padding:4px 0;color:#1E293B}' +
+    '.amt{font-size:16px;font-weight:800;color:#B91C1C}' +
+    '.row{display:flex;gap:8px;flex-wrap:wrap}' +
+    'button{padding:9px 18px;border:none;border-radius:7px;font-size:13.5px;font-weight:700;' +
+      'cursor:pointer;font-family:inherit}' +
+    '.ok{background:#10B981;color:#fff}.no-btn{background:#F1F5F9;color:#B91C1C}' +
+    'button:disabled{opacity:.45;cursor:not-allowed}' +
+    '.center{text-align:center;color:#64748B;font-size:13px;padding:36px 0}' +
+    '.msg{padding:10px 12px;border-radius:8px;font-size:13px;line-height:1.6;margin-bottom:10px}' +
+    '.msg.fail{background:#FEE2E2;color:#991B1B}.msg.done{background:#D1FAE5;color:#065F46}' +
+    '.note{font-size:11px;color:#94A3B8;margin-top:8px;line-height:1.6}';
+
+  var html =
+    '<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8">' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1.0">' +
+    '<style>' + css + '</style></head><body>' + bodyHtml + '</body></html>';
+
+  return HtmlService.createHtmlOutput(html)
+    .setTitle('發包簽核')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+function errorBlock_(title, detail) {
+  return '<div class="hd"><div class="ic">📋</div><div><h1>發包簽核</h1></div></div>' +
+         '<div class="card"><div class="msg fail"><b>' + esc_(title) + '</b><br>' +
+         esc_(detail) + '</div></div>';
+}
+
+function listBlock_(email, rows) {
+  var head =
+    '<div class="hd"><div class="ic">📋</div><div>' +
+    '<h1>發包簽核</h1><p>' + esc_(email) + '</p></div></div>' +
+    '<div id="msg"></div>';
+
+  if (!rows.length) {
+    return head + '<div class="card"><div class="center">目前沒有待核准的發包項目 👍</div></div>';
+  }
+
+  var cards = '';
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    var id = 'c' + i;
+    cards +=
+      '<div class="card" id="' + id + '">' +
+        '<div class="top">' +
+          '<span class="no">' + esc_(r.orderNo) + '</span>' +
+          '<span class="date">' + esc_(r.applyAt) + '</span>' +
+          '<span class="who">發包：' + esc_(r.dispatcher) + '</span>' +
+        '</div>' +
+        '<table>' +
+          tr_('承包商', r.worker) +
+          tr_('客戶', r.customer + (r.project ? '（' + r.project + '）' : '')) +
+          tr_('型號', r.model + (r.qty ? ' × ' + r.qty : '')) +
+          '<tr><th>承包總價</th><td class="amt">' + esc_(r.price || '—') + '</td></tr>' +
+          (r.note ? tr_('補充說明', r.note) : '') +
+        '</table>' +
+        '<div class="row">' +
+          '<button class="ok" onclick="act(\'' + jsq_(r.orderNo) + '\',\'approve\',\'' + id + '\')">✅ 核准</button>' +
+          '<button class="no-btn" onclick="act(\'' + jsq_(r.orderNo) + '\',\'reject\',\'' + id + '\')">❌ 退回</button>' +
+        '</div>' +
+      '</div>';
+  }
+
+  var script =
+    '<script>' +
+    'function show(t,cls){var m=document.getElementById("msg");' +
+      'm.innerHTML=\'<div class="msg \'+cls+\'">\'+t+\'</div>\';window.scrollTo(0,0);}' +
+    'function act(no,dec,cardId){' +
+      'var note="";' +
+      'if(dec==="reject"){note=prompt("退回原因（會寫進紀錄，讓業務知道要改什麼）：")||"";' +
+        'if(!note.trim()){return;}}' +
+      'var card=document.getElementById(cardId);' +
+      'var btns=card.querySelectorAll("button");' +
+      'for(var i=0;i<btns.length;i++){btns[i].disabled=true;}' +
+      'google.script.run' +
+        '.withSuccessHandler(function(res){' +
+          'if(res.ok){card.parentNode.removeChild(card);show(res.message,"done");' +
+            'if(!document.querySelectorAll(".card").length){' +
+              'show("全部處理完畢 👍","done");}}' +
+          'else{for(var i=0;i<btns.length;i++){btns[i].disabled=false;}show(res.message,"fail");}' +
+        '})' +
+        '.withFailureHandler(function(err){' +
+          'for(var i=0;i<btns.length;i++){btns[i].disabled=false;}' +
+          'show("連線失敗："+err.message,"fail");})' +
+        '.submitDecision(no,dec,note);' +
+    '}' +
+    '</script>';
+
+  var footer = '<div class="note">簽核者身分取自您的 Google 帳號，無法手動修改。' +
+               '每一筆核准／退回都會記錄在試算表的「' + AUDIT_SHEET + '」分頁。</div>';
+
+  return head + cards + footer + script;
+}
+
+function tr_(label, value) {
+  return '<tr><th>' + esc_(label) + '</th><td>' + esc_(value || '—') + '</td></tr>';
+}
+
+function esc_(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+/** 供內嵌到 onclick='...' 的單引號字串用 */
+function jsq_(s) {
+  return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+// ────────────────────────────────────────────── 設定自檢
+
+/**
+ * 手動執行這支，確認設定是否齊全（部署前先跑一次，省得部署完才發現漏設）。
+ * 在編輯器選這個函式按「執行」，看執行記錄。
+ */
+function checkSetup() {
+  var props = PropertiesService.getScriptProperties();
+  Logger.log('DISPATCH_SHEET_ID   = ' + (props.getProperty('DISPATCH_SHEET_ID') || '❌ 未設定'));
+  Logger.log('DISPATCH_SHEET_NAME = ' + (props.getProperty('DISPATCH_SHEET_NAME') || '❌ 未設定'));
+  Logger.log('DISPATCH_HEADER_ROW = ' + (props.getProperty('DISPATCH_HEADER_ROW') || '（未設定，將自動偵測）'));
+  try {
+    var ctx = openSheet_();
+    Logger.log('✅ 試算表開啟成功，表頭在第 ' + ctx.headerRow + ' 列');
+    var missing = [];
+    [COL_ORDER_NO, COL_WORKER, COL_CUSTOMER, COL_MODEL, COL_APPROVAL, COL_STATUS].forEach(function (n) {
+      if (!ctx.col[n]) missing.push(n);
+    });
+    if (missing.length) {
+      Logger.log('⚠ 找不到這些欄位（請確認表頭文字完全一致）：' + missing.join('、'));
+    } else {
+      Logger.log('✅ 必要欄位齊全');
+    }
+    Logger.log('待核項目：' + getPending_().length + ' 筆');
+  } catch (err) {
+    Logger.log('❌ ' + err);
+  }
+  Logger.log('登入身分（在編輯器手動執行時可能為空，屬正常）：' + currentUserEmail_());
+}
