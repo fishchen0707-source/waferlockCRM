@@ -321,18 +321,41 @@ function fld_(id, label, ph) {
 }
 
 /** 頁面切換列。只列出這個身分真的有權限的頁，不給看得到卻點不進去的東西。 */
+/**
+ * 本 Web App 的 /exec 網址。
+ *
+ * ⚠ 這裡不能用相對連結。GAS 的畫面實際跑在 googleusercontent.com 的沙箱 iframe 裡，
+ *   `href="?page=ship"` 會相對到那個沙箱網址而不是 /exec，點下去是**一片空白、沒有錯誤訊息**。
+ *   必須用絕對網址搭配 target="_top"，才會在最外層視窗換頁。
+ */
+function webAppUrl_() {
+  try {
+    return ScriptApp.getService().getUrl() || '';
+  } catch (err) {
+    Logger.log('取不到 Web App 網址（頁籤將無法切換）：' + err);
+    return '';
+  }
+}
+
 function navBlock_(current, roles) {
   var tabs = [];
   if (roles.sub || roles.boss) tabs.push(['approve', '簽核']);
   if (roles.assistant) tabs.push(['ship', '出貨登錄']);
   if (tabs.length < 2) return '';
 
+  var base = webAppUrl_();
   var html = '<div class="nav">';
   for (var i = 0; i < tabs.length; i++) {
     var on = tabs[i][0] === current;
-    html += on
-      ? '<span class="tab on">' + esc_(tabs[i][1]) + '</span>'
-      : '<a class="tab" href="?page=' + tabs[i][0] + '">' + esc_(tabs[i][1]) + '</a>';
+    if (on) {
+      html += '<span class="tab on">' + esc_(tabs[i][1]) + '</span>';
+    } else if (base) {
+      html += '<a class="tab" target="_top" href="' + esc_(base) + '?page=' + tabs[i][0] +
+        '">' + esc_(tabs[i][1]) + '</a>';
+    } else {
+      // 取不到網址時寧可顯示不可點，也不要給一個點了變空白的連結
+      html += '<span class="tab" title="取不到 Web App 網址">' + esc_(tabs[i][1]) + '</span>';
+    }
   }
   return html + '</div>';
 }

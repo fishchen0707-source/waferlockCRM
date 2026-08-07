@@ -74,6 +74,7 @@ const sandbox = {
   HtmlService: { createHtmlOutput: h => ({ _h: h, setTitle() { return this; }, addMetaTag() { return this; } }) },
   Logger: { log: m => LOG.push(String(m)) },
   DriveApp: { getFolderById: () => ({}) },
+  ScriptApp: { getService: () => ({ getUrl: () => 'https://script.google.com/a/macros/w/s/AAA/exec' }) },
   CacheService: { getScriptCache: () => ({ get: k => (k in CACHE ? CACHE[k] : null), put: (k, v) => { CACHE[k] = v; }, remove: k => { delete CACHE[k]; } }) },
   UrlFetchApp: { fetch: () => ({ getResponseCode: () => 200, getContentText: () => 'ok' }) },
   console,
@@ -788,6 +789,28 @@ console.log('【13】助理出貨頁與出貨登錄');
   const html2 = G.renderShipPage_('anyone@waferlock.com', roles2)._h;
   ok(html2.indexOf('尚未設定 DISPATCH_ASSISTANTS') >= 0, '未設名單時畫面應顯示警告');
   props.DISPATCH_ASSISTANTS = 'vivi@waferlock.com';
+
+  // ── 頁籤連結：GAS 沙箱 iframe 裡相對連結會導到空白頁 ──
+  reset(); asUser('vivi@waferlock.com');
+  props.DISPATCH_BOSS_APPROVERS = 'vivi@waferlock.com';   // 讓她兩個頁籤都有，才會出現 nav
+  CACHE = {};
+  const nav = G.doGet({ parameter: {} })._h;
+  ok(nav.indexOf('class="nav"') >= 0, '同時有簽核與出貨權限時應顯示頁籤列');
+  ok(nav.indexOf('href="?page=') < 0,
+     '頁籤不可用相對連結——GAS 跑在沙箱 iframe，點下去會是一片空白且沒有錯誤訊息');
+  ok(nav.indexOf('https://script.google.com/a/macros/w/s/AAA/exec?page=ship') >= 0,
+     '頁籤應使用 ScriptApp.getService().getUrl() 的絕對網址');
+  ok(nav.indexOf('target="_top"') >= 0, '頁籤必須 target="_top"，否則只換 iframe 內容');
+
+  // 取不到網址時不可給一個點了變空白的連結
+  const origSA = sandbox.ScriptApp;
+  sandbox.ScriptApp = { getService: () => ({ getUrl: () => '' }) };
+  CACHE = {};
+  const nav2 = G.doGet({ parameter: {} })._h;
+  ok(nav2.indexOf('<a class="tab"') < 0, '取不到網址時應退成不可點，不給死連結');
+  sandbox.ScriptApp = origSA;
+  delete props.DISPATCH_BOSS_APPROVERS;
+  props.DISPATCH_BOSS_APPROVERS = 'boss@waferlock.com';
 
   // ── ?page= 不是權限依據 ──
   asUser('outsider@waferlock.com');
