@@ -517,5 +517,129 @@ ok(r.ok, '提示指向簽核紀錄時應退回完整搜尋｜' + r.message);
 eli = SHEETS.find(s => s._name === '一課-eli');
 ok(/^✅/.test(String(eli._grid[2][17])), '仍寫進正確位置');
 
+// ── 測試 12：全形表頭、工資／承包報價、人員代碼路由 ──
+console.log('【12】全形表頭與核准後通知助理');
+
+// 真實表頭「工資報價(對客戶）」右括號是全形，不轉寬度就會在所有分頁讀不到
+ok(G.normHeader_('工資報價(對客戶）') === '工資報價(對客戶)', '全形右括號應轉半形');
+ok(G.normHeader_('副主管KEY英文名押日期') !== G.normHeader_('主管KEY英文名押日期'),
+   '副主管欄與主管欄正規化後仍須可區分（誤配等於整層覆核被跳過）');
+
+(function () {
+  const col = {};
+  ['工資報價(對客戶）', '承包報價(組)', '主管KEY英文名押日期']
+    .forEach((h, i) => { col[G.normHeader_(h)] = i + 1; });
+  G.applyAliases_(col);
+  ok(col[G.COL_WAGE] === 1, '工資報價應對到第 1 欄，實得 ' + col[G.COL_WAGE]);
+  ok(col[G.COL_UNIT] === 2, '承包報價應對到第 2 欄，實得 ' + col[G.COL_UNIT]);
+
+  // 陳俊行只有「發包單價」：可當承包報價（單價），但絕不可當承包總價
+  const c2 = {}; c2[G.normHeader_('發包單價')] = 9;
+  G.applyAliases_(c2);
+  ok(c2[G.COL_UNIT] === 9, '發包單價應對到承包報價（單價）');
+  ok(!c2[G.COL_PRICE], '發包單價**不可**被當成承包總價——主管會看著錯的金額按核准');
+})();
+
+// 人員代碼對照表
+const ROSTER_HEAD = ['業務代碼', '業務姓名', '業務 email', '類別', '對應助理', '助理 email'];
+const rosterSheet = makeSheet('人員代碼', ROSTER_HEAD, [
+  ['JW', 'Johnson Wu', 'Johnson.wu@waferlock.com', '內銷', 'Ting.Hsu', 'Ting.Hsu@waferlock.com'],
+  ['LS', 'sammi lin', 'sammi.lin@waferlock.com', '內銷', 'Ting.Hsu', 'Ting.Hsu@waferlock.com'],
+  ['VH', 'vivi huang', 'vivi.huang@waferlock.com', '電商', 'wendy Chang', 'wendy.chang@waferlock.com'],
+  ['SL', 'sean lin', 'sean.lin@waferlock.com', '內銷', 'Ting.Hsu', 'Ting.Hsu@waferlock.com'],
+], 1);
+
+ok(G.codeOf_('LS-260806-01') === 'LS', '應從單號取出代碼 LS');
+ok(G.codeOf_('VH-260803-01') === 'VH', '應從單號取出代碼 VH');
+ok(G.codeOf_('先寄未裝') === '', '非單號格式應取不到代碼');
+
+(function () {
+  SHEETS = [rosterSheet];
+  const roster = G.loadRoster_();
+  ok(Object.keys(roster).length === 4, '應讀到 4 筆對照，實得 ' + Object.keys(roster).length);
+  ok(roster.LS && roster.LS.assist === 'Ting.Hsu', 'LS 應對到 Ting.Hsu');
+  ok(roster.VH && roster.VH.assist === 'wendy Chang', 'VH 應對到 wendy Chang');
+  ok(roster.VH && roster.VH.type === '電商', 'VH 類別應為電商');
+  // 表頭「業務 email」含空白，正規化後才對得上
+  ok(roster.JW && roster.JW.salesMail === 'Johnson.wu@waferlock.com', '含空白的表頭應正確對應');
+
+  // 對照表讀不到時不可讓簽核連帶失敗
+  SHEETS = [];
+  ok(Object.keys(G.loadRoster_()).length === 0, '找不到對照表應回空物件而非拋錯');
+})();
+
+// 通知內容：查得到與查不到助理，兩種都要發，且查不到要明講
+(function () {
+  SHEETS = [rosterSheet];
+  props.DISPATCH_WAREHOUSE_WEBHOOK = 'https://example.test/hook';
+  let sentBody = null;
+  const origFetch = sandbox.UrlFetchApp.fetch;
+  sandbox.UrlFetchApp.fetch = (url, opt) => {
+    sentBody = JSON.parse(opt.payload).text;
+    return { getResponseCode: () => 200, getContentText: () => 'ok' };
+  };
+
+  let res = G.notifyAssistant_({ orderNo: 'LS-260806-01', who: 'boss@w.com', at: '2026-08-07 11:00',
+    worker: '李建男（宇泰）', customer: '王宣晴', project: '散戶', model: 'L376', qty: '1' });
+  ok(res.sent && res.matched, '查得到助理時應成功發送並標記已配對');
+  ok(sentBody.indexOf('Ting.Hsu') >= 0, '訊息應點名 Ting.Hsu');
+  ok(sentBody.indexOf('LS-260806-01') >= 0, '訊息應含發包單號');
+
+  // ST／TL 已出現在實際資料，但對照表沒有——不可靜默跳過
+  res = G.notifyAssistant_({ orderNo: 'ST-260806-01', who: 'boss@w.com', at: '2026-08-07 11:00' });
+  ok(res.sent, '查不到助理時仍要發通知，不可靜默跳過');
+  ok(res.matched === false, '應標記未配對');
+  ok(sentBody.indexOf('查無對應助理') >= 0, '訊息應明講查無對應助理，否則這筆會沒人接手');
+  ok(sentBody.indexOf('ST') >= 0, '訊息應帶出未收錄的代碼');
+
+  // 未設 webhook 時安靜跳過（不是錯誤，是還沒設定）
+  delete props.DISPATCH_WAREHOUSE_WEBHOOK;
+  ok(G.notifyAssistant_({ orderNo: 'LS-1' }).sent === false, '未設 webhook 應回 sent:false');
+
+  sandbox.UrlFetchApp.fetch = origFetch;
+})();
+
+// 只有「主管核准」才通知助理；副主管核准與退回都不該通知
+(function () {
+  props.DISPATCH_WAREHOUSE_WEBHOOK = 'https://example.test/hook';
+  props.DISPATCH_SHEET_NAME = '*';
+  props.DISPATCH_SUB_APPROVERS = 'sub@waferlock.com';
+  props.DISPATCH_BOSS_APPROVERS = 'boss@waferlock.com';
+
+  let calls = 0;
+  const origFetch = sandbox.UrlFetchApp.fetch;
+  sandbox.UrlFetchApp.fetch = () => { calls++; return { getResponseCode: () => 200, getContentText: () => 'ok' }; };
+
+  const mk = (name, orderNo) => {
+    const head = HEADS[name], row = head.map(() => '');
+    row[0] = new Date(2026, 7, 5); row[1] = orderNo; row[2] = '廠'; row[5] = '客';
+    return makeSheet(name, head, [row], 2);
+  };
+
+  // 兩層分頁：副主管核准 → 不通知
+  SHEETS = [mk('一課-eli', 'JW-260805-01'), rosterSheet];
+  CACHE = {}; calls = 0;
+  sandbox.Session.getActiveUser = () => ({ getEmail: () => 'sub@waferlock.com' });
+  let rr = G.submitDecision('JW-260805-01', 'approve', '', '一課-eli', 3);
+  ok(rr.ok, '副主管核准應成功｜' + rr.message);
+  ok(calls === 0, '副主管核准不可通知助理（通知了助理會白跑一趟），實際發了 ' + calls + ' 次');
+
+  // 接著主管核准 → 要通知
+  CACHE = {}; calls = 0;
+  sandbox.Session.getActiveUser = () => ({ getEmail: () => 'boss@waferlock.com' });
+  rr = G.submitDecision('JW-260805-01', 'approve', '', '一課-eli', 3);
+  ok(rr.ok, '主管核准應成功｜' + rr.message);
+  ok(calls === 1, '主管核准（終局）應通知助理一次，實際 ' + calls + ' 次');
+
+  // 單層分頁的退回 → 不通知
+  SHEETS = [mk('零售-Sammi', 'LS-260805-01'), rosterSheet];
+  CACHE = {}; calls = 0;
+  rr = G.submitDecision('LS-260805-01', 'reject', '型號寫錯', '零售-Sammi', 3);
+  ok(rr.ok, '退回應成功｜' + rr.message);
+  ok(calls === 0, '退回不可通知助理，實際發了 ' + calls + ' 次');
+
+  sandbox.UrlFetchApp.fetch = origFetch;
+})();
+
 console.log('\n' + (fail ? '❌' : '✅') + ' 通過 ' + pass + '／失敗 ' + fail);
 process.exit(fail ? 1 : 0);

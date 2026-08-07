@@ -48,7 +48,9 @@ var COL_CUSTOMER  = '客戶';
 var COL_PROJECT   = '案名';
 var COL_MODEL     = '型號';
 var COL_QTY       = '本次請款數量';
-var COL_PRICE     = '承包總價';
+var COL_WAGE      = '工資報價(對客戶)';   // 對客戶收的
+var COL_UNIT      = '承包報價(組)';       // 給承包商的單價
+var COL_PRICE     = '承包總價';           // 給承包商的總價
 var COL_DISPATCHER= '發包人員';
 var COL_NOTE      = '補充說明';
 var COL_APPROVAL  = '主管簽核';   // 建議改成這個欄名；下方 ALIAS 仍認得舊名，不強迫先改
@@ -71,10 +73,28 @@ var COL_ALIAS = {};
 COL_ALIAS[COL_APPROVAL] = ['主管KEY英文名押日期', '主管簽核', '主管核准', '主管確認/押日期'];
 COL_ALIAS[COL_SUB_APPROVAL] = ['副主管簽核', '副主管確認/押日期', '副主管KEY英文名押日期'];
 COL_ALIAS[COL_PRICE] = ['承包總價', '發包合計'];
+// 真實表頭是「工資報價(對客戶）」——左半形、右**全形**括號，人工輸入的產物。
+// normHeader_ 已統一把全形轉半形，所以這裡只需要寫半形版本。
+COL_ALIAS[COL_WAGE] = ['工資報價(對客戶)', '工資報價'];
+// 陳俊行分頁只有「發包單價」沒有合計——單價歸單價欄是正確的，
+// 但**絕不可**把它放進 COL_PRICE 的別名：把單價當總價顯示，主管會看著錯的金額按核准。
+COL_ALIAS[COL_UNIT] = ['承包報價(組)', '承包報價', '發包單價'];
 COL_ALIAS[COL_QTY] = ['本次請款數量', '請款數量'];
 // 一課-sin 的欄名是「發包日期」。少這個別名，該分頁的申請日一律讀成空值，
 // DISPATCH_PENDING_SINCE 的日期過濾對整個分頁失效——歷史單會全部湧進待核清單。
 COL_ALIAS[COL_APPLY_AT] = ['發包申請日期', '發包日期'];
+
+// ── 人員代碼對照表（發包單號前綴 → 業務 → 對應助理）────────────────
+// 為什麼一定要查表、不能用程式從姓名推導：實際的代碼規則不一致——
+//   Johnson Wu → JW（名+姓）    sammi lin → LS（姓+名，反過來）    sean lin → SL
+// 而且 SL 與 LS 只差順序、是兩個不同的人。任何推導規則都會出錯。
+var ROSTER_SHEET_DEFAULT = '人員代碼';
+var COL_R_CODE       = '業務代碼';
+var COL_R_SALES      = '業務姓名';
+var COL_R_SALES_MAIL = '業務email';    // normHeader_ 會去掉空白，「業務 email」也對得上
+var COL_R_TYPE       = '類別';
+var COL_R_ASSIST     = '對應助理';
+var COL_R_ASSIST_MAIL= '助理email';
 
 var AUDIT_SHEET = '簽核紀錄';     // 稽核軌跡（不存在會自動建立）
 var MAX_SCAN_HEADER_ROWS = 10;    // 自動偵測表頭時最多往下找幾列
@@ -266,6 +286,22 @@ function submitDecision(orderNo, decision, note, hintSheet, hintRow) {
 
     SpreadsheetApp.flush();
     updatePendingCache_(orderNo, decision, stage, mark);
+
+    // 主管核准＝終局，這時才通知助理去打出貨單。
+    // 副主管核准只是往上送，通知了只會讓助理白跑一趟。
+    // 整段包 try：通知是附加動作，它壞掉不該讓一次已經寫成功的簽核被回報成失敗
+    //（那會讓使用者重試，然後看到「已經被處理過了」而困惑）。
+    if (decision === 'approve' && stage === 'boss') {
+      try {
+        notifyAssistant_({
+          orderNo: orderNo, who: email, at: stamp,
+          worker: cellOf(COL_WORKER), customer: cellOf(COL_CUSTOMER),
+          project: cellOf(COL_PROJECT), model: cellOf(COL_MODEL), qty: cellOf(COL_QTY)
+        });
+      } catch (e2) {
+        Logger.log('核准後通知助理失敗（簽核已成功寫入）：' + e2);
+      }
+    }
 
     var done = (decision === 'approve')
       ? (stage === 'sub' ? '已核准（' + roleName + '層），已送主管 ' : '已核准 ')
@@ -505,8 +541,22 @@ function headerMapOf_(headRow) {
   return map;
 }
 
+/**
+ * 表頭正規化：去空白 ＋ 全形英數標點轉半形。
+ *
+ * 為什麼要轉全形：實際表頭是「工資報價(對客戶）」——左括號半形、右括號**全形**，
+ * 手打出來的。不轉的話這個欄位在所有分頁都讀不到，而且不會報錯，
+ * 只是金額欄一片空白（正是本專案反覆踩到的那種靜默失效）。
+ *
+ * ⚠ 刻意**只做寬度統一，不做模糊比對**。「副主管KEY英文名押日期」與
+ *   「主管KEY英文名押日期」必須維持可區分——副主管欄若被誤配成主管欄，
+ *   等於整層覆核被跳過。
+ */
 function normHeader_(v) {
-  return String(v == null ? '' : v).replace(/[\s　]+/g, '').trim();
+  return String(v == null ? '' : v)
+    .replace(/[！-～]/g, function (ch) { return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0); })
+    .replace(/[\s　]+/g, '')
+    .trim();
 }
 
 /** 標準欄名找不到時，改用別名補上（讓舊表頭也能運作） */
@@ -717,6 +767,10 @@ function pendingOfSheet_(ctx) {
       project: pick(COL_PROJECT),
       model: pick(COL_MODEL),
       qty: pick(COL_QTY),
+      // 主管指定要看的：工資報價（對客戶收）與承包報價（給承包商的單價），
+      // 兩個並排才看得出這一單的毛利，這是他判斷要不要核的依據
+      wage: fmtMoney_(raw(COL_WAGE)),
+      unit: fmtMoney_(raw(COL_UNIT)),
       price: fmtMoney_(raw(COL_PRICE)),
       dispatcher: pick(COL_DISPATCHER),
       note: pick(COL_NOTE),
@@ -801,6 +855,119 @@ function fmtMoney_(v) {
   var n = Number(v);
   if (isNaN(n)) return String(v).trim();
   return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+// ────────────────────────────────────────────── 人員代碼對照 ／ 核准後通知助理
+
+/**
+ * 讀人員代碼對照表，回傳 { 代碼大寫: {code,sales,salesMail,type,assist,assistMail} }。
+ * 讀不到就回空物件——路由通知失效不該讓簽核本身失敗，簽核才是主線。
+ */
+function loadRoster_() {
+  var props = PropertiesService.getScriptProperties();
+  var name = String(props.getProperty('DISPATCH_ROSTER_SHEET') || ROSTER_SHEET_DEFAULT).trim();
+  var id = props.getProperty('DISPATCH_SHEET_ID');
+  if (!id || !name) return {};
+
+  try {
+    var sheet = SpreadsheetApp.openById(id).getSheetByName(name);
+    if (!sheet) return {};
+    var lastRow = sheet.getLastRow(), lastCol = sheet.getLastColumn();
+    if (lastRow < 2 || lastCol < 1) return {};
+
+    var values = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+    var headerRow = -1;
+    for (var r = 0; r < Math.min(values.length, MAX_SCAN_HEADER_ROWS); r++) {
+      for (var c = 0; c < values[r].length; c++) {
+        if (normHeader_(values[r][c]) === COL_R_CODE) { headerRow = r; break; }
+      }
+      if (headerRow >= 0) break;
+    }
+    if (headerRow < 0) return {};
+
+    var col = {};
+    for (var k = 0; k < values[headerRow].length; k++) {
+      var key = normHeader_(values[headerRow][k]);
+      if (key && !col[key]) col[key] = k;
+    }
+    if (col[COL_R_CODE] === undefined) return {};
+
+    var at = function (row, name2) {
+      var idx = col[name2];
+      return idx === undefined ? '' : String(row[idx] == null ? '' : row[idx]).trim();
+    };
+
+    var out = {};
+    for (var i = headerRow + 1; i < values.length; i++) {
+      var code = at(values[i], COL_R_CODE).toUpperCase();
+      if (!code) continue;
+      out[code] = {
+        code: code,
+        sales: at(values[i], COL_R_SALES),
+        salesMail: at(values[i], COL_R_SALES_MAIL),
+        type: at(values[i], COL_R_TYPE),
+        assist: at(values[i], COL_R_ASSIST),
+        assistMail: at(values[i], COL_R_ASSIST_MAIL)
+      };
+    }
+    return out;
+  } catch (err) {
+    Logger.log('讀人員代碼對照表失敗（不影響簽核）：' + err);
+    return {};
+  }
+}
+
+/** 從發包單號取出業務代碼前綴（LS-260806-01 → LS） */
+function codeOf_(orderNo) {
+  var m = String(orderNo || '').match(/^([A-Za-z]{2})-/);
+  return m ? m[1].toUpperCase() : '';
+}
+
+/**
+ * 主管核准（＝終局）後通知對應助理去 TipTop 打出貨單。
+ *
+ * 查不到對照時**不靜默跳過**——照樣發通知但明講「查無對應助理」。
+ * 實際資料裡已經出現 ST、TL 這兩個代碼，而對照表目前只有 JW/LS/VH/SL；
+ * 靜默跳過的話，那些單會核完就沒下文，沒有人知道該接手。
+ */
+function notifyAssistant_(rec) {
+  var webhook = PropertiesService.getScriptProperties()
+    .getProperty('DISPATCH_WAREHOUSE_WEBHOOK');
+  if (!webhook) return { sent: false, reason: '未設定 DISPATCH_WAREHOUSE_WEBHOOK' };
+
+  var code = codeOf_(rec.orderNo);
+  var person = loadRoster_()[code] || null;
+
+  var lines = ['*已核准，可開出貨單*', ''];
+  lines.push('• 發包單號：' + rec.orderNo);
+  if (rec.worker) lines.push('• 承包商：' + rec.worker);
+  if (rec.customer) lines.push('• 客戶：' + rec.customer + (rec.project ? '（' + rec.project + '）' : ''));
+  if (rec.model) lines.push('• 型號：' + rec.model + (rec.qty ? ' × ' + rec.qty : ''));
+  lines.push('• 核准：' + rec.who + '　' + rec.at);
+  lines.push('');
+
+  if (person && person.assist) {
+    lines.push('請 *' + person.assist + '* 接手打出貨單' +
+      (person.type ? '（' + person.type + '）' : ''));
+  } else {
+    lines.push('⚠ 代碼「' + (code || '?') + '」在人員代碼對照表查無對應助理，請人工確認由誰接手。');
+  }
+
+  try {
+    var resp = UrlFetchApp.fetch(webhook, {
+      method: 'post',
+      contentType: 'application/json; charset=UTF-8',
+      payload: JSON.stringify({ text: lines.join('\n') }),
+      muteHttpExceptions: true
+    });
+    var ok = resp.getResponseCode() >= 200 && resp.getResponseCode() < 300;
+    if (!ok) Logger.log('通知助理失敗 HTTP ' + resp.getResponseCode() + '：' +
+      resp.getContentText().slice(0, 200));
+    return { sent: ok, matched: !!(person && person.assist) };
+  } catch (err) {
+    Logger.log('通知助理例外（不影響簽核）：' + err);
+    return { sent: false, reason: String(err) };
+  }
 }
 
 // ────────────────────────────────────────────── 稽核軌跡
@@ -1042,7 +1209,9 @@ function cardsOf_(rows, prefix) {
           tr_('承包商', r.worker) +
           tr_('客戶', r.customer + (r.project ? '（' + r.project + '）' : '')) +
           tr_('型號', r.model + (r.qty ? ' × ' + r.qty : '')) +
-          '<tr><th>' + (r.price ? '金額' : '承包總價') + '</th><td class="amt">' +
+          (r.wage ? tr_('工資報價', 'NT$ ' + r.wage + '（對客戶）') : '') +
+          (r.unit ? tr_('承包報價', 'NT$ ' + r.unit + '（單價）') : '') +
+          '<tr><th>承包總價</th><td class="amt">' +
             (r.price ? 'NT$ ' + esc_(r.price) : '—') + '</td></tr>' +
           (r.note ? tr_('補充說明', r.note) : '') +
           (r.stage === 'boss' && r.subMark ? tr_('副主管', r.subMark) : '') +
@@ -1148,6 +1317,36 @@ function checkSetup() {
   }
   Logger.log('DISPATCH_PENDING_SINCE = ' +
     (props.getProperty('DISPATCH_PENDING_SINCE') || '（未設定，不過濾舊資料）'));
+
+  // 人員代碼對照：核准後要靠它決定通知哪位助理
+  Logger.log('DISPATCH_WAREHOUSE_WEBHOOK = ' +
+    (props.getProperty('DISPATCH_WAREHOUSE_WEBHOOK') ? '已設定' : '❌ 未設定（核准後不會通知助理）'));
+  var roster = loadRoster_();
+  var codes = Object.keys(roster);
+  if (!codes.length) {
+    Logger.log('❌ 讀不到人員代碼對照表（分頁「' +
+      (props.getProperty('DISPATCH_ROSTER_SHEET') || ROSTER_SHEET_DEFAULT) +
+      '」），核准後無法判斷通知誰');
+  } else {
+    Logger.log('人員代碼對照：' + codes.length + ' 筆　' +
+      codes.map(function (c) { return c + '→' + (roster[c].assist || '?'); }).join('、'));
+
+    // 實際待核資料裡出現、但對照表沒有的代碼——這些單核完會沒人接手
+    try {
+      var seen = {};
+      var pend = getPending_();
+      for (var m = 0; m < pend.length; m++) {
+        var cd = codeOf_(pend[m].orderNo);
+        if (cd && !roster[cd]) seen[cd] = (seen[cd] || 0) + 1;
+      }
+      var orphan = Object.keys(seen);
+      if (orphan.length) {
+        Logger.log('⚠ 待核資料裡有對照表沒收錄的代碼：' +
+          orphan.map(function (c) { return c + '(' + seen[c] + '筆)'; }).join('、') +
+          ' → 這些單核准後只會提示「查無對應助理」');
+      }
+    } catch (e3) { /* 對照檢查失敗不影響其他自檢項目 */ }
+  }
 
   // 兩層簽核若沒有名單，同一個人可以自己核完兩層——那就只是同一個簽名蓋兩次
   var sub = String(props.getProperty('DISPATCH_SUB_APPROVERS') || '').trim();
