@@ -190,6 +190,9 @@ function openSheets_() {
   if (spec === '*') {
     var all = ss.getSheets();
     for (var i = 0; i < all.length; i++) {
+      // 簽核紀錄的表頭也有「發包單號」，不排除的話會被當成資料分頁、
+      // 把稽核紀錄本身讀成待核項目
+      if (all[i].getName() === AUDIT_SHEET) continue;
       var ctx = buildCtx_(all[i]);
       if (ctx) list.push(ctx);   // 沒有「發包單號」表頭的分頁自動略過
     }
@@ -223,7 +226,15 @@ function buildCtx_(sheet) {
   applyAliases_(col);
   if (!col[COL_ORDER_NO]) return null;
 
-  return { sheet: sheet, name: sheet.getName(), headerRow: headerRow, col: col };
+  // 沒有簽核欄的分頁「不可用」：既無從判斷哪些已核（會把整張表當成待核），
+  // 主管就算按了核准也沒地方寫。這種情況要當成設定錯誤報出來，不能默默列出來。
+  return {
+    sheet: sheet,
+    name: sheet.getName(),
+    headerRow: headerRow,
+    col: col,
+    usable: !!col[COL_APPROVAL]
+  };
 }
 
 /** 自動找出表頭在第幾列：往下掃，第一個含「發包單號」的列就是。找不到回傳 0。 */
@@ -289,6 +300,8 @@ function getPending_() {
  * 沒設定＝不過濾（不預設幫使用者決定哪些資料該被藏起來）。
  */
 function pendingOfSheet_(ctx) {
+  if (!ctx.usable) return [];   // 缺簽核欄，判斷不出狀態，一律不列（由 checkSetup 報警）
+
   var since = String(PropertiesService.getScriptProperties()
     .getProperty('DISPATCH_PENDING_SINCE') || '').trim();
   var startRow = ctx.headerRow + 1;
@@ -546,30 +559,52 @@ function checkSetup() {
     var env = openSheets_();
     Logger.log('✅ 試算表開啟成功，納入 ' + env.list.length + ' 個分頁');
 
-    var need = [COL_ORDER_NO, COL_WORKER, COL_CUSTOMER, COL_MODEL, COL_APPROVAL, COL_STATUS];
+    var need = [COL_WORKER, COL_CUSTOMER, COL_MODEL, COL_STATUS];
+    var all = [];
+    var blocked = [];
+
+    // 只掃一次，邊掃邊累計——不要掃完再呼叫 getPending_() 整個重來（18 個分頁會多花一分鐘）
     for (var i = 0; i < env.list.length; i++) {
       var ctx = env.list[i];
+      if (!ctx.usable) {
+        blocked.push(ctx.name);
+        Logger.log('　⛔ ' + ctx.name + '｜表頭第 ' + ctx.headerRow +
+          ' 列｜**缺「' + COL_APPROVAL + '」欄，整個分頁略過**（無處記錄簽核結果）');
+        continue;
+      }
       var missing = [];
       for (var j = 0; j < need.length; j++) {
         if (!ctx.col[need[j]]) missing.push(need[j]);
       }
-      var n = pendingOfSheet_(ctx).length;
-      Logger.log('　• ' + ctx.name + '｜表頭第 ' + ctx.headerRow + ' 列｜待核 ' + n + ' 筆' +
+      var rows = pendingOfSheet_(ctx);
+      all = all.concat(rows);
+      Logger.log('　• ' + ctx.name + '｜表頭第 ' + ctx.headerRow + ' 列｜待核 ' + rows.length + ' 筆' +
         (missing.length ? '｜⚠ 缺欄位：' + missing.join('、') : '｜欄位齊全'));
     }
 
-    var all = getPending_();
-    Logger.log('合計待核：' + all.length + ' 筆');
+    Logger.log('合計待核：' + all.length + ' 筆（納入 ' +
+      (env.list.length - blocked.length) + ' 個分頁）');
+
+    if (blocked.length) {
+      Logger.log('⛔ 以下 ' + blocked.length + ' 個分頁因缺「' + COL_APPROVAL +
+        '」欄而完全略過，主管看不到、也核不了：' + blocked.join('、'));
+      Logger.log('　 → 請在這些分頁補上「' + COL_APPROVAL + '」欄（或確認欄名是否不同）。');
+    }
 
     // 最舊的待核項目：若是很久以前的資料，多半是歷史單從沒填過簽核欄，
     // 而不是真的等著被核——建議用 DISPATCH_PENDING_SINCE 過濾
     if (all.length) {
       var oldest = '';
+      var noDate = 0;
       for (var k = 0; k < all.length; k++) {
         var d = all[k].applyAt;
-        if (d && (!oldest || d < oldest)) oldest = d;
+        if (!d) { noDate++; continue; }
+        if (!oldest || d < oldest) oldest = d;
       }
       if (oldest) Logger.log('最舊待核申請日：' + oldest);
+      if (noDate) {
+        Logger.log('⚠ 其中 ' + noDate + ' 筆沒有申請日期，日期過濾對它們無效（一律保留）。');
+      }
     }
   } catch (err) {
     Logger.log('❌ ' + err);
