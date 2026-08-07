@@ -112,12 +112,17 @@ function submitDecision(orderNo, decision, note) {
   }
 
   try {
-    var ctx = openSheet_();
-    var hit = findRowByOrderNo_(ctx, orderNo);
+    var env = openSheets_();
+    var hit = findByOrderNo_(env, orderNo);
     if (!hit) return { ok: false, message: '找不到發包單號 ' + orderNo + '，可能已被刪除。' };
 
+    var ctx = hit.ctx;
+    if (!ctx.col[COL_APPROVAL]) {
+      return { ok: false, message: '分頁「' + ctx.name + '」找不到簽核欄，未寫入任何資料。' };
+    }
+
     // 重讀一次當下的簽核狀態：避免兩位主管同時開著頁面、後按的人覆蓋前一位
-    var already = String(ctx.sheet.getRange(hit.row, hit.col[COL_APPROVAL]).getValue() || '').trim();
+    var already = String(ctx.sheet.getRange(hit.row, ctx.col[COL_APPROVAL]).getValue() || '').trim();
     if (already) {
       return { ok: false, message: '這筆已經被處理過了：' + already + '（畫面請重新整理）' };
     }
@@ -127,17 +132,17 @@ function submitDecision(orderNo, decision, note) {
       ? '✅ 核准 ' + email + ' ' + stamp
       : '❌ 退回 ' + email + ' ' + stamp + '｜' + note;
 
-    ctx.sheet.getRange(hit.row, hit.col[COL_APPROVAL]).setValue(mark);
-    if (hit.col[COL_STATUS]) {
-      ctx.sheet.getRange(hit.row, hit.col[COL_STATUS])
+    ctx.sheet.getRange(hit.row, ctx.col[COL_APPROVAL]).setValue(mark);
+    if (ctx.col[COL_STATUS]) {
+      ctx.sheet.getRange(hit.row, ctx.col[COL_STATUS])
         .setValue(decision === 'approve' ? '已核准' : '已退回');
     }
 
-    // 稽核軌跡：O 欄只留最後狀態，這裡留完整歷程（誰、何時、做了什麼、為什麼）
-    appendAudit_(ctx.ss, {
+    // 稽核軌跡：簽核欄只留最後狀態，這裡留完整歷程（誰、何時、做了什麼、為什麼）
+    appendAudit_(env.ss, {
       at: stamp, who: email, orderNo: orderNo,
       action: decision === 'approve' ? '核准' : '退回',
-      note: note, row: hit.row
+      note: note, sheet: ctx.name, row: hit.row
     });
 
     SpreadsheetApp.flush();
@@ -161,38 +166,80 @@ function refreshPending() {
 
 // ────────────────────────────────────────────── 試算表存取
 
-function openSheet_() {
+/**
+ * 開啟所有要處理的工作表。
+ *
+ * 為什麼要支援多分頁：實際的試算表是「每位業務一個分頁」（零售-Johnson、零售-Sammi…），
+ * 只讀一頁的話，主管會看不到其他業務的發包，而且是**安靜地看不到**——最危險的那種錯。
+ *
+ * DISPATCH_SHEET_NAME 的三種寫法：
+ *   零售-Johnson              單一分頁
+ *   零售-Johnson,零售-Sammi   多個分頁，逗號分隔
+ *   *                         自動掃描：所有含「發包單號」表頭的分頁都納入
+ */
+function openSheets_() {
   var props = PropertiesService.getScriptProperties();
   var id = props.getProperty('DISPATCH_SHEET_ID');
-  var name = props.getProperty('DISPATCH_SHEET_NAME');
+  var spec = String(props.getProperty('DISPATCH_SHEET_NAME') || '').trim();
   if (!id) throw new Error('未設定指令碼屬性 DISPATCH_SHEET_ID');
-  if (!name) throw new Error('未設定指令碼屬性 DISPATCH_SHEET_NAME');
+  if (!spec) throw new Error('未設定指令碼屬性 DISPATCH_SHEET_NAME（可填分頁名、逗號分隔多個、或 * 代表全部）');
 
   var ss = SpreadsheetApp.openById(id);
-  var sheet = ss.getSheetByName(name);
-  if (!sheet) throw new Error('找不到工作表「' + name + '」，請確認 DISPATCH_SHEET_NAME 是否正確');
+  var list = [];
 
-  var headerRow = Number(props.getProperty('DISPATCH_HEADER_ROW') || 0) || detectHeaderRow_(sheet);
-  var col = headerMap_(sheet, headerRow);
-  applyAliases_(col);
-  if (!col[COL_ORDER_NO]) {
-    throw new Error('表頭第 ' + headerRow + ' 列找不到「' + COL_ORDER_NO + '」欄，請檢查欄位名稱');
+  if (spec === '*') {
+    var all = ss.getSheets();
+    for (var i = 0; i < all.length; i++) {
+      var ctx = buildCtx_(all[i]);
+      if (ctx) list.push(ctx);   // 沒有「發包單號」表頭的分頁自動略過
+    }
+    if (!list.length) {
+      throw new Error('自動掃描找不到任何含「' + COL_ORDER_NO + '」表頭的分頁');
+    }
+  } else {
+    var names = spec.split(',');
+    for (var j = 0; j < names.length; j++) {
+      var name = names[j].trim();
+      if (!name) continue;
+      var sheet = ss.getSheetByName(name);
+      if (!sheet) throw new Error('找不到工作表「' + name + '」，請確認 DISPATCH_SHEET_NAME');
+      var c = buildCtx_(sheet);
+      if (!c) throw new Error('工作表「' + name + '」找不到「' + COL_ORDER_NO + '」欄，請檢查表頭');
+      list.push(c);
+    }
+    if (!list.length) throw new Error('DISPATCH_SHEET_NAME 沒有指定任何有效的分頁');
   }
-  return { ss: ss, sheet: sheet, headerRow: headerRow, col: col };
+
+  return { ss: ss, list: list };
 }
 
-/** 自動找出表頭在第幾列：往下掃，第一個含「發包單號」的列就是 */
+/** 建立單一分頁的欄位對照。找不到「發包單號」表頭回傳 null（供自動掃描略過用） */
+function buildCtx_(sheet) {
+  var forced = Number(PropertiesService.getScriptProperties().getProperty('DISPATCH_HEADER_ROW') || 0);
+  var headerRow = forced || detectHeaderRow_(sheet);
+  if (!headerRow) return null;
+
+  var col = headerMap_(sheet, headerRow);
+  applyAliases_(col);
+  if (!col[COL_ORDER_NO]) return null;
+
+  return { sheet: sheet, name: sheet.getName(), headerRow: headerRow, col: col };
+}
+
+/** 自動找出表頭在第幾列：往下掃，第一個含「發包單號」的列就是。找不到回傳 0。 */
 function detectHeaderRow_(sheet) {
-  var rows = Math.min(MAX_SCAN_HEADER_ROWS, sheet.getLastRow());
-  if (rows < 1) throw new Error('工作表是空的');
-  var values = sheet.getRange(1, 1, rows, sheet.getLastColumn()).getValues();
+  var lastRow = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+  if (lastRow < 1 || lastCol < 1) return 0;
+
+  var rows = Math.min(MAX_SCAN_HEADER_ROWS, lastRow);
+  var values = sheet.getRange(1, 1, rows, lastCol).getValues();
   for (var r = 0; r < values.length; r++) {
     for (var c = 0; c < values[r].length; c++) {
       if (normHeader_(values[r][c]) === COL_ORDER_NO) return r + 1;
     }
   }
-  throw new Error('前 ' + rows + ' 列都找不到「' + COL_ORDER_NO + '」，無法判斷表頭位置。' +
-                  '可設定 DISPATCH_HEADER_ROW 指定列號。');
+  return 0;
 }
 
 /** 表頭文字 → 欄號（1-based）。表頭常有換行與多餘空白，統一正規化後比對。 */
@@ -223,9 +270,27 @@ function applyAliases_(col) {
   }
 }
 
-/** 撈出待核清單：有發包單號、且主管簽核欄還是空的 */
+/** 撈出所有分頁的待核清單 */
 function getPending_() {
-  var ctx = openSheet_();
+  var env = openSheets_();
+  var out = [];
+  for (var i = 0; i < env.list.length; i++) {
+    out = out.concat(pendingOfSheet_(env.list[i]));
+  }
+  return out;
+}
+
+/**
+ * 單一分頁的待核清單：有發包單號、且主管簽核欄還是空的。
+ *
+ * 可選的 DISPATCH_PENDING_SINCE（格式 YYYY-MM-DD）：只列出申請日在此之後的。
+ * 為什麼需要：實際資料裡有 2023 年的單一直沒填簽核欄，那多半是歷史遺留、
+ * 不是真的等著被核。主管開頁面看到一堆三年前的單，反而會失去信任。
+ * 沒設定＝不過濾（不預設幫使用者決定哪些資料該被藏起來）。
+ */
+function pendingOfSheet_(ctx) {
+  var since = String(PropertiesService.getScriptProperties()
+    .getProperty('DISPATCH_PENDING_SINCE') || '').trim();
   var startRow = ctx.headerRow + 1;
   var lastRow = ctx.sheet.getLastRow();
   if (lastRow < startRow) return [];
@@ -236,9 +301,15 @@ function getPending_() {
 
   for (var i = 0; i < values.length; i++) {
     var row = values[i];
-    var pick = function (name) {
+    // raw 取原始值（日期欄會是 Date 物件、金額欄會是數字）；pick 取字串。
+    // 日期一定要走 raw——先轉字串的話會變成 "Wed Jul 05 2023 00:00:00 GMT+0800"。
+    var raw = function (name) {
       var c = ctx.col[name];
-      return c ? String(row[c - 1] == null ? '' : row[c - 1]).trim() : '';
+      return c ? row[c - 1] : '';
+    };
+    var pick = function (name) {
+      var v = raw(name);
+      return String(v == null ? '' : v).trim();
     };
 
     var orderNo = pick(COL_ORDER_NO);
@@ -246,40 +317,62 @@ function getPending_() {
     if (!orderNo || !/^[A-Za-z]{2}-\d{6}-\d+/.test(orderNo)) continue;
     if (pick(COL_APPROVAL)) continue;   // 已處理過
 
+    var applyAt = fmtDate_(raw(COL_APPLY_AT));
+    // 有設定起始日才過濾；日期空白的一律保留（無從判斷，寧可多顯示也不要漏）
+    if (since && applyAt && applyAt < since) continue;
+
     out.push({
       orderNo: orderNo,
-      applyAt: fmtCell_(pick(COL_APPLY_AT)),
+      applyAt: applyAt,
       worker: pick(COL_WORKER),
       customer: pick(COL_CUSTOMER),
       project: pick(COL_PROJECT),
       model: pick(COL_MODEL),
       qty: pick(COL_QTY),
-      price: pick(COL_PRICE),
+      price: fmtMoney_(raw(COL_PRICE)),
       dispatcher: pick(COL_DISPATCHER),
       note: pick(COL_NOTE),
+      sheet: ctx.name,
       row: startRow + i
     });
   }
   return out;
 }
 
-function findRowByOrderNo_(ctx, orderNo) {
-  var startRow = ctx.headerRow + 1;
-  var lastRow = ctx.sheet.getLastRow();
-  if (lastRow < startRow) return null;
-  var c = ctx.col[COL_ORDER_NO];
-  var vals = ctx.sheet.getRange(startRow, c, lastRow - startRow + 1, 1).getValues();
-  for (var i = 0; i < vals.length; i++) {
-    if (String(vals[i][0] || '').trim() === orderNo) {
-      return { row: startRow + i, col: ctx.col };
+/**
+ * 跨所有分頁找出這個發包單號在哪一列。
+ * 發包單號本身已含業務代碼前綴（JW/LS/SL/VH…），全域唯一，
+ * 所以不需要前端回傳分頁名稱——少一個可被竄改的輸入。
+ */
+function findByOrderNo_(env, orderNo) {
+  for (var k = 0; k < env.list.length; k++) {
+    var ctx = env.list[k];
+    var startRow = ctx.headerRow + 1;
+    var lastRow = ctx.sheet.getLastRow();
+    if (lastRow < startRow) continue;
+    var c = ctx.col[COL_ORDER_NO];
+    var vals = ctx.sheet.getRange(startRow, c, lastRow - startRow + 1, 1).getValues();
+    for (var i = 0; i < vals.length; i++) {
+      if (String(vals[i][0] || '').trim() === orderNo) {
+        return { ctx: ctx, row: startRow + i };
+      }
     }
   }
   return null;
 }
 
-function fmtCell_(v) {
+/** 日期欄：試算表回傳的是 Date 物件，直接 String() 會變成一長串英文格式 */
+function fmtDate_(v) {
   if (v instanceof Date) return Utilities.formatDate(v, TZ, 'yyyy-MM-dd');
-  return String(v || '');
+  return String(v == null ? '' : v).trim();
+}
+
+/** 金額欄：加千分位。不用 toLocaleString，避免不同執行環境的地區設定差異 */
+function fmtMoney_(v) {
+  if (v === '' || v == null) return '';
+  var n = Number(v);
+  if (isNaN(n)) return String(v).trim();
+  return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
 // ────────────────────────────────────────────── 稽核軌跡
@@ -288,10 +381,10 @@ function appendAudit_(ss, rec) {
   var sh = ss.getSheetByName(AUDIT_SHEET);
   if (!sh) {
     sh = ss.insertSheet(AUDIT_SHEET);
-    sh.appendRow(['時間', '操作者', '發包單號', '動作', '說明', '試算表列號']);
+    sh.appendRow(['時間', '操作者', '發包單號', '動作', '說明', '分頁', '列號']);
     sh.setFrozenRows(1);
   }
-  sh.appendRow([rec.at, rec.who, rec.orderNo, rec.action, rec.note, rec.row]);
+  sh.appendRow([rec.at, rec.who, rec.orderNo, rec.action, rec.note, rec.sheet, rec.row]);
 }
 
 // ────────────────────────────────────────────── 身分
@@ -374,13 +467,15 @@ function listBlock_(email, rows) {
         '<div class="top">' +
           '<span class="no">' + esc_(r.orderNo) + '</span>' +
           '<span class="date">' + esc_(r.applyAt) + '</span>' +
-          '<span class="who">發包：' + esc_(r.dispatcher) + '</span>' +
+          '<span class="who">' + esc_(r.sheet) +
+            (r.dispatcher ? '｜' + esc_(r.dispatcher) : '') + '</span>' +
         '</div>' +
         '<table>' +
           tr_('承包商', r.worker) +
           tr_('客戶', r.customer + (r.project ? '（' + r.project + '）' : '')) +
           tr_('型號', r.model + (r.qty ? ' × ' + r.qty : '')) +
-          '<tr><th>承包總價</th><td class="amt">' + esc_(r.price || '—') + '</td></tr>' +
+          '<tr><th>承包總價</th><td class="amt">' +
+            (r.price ? 'NT$ ' + esc_(r.price) : '—') + '</td></tr>' +
           (r.note ? tr_('補充說明', r.note) : '') +
         '</table>' +
         '<div class="row">' +
@@ -448,20 +543,38 @@ function checkSetup() {
   Logger.log('DISPATCH_SHEET_NAME = ' + (props.getProperty('DISPATCH_SHEET_NAME') || '❌ 未設定'));
   Logger.log('DISPATCH_HEADER_ROW = ' + (props.getProperty('DISPATCH_HEADER_ROW') || '（未設定，將自動偵測）'));
   try {
-    var ctx = openSheet_();
-    Logger.log('✅ 試算表開啟成功，表頭在第 ' + ctx.headerRow + ' 列');
-    var missing = [];
-    [COL_ORDER_NO, COL_WORKER, COL_CUSTOMER, COL_MODEL, COL_APPROVAL, COL_STATUS].forEach(function (n) {
-      if (!ctx.col[n]) missing.push(n);
-    });
-    if (missing.length) {
-      Logger.log('⚠ 找不到這些欄位（請確認表頭文字完全一致）：' + missing.join('、'));
-    } else {
-      Logger.log('✅ 必要欄位齊全');
+    var env = openSheets_();
+    Logger.log('✅ 試算表開啟成功，納入 ' + env.list.length + ' 個分頁');
+
+    var need = [COL_ORDER_NO, COL_WORKER, COL_CUSTOMER, COL_MODEL, COL_APPROVAL, COL_STATUS];
+    for (var i = 0; i < env.list.length; i++) {
+      var ctx = env.list[i];
+      var missing = [];
+      for (var j = 0; j < need.length; j++) {
+        if (!ctx.col[need[j]]) missing.push(need[j]);
+      }
+      var n = pendingOfSheet_(ctx).length;
+      Logger.log('　• ' + ctx.name + '｜表頭第 ' + ctx.headerRow + ' 列｜待核 ' + n + ' 筆' +
+        (missing.length ? '｜⚠ 缺欄位：' + missing.join('、') : '｜欄位齊全'));
     }
-    Logger.log('待核項目：' + getPending_().length + ' 筆');
+
+    var all = getPending_();
+    Logger.log('合計待核：' + all.length + ' 筆');
+
+    // 最舊的待核項目：若是很久以前的資料，多半是歷史單從沒填過簽核欄，
+    // 而不是真的等著被核——建議用 DISPATCH_PENDING_SINCE 過濾
+    if (all.length) {
+      var oldest = '';
+      for (var k = 0; k < all.length; k++) {
+        var d = all[k].applyAt;
+        if (d && (!oldest || d < oldest)) oldest = d;
+      }
+      if (oldest) Logger.log('最舊待核申請日：' + oldest);
+    }
   } catch (err) {
     Logger.log('❌ ' + err);
   }
+  Logger.log('DISPATCH_PENDING_SINCE = ' +
+    (props.getProperty('DISPATCH_PENDING_SINCE') || '（未設定，不過濾舊資料）'));
   Logger.log('登入身分（在編輯器手動執行時可能為空，屬正常）：' + currentUserEmail_());
 }
