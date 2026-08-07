@@ -52,14 +52,36 @@ var COL_PRICE     = '承包總價';
 var COL_DISPATCHER= '發包人員';
 var COL_NOTE      = '補充說明';
 var COL_APPROVAL  = '主管簽核';   // 建議改成這個欄名；下方 ALIAS 仍認得舊名，不強迫先改
+var COL_SUB_APPROVAL = '副主管簽核';  // 只有部分分頁有；有這欄的走兩層簽核
 var COL_STATUS    = '案件狀態';   // 新增欄，取代「黃色標示」
 
-// 舊表頭相容：欄位還沒改名也能運作，避免「非得先改試算表才能用」的導入門檻
+/**
+ * 舊表頭相容：欄位還沒改名也能運作，避免「非得先改試算表才能用」的導入門檻。
+ *
+ * 這張別名表不是為了「以防萬一」——實際盤點 18 個分頁後，同一個概念用了 4 種寫法：
+ *   簽核欄：主管簽核／主管KEY英文名押日期／主管確認/押日期
+ *   金額欄：承包總價／發包合計
+ *   數量欄：本次請款數量／請款數量（陳俊行分頁）
+ * 少任何一個別名，對應分頁就會安靜地少掉欄位（金額顯示成「—」），不會報錯。
+ *
+ * ⚠ 副主管別名絕對不能寫進 COL_APPROVAL 的清單裡。normHeader_ 只去空白不做模糊比對，
+ *   所以「副主管KEY英文名押日期」不會誤配到「主管KEY英文名押日期」——這是刻意依賴的行為。
+ */
 var COL_ALIAS = {};
-COL_ALIAS[COL_APPROVAL] = ['主管KEY英文名押日期', '主管簽核', '主管核准'];
+COL_ALIAS[COL_APPROVAL] = ['主管KEY英文名押日期', '主管簽核', '主管核准', '主管確認/押日期'];
+COL_ALIAS[COL_SUB_APPROVAL] = ['副主管簽核', '副主管確認/押日期', '副主管KEY英文名押日期'];
+COL_ALIAS[COL_PRICE] = ['承包總價', '發包合計'];
+COL_ALIAS[COL_QTY] = ['本次請款數量', '請款數量'];
+// 一課-sin 的欄名是「發包日期」。少這個別名，該分頁的申請日一律讀成空值，
+// DISPATCH_PENDING_SINCE 的日期過濾對整個分頁失效——歷史單會全部湧進待核清單。
+COL_ALIAS[COL_APPLY_AT] = ['發包申請日期', '發包日期'];
 
 var AUDIT_SHEET = '簽核紀錄';     // 稽核軌跡（不存在會自動建立）
 var MAX_SCAN_HEADER_ROWS = 10;    // 自動偵測表頭時最多往下找幾列
+
+// 發包單號格式（業務代碼前綴 + 日期 + 序號），例：JW-260805-01。
+// 表格最上方幾列會寫「先寄未裝」之類的狀態註記而不是單號，靠這個式子濾掉。
+var ORDER_NO_RE = /^[A-Za-z]{2}-\d{6}-\d+/;
 
 // ────────────────────────────────────────────── 網頁進入點
 
@@ -73,14 +95,65 @@ function doGet() {
     ));
   }
 
-  var data;
+  var data, dataAt = '', fromCache = false;
   try {
-    data = getPending_();
+    var res = getPendingCached_();
+    data = res.rows;
+    dataAt = res.at;
+    fromCache = res.cached;
   } catch (err) {
     return htmlPage_(errorBlock_('讀取試算表失敗', String(err)));
   }
 
-  return htmlPage_(listBlock_(email, data));
+  var allow = stagesFor_(email);
+  if (!allow.sub && !allow.boss) {
+    return htmlPage_(errorBlock_(
+      '您沒有簽核權限',
+      email + ' 不在副主管或主管的簽核名單中。若這不正確，' +
+      '請確認指令碼屬性 DISPATCH_SUB_APPROVERS／DISPATCH_BOSS_APPROVERS 是否包含您的帳號。'
+    ));
+  }
+
+  return htmlPage_(listBlock_(email, data, allow, { at: dataAt, cached: fromCache }));
+}
+
+/**
+ * 這個帳號可以看到／操作哪幾層。
+ *
+ * 為什麼要依身分過濾畫面，而不是把兩層都列出來讓人按了才擋：
+ * 顯示一個按下去一定會被拒絕的按鈕，是在讓人做白工。主管開頁面看到 15 筆
+ * 副主管待核，會先困惑再按、按了被擋、然後懷疑系統壞了。
+ *
+ * 為什麼不做成兩個網址（?page=sub）：GAS 一個部署只有一個網址，靠查詢參數分頁面的話，
+ * 參數是使用者可以隨手改的，不能當權限依據——擋人的仍然只能是名單。
+ * 兩個網址只多出「要管理、可能發錯」的成本，安全性沒有任何增加。
+ * 身分由 Session.getActiveUser() 取得，不可偽造，才是唯一可靠的依據。
+ *
+ * 名單都沒設定＝兩層都看得到（降級狀態，checkSetup 會警告）。
+ */
+function stagesFor_(email) {
+  var props = PropertiesService.getScriptProperties();
+  var subRaw = String(props.getProperty('DISPATCH_SUB_APPROVERS') || '').trim();
+  var bossRaw = String(props.getProperty('DISPATCH_BOSS_APPROVERS') || '').trim();
+
+  // 兩份名單都沒設：維持可用，兩層都顯示（否則導入初期會直接不能用）
+  if (!subRaw && !bossRaw) return { sub: true, boss: true, unrestricted: true };
+
+  return {
+    sub: inList_(subRaw, email),
+    boss: inList_(bossRaw, email),
+    unrestricted: false
+  };
+}
+
+function inList_(raw, email) {
+  if (!raw) return false;
+  var list = String(raw).split(',');
+  var me = String(email).toLowerCase().trim();
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].toLowerCase().trim() === me) return true;
+  }
+  return false;
 }
 
 // ────────────────────────────────────────────── 給前端 google.script.run 呼叫
@@ -89,7 +162,7 @@ function doGet() {
  * 寫入簽核結果。回傳 {ok, message}。
  * 前端不傳簽核者是誰——一律由伺服器端從登入身分取得，避免被竄改。
  */
-function submitDecision(orderNo, decision, note) {
+function submitDecision(orderNo, decision, note, hintSheet, hintRow) {
   var email = currentUserEmail_();
   if (!email) return { ok: false, message: '無法辨識身分，未寫入任何資料。' };
 
@@ -112,8 +185,27 @@ function submitDecision(orderNo, decision, note) {
   }
 
   try {
-    var env = openSheets_();
-    var hit = findByOrderNo_(env, orderNo);
+    // 快路徑：位置提示指得出分頁與列，就只開那一個分頁。
+    // 提示仍然要驗證（下面會比對單號），對不上就退回完整搜尋——
+    // 提示只能讓事情變快，不能讓它指向別的列。
+    var env = null, hit = null;
+    var hr = Number(hintRow || 0);
+    if (hintSheet && hr > 0) {
+      var one = openSheetByName_(hintSheet);
+      if (one && hr > one.ctx.headerRow && hr <= (one.ctx.lastRow || 0)) {
+        var probe = String(one.ctx.sheet
+          .getRange(hr, one.ctx.col[COL_ORDER_NO]).getValue() || '').trim();
+        if (probe === orderNo) {
+          env = one;
+          hit = { ctx: one.ctx, row: hr };
+        }
+      }
+    }
+
+    if (!hit) {
+      env = openSheets_();
+      hit = findByOrderNo_(env, orderNo, hintSheet, hr);
+    }
     if (!hit) return { ok: false, message: '找不到發包單號 ' + orderNo + '，可能已被刪除。' };
 
     var ctx = hit.ctx;
@@ -121,32 +213,64 @@ function submitDecision(orderNo, decision, note) {
       return { ok: false, message: '分頁「' + ctx.name + '」找不到簽核欄，未寫入任何資料。' };
     }
 
-    // 重讀一次當下的簽核狀態：避免兩位主管同時開著頁面、後按的人覆蓋前一位
-    var already = String(ctx.sheet.getRange(hit.row, ctx.col[COL_APPROVAL]).getValue() || '').trim();
-    if (already) {
-      return { ok: false, message: '這筆已經被處理過了：' + already + '（畫面請重新整理）' };
+    // 重讀一次當下的簽核狀態：避免兩人同時開著頁面、後按的人覆蓋前一位。
+    // 階段一律由伺服器重算，不接受前端傳入——否則有人可以偽造 stage 跳過副主管那關。
+    // 一次讀整列，而不是每個欄位各發一次 getValue()——每次往返約 0.3 秒
+    var rowVals = ctx.sheet.getRange(hit.row, 1, 1, ctx.lastCol || ctx.sheet.getLastColumn())
+      .getValues()[0];
+    var cellOf = function (name) {
+      var c = ctx.col[name];
+      return (c && c <= rowVals.length) ? String(rowVals[c - 1] == null ? '' : rowVals[c - 1]).trim() : '';
+    };
+    var subVal = ctx.twoStage ? cellOf(COL_SUB_APPROVAL) : '';
+    var bossVal = cellOf(COL_APPROVAL);
+
+    var stage = stageOf_(ctx, subVal, bossVal);
+    if (!stage) {
+      return {
+        ok: false,
+        message: '這筆已經被處理過了：' + (bossVal || subVal) + '（畫面請重新整理）'
+      };
     }
+
+    var gate = checkApprover_(stage, email);
+    if (!gate.ok) return gate;
+
+    var targetCol = (stage === 'sub') ? ctx.col[COL_SUB_APPROVAL] : ctx.col[COL_APPROVAL];
+    var roleName = (stage === 'sub') ? '副主管' : '主管';
 
     var stamp = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm');
     var mark = (decision === 'approve')
       ? '✅ 核准 ' + email + ' ' + stamp
       : '❌ 退回 ' + email + ' ' + stamp + '｜' + note;
 
-    ctx.sheet.getRange(hit.row, ctx.col[COL_APPROVAL]).setValue(mark);
+    ctx.sheet.getRange(hit.row, targetCol).setValue(mark);
+
+    // 案件狀態只在「終局」才寫：副主管核准只是往上送，還沒定案，
+    // 這時就寫「已核准」會讓看表的人以為整筆過了。副主管退回是終局，要寫。
     if (ctx.col[COL_STATUS]) {
-      ctx.sheet.getRange(hit.row, ctx.col[COL_STATUS])
-        .setValue(decision === 'approve' ? '已核准' : '已退回');
+      var status = '';
+      if (decision === 'reject') status = '已退回（' + roleName + '）';
+      else if (stage === 'boss') status = '已核准';
+      else status = '待主管核准';
+      ctx.sheet.getRange(hit.row, ctx.col[COL_STATUS]).setValue(status);
     }
 
-    // 稽核軌跡：簽核欄只留最後狀態，這裡留完整歷程（誰、何時、做了什麼、為什麼）
+    // 稽核軌跡：簽核欄只留最後狀態，這裡留完整歷程（誰、何時、哪一層、做了什麼、為什麼）
     appendAudit_(env.ss, {
-      at: stamp, who: email, orderNo: orderNo,
+      at: stamp, who: email, orderNo: orderNo, role: roleName,
       action: decision === 'approve' ? '核准' : '退回',
-      note: note, sheet: ctx.name, row: hit.row
+      note: note + (gate.warn ? '｜⚠ ' + gate.warn : ''),
+      sheet: ctx.name, row: hit.row
     });
 
     SpreadsheetApp.flush();
-    return { ok: true, message: (decision === 'approve' ? '已核准 ' : '已退回 ') + orderNo };
+    updatePendingCache_(orderNo, decision, stage, mark);
+
+    var done = (decision === 'approve')
+      ? (stage === 'sub' ? '已核准（' + roleName + '層），已送主管 ' : '已核准 ')
+      : '已退回 ';
+    return { ok: true, message: done + orderNo };
   } catch (err) {
     return { ok: false, message: '寫入失敗：' + err };   // 顯性失敗，不靜默吞掉
   } finally {
@@ -154,11 +278,54 @@ function submitDecision(orderNo, decision, note) {
   }
 }
 
-/** 前端「重新整理」用：只回資料不重畫整頁 */
+/**
+ * 這個人可以核這一層嗎？
+ *
+ * 為什麼需要這道閘門：兩層簽核的意義在於「兩個不同的人」。若不限制，
+ * 同一個人可以先按副主管層、重新整理後再按主管層，兩層都自己核完——
+ * 那就只是同一個簽名蓋兩次，比單層更糟（看起來像有覆核）。
+ *
+ * 名單留空＝不限制。刻意不預設擋人：導入初期還沒收集到 email 就全擋，
+ * 系統會直接不能用。但這是降級狀態，checkSetup 會警告，稽核紀錄也會標記。
+ *
+ * 指令碼屬性（email 逗號分隔，大小寫不分）：
+ *   DISPATCH_SUB_APPROVERS  = 副主管的 Google 帳號
+ *   DISPATCH_BOSS_APPROVERS = 主管的 Google 帳號
+ */
+function checkApprover_(stage, email) {
+  // 與畫面過濾（stagesFor_）共用同一套判定，這點很重要：
+  // 前端 JS 是使用者可以用開發者工具改掉的，畫面藏起來不等於擋得住。
+  // 兩邊若各判一次，就會出現「看不到但呼叫得動」的漏洞。
+  var allow = stagesFor_(email);
+  var roleName = (stage === 'sub') ? '副主管' : '主管';
+
+  if (allow.unrestricted) {
+    return { ok: true, warn: '兩份簽核名單皆未設定，任何人皆可核（同一人可自核兩層）' };
+  }
+  if (stage === 'sub' ? allow.sub : allow.boss) return { ok: true, warn: '' };
+
+  return {
+    ok: false,
+    message: '您（' + email + '）不在' + roleName + '簽核名單中，未寫入任何資料。'
+  };
+}
+
+/**
+ * 前端「重新整理」用：只回資料不重畫整頁。
+ * 一樣要依身分過濾——否則重新整理會把畫面藏起來的那一層帶回來。
+ */
 function refreshPending() {
-  if (!currentUserEmail_()) return { ok: false, rows: [] };
+  var email = currentUserEmail_();
+  if (!email) return { ok: false, rows: [] };
   try {
-    return { ok: true, rows: getPending_() };
+    var allow = stagesFor_(email);
+    var all = getPendingCached_().rows;
+    var mine = [];
+    for (var i = 0; i < all.length; i++) {
+      var st = all[i].stage;
+      if (st === 'sub' ? allow.sub : allow.boss) mine.push(all[i]);
+    }
+    return { ok: true, rows: mine };
   } catch (err) {
     return { ok: false, rows: [], message: String(err) };
   }
@@ -216,13 +383,70 @@ function openSheets_() {
   return { ss: ss, list: list };
 }
 
-/** 建立單一分頁的欄位對照。找不到「發包單號」表頭回傳 null（供自動掃描略過用） */
+/**
+ * 這個分頁名有沒有在掃描範圍內。
+ * 用途：位置提示是前端傳來的，不能讓它指向一個本來就不該被納入的分頁
+ * （例如「簽核紀錄」，或 DISPATCH_SHEET_NAME 明確列舉時未列出的分頁）。
+ */
+function isSheetInScope_(name) {
+  if (!name || name === AUDIT_SHEET) return false;
+  var spec = String(PropertiesService.getScriptProperties()
+    .getProperty('DISPATCH_SHEET_NAME') || '').trim();
+  if (spec === '*') return true;
+  var names = spec.split(',');
+  for (var i = 0; i < names.length; i++) {
+    if (names[i].trim() === name) return true;
+  }
+  return false;
+}
+
+/**
+ * 只開一個分頁（簽核寫入的快路徑）。
+ *
+ * submitDecision 只需要動一個分頁的一列，但原本要先跑 openSheets_() 把 17 個分頁
+ * 全部建一次欄位對照——每頁 3 次 API 往返，光這樣就十幾秒，實測按核准要 18.4 秒。
+ * 有位置提示時直接開那一頁，往返次數從 50 幾次降到 3 次。
+ *
+ * 找不到、不在掃描範圍、或沒有簽核欄都回 null，呼叫端會退回完整搜尋。
+ */
+function openSheetByName_(name) {
+  if (!isSheetInScope_(name)) return null;
+  var id = PropertiesService.getScriptProperties().getProperty('DISPATCH_SHEET_ID');
+  if (!id) return null;
+  try {
+    var ss = SpreadsheetApp.openById(id);
+    var sheet = ss.getSheetByName(name);
+    if (!sheet) return null;
+    var ctx = buildCtx_(sheet);
+    if (!ctx || !ctx.usable) return null;
+    return { ss: ss, list: [ctx], ctx: ctx };
+  } catch (err) {
+    return null;
+  }
+}
+
+/**
+ * 建立單一分頁的欄位對照。找不到「發包單號」表頭回傳 null（供自動掃描略過用）。
+ *
+ * 效能：整個函式只做 **1 次** getValues。
+ * 原本是 detectHeaderRow_ 讀前 10 列、headerMap_ 再把同一列讀第二次，
+ * 加上兩次 getLastColumn()，每個分頁 5 次 API 往返；18 個分頁約 90 次、
+ * 每次約 0.3 秒 → 光開表就 28 秒。試算表 API 的成本幾乎全在往返次數，
+ * 不在讀多少格，所以「一次讀足夠的範圍」比「精準只讀要的那一列」快得多。
+ */
 function buildCtx_(sheet) {
   var forced = Number(PropertiesService.getScriptProperties().getProperty('DISPATCH_HEADER_ROW') || 0);
-  var headerRow = forced || detectHeaderRow_(sheet);
-  if (!headerRow) return null;
+  var lastRow = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+  if (lastRow < 1 || lastCol < 1) return null;
 
-  var col = headerMap_(sheet, headerRow);
+  var scanTo = forced ? Math.min(forced, lastRow) : Math.min(MAX_SCAN_HEADER_ROWS, lastRow);
+  var top = sheet.getRange(1, 1, scanTo, lastCol).getValues();
+
+  var headerRow = forced || detectHeaderRowIn_(top);
+  if (!headerRow || headerRow > top.length) return null;
+
+  var col = headerMapOf_(top[headerRow - 1]);
   applyAliases_(col);
   if (!col[COL_ORDER_NO]) return null;
 
@@ -232,8 +456,13 @@ function buildCtx_(sheet) {
     sheet: sheet,
     name: sheet.getName(),
     headerRow: headerRow,
+    lastRow: lastRow,     // 已經問過了，別再問第二次
+    lastCol: lastCol,
     col: col,
-    usable: !!col[COL_APPROVAL]
+    usable: !!col[COL_APPROVAL],
+    // 有副主管欄的分頁走兩層：副主管先核，核完才進主管清單。
+    // 9 個分頁有這一層，先前只讀主管欄的話，副主管那關會被安靜地跳過。
+    twoStage: !!col[COL_SUB_APPROVAL]
   };
 }
 
@@ -244,7 +473,21 @@ function detectHeaderRow_(sheet) {
   if (lastRow < 1 || lastCol < 1) return 0;
 
   var rows = Math.min(MAX_SCAN_HEADER_ROWS, lastRow);
-  var values = sheet.getRange(1, 1, rows, lastCol).getValues();
+  return detectHeaderRowIn_(sheet.getRange(1, 1, rows, lastCol).getValues());
+}
+
+/** 表頭文字 → 欄號（1-based）。表頭常有換行與多餘空白，統一正規化後比對。 */
+function headerMap_(sheet, headerRow) {
+  var last = sheet.getLastColumn();
+  return headerMapOf_(sheet.getRange(headerRow, 1, 1, last).getValues()[0]);
+}
+
+/**
+ * 以下兩支是純函式版本（吃已經讀好的值，不碰試算表）。
+ * 拆出來的原因：buildCtx_ 只想讀一次資料就把表頭列和欄位對照都算出來，
+ * 而上面兩支帶 sheet 的版本保留不動，避免影響其他呼叫端。
+ */
+function detectHeaderRowIn_(values) {
   for (var r = 0; r < values.length; r++) {
     for (var c = 0; c < values[r].length; c++) {
       if (normHeader_(values[r][c]) === COL_ORDER_NO) return r + 1;
@@ -253,13 +496,10 @@ function detectHeaderRow_(sheet) {
   return 0;
 }
 
-/** 表頭文字 → 欄號（1-based）。表頭常有換行與多餘空白，統一正規化後比對。 */
-function headerMap_(sheet, headerRow) {
-  var last = sheet.getLastColumn();
-  var head = sheet.getRange(headerRow, 1, 1, last).getValues()[0];
+function headerMapOf_(headRow) {
   var map = {};
-  for (var i = 0; i < head.length; i++) {
-    var key = normHeader_(head[i]);
+  for (var i = 0; i < headRow.length; i++) {
+    var key = normHeader_(headRow[i]);
     if (key && !map[key]) map[key] = i + 1;
   }
   return map;
@@ -281,7 +521,116 @@ function applyAliases_(col) {
   }
 }
 
-/** 撈出所有分頁的待核清單 */
+var CACHE_KEY = 'dispatch_pending_v1';
+var CACHE_TTL = 900;              // 秒。預熱觸發器設每 10 分鐘，留 5 分鐘餘裕
+var CACHE_MAX_BYTES = 95000;      // CacheService 單一值上限 100KB，留一點安全邊界
+
+/**
+ * 待核清單（優先用快取）。
+ *
+ * 為什麼需要快取：掃 17 個分頁本身就要 34 次以上的試算表 API 往返，
+ * 每次約 0.3 秒——這是無法再壓縮的下限，實測開頁 39 秒。
+ * 主管不會接受每次開頁等 40 秒，而這份資料的新鮮度要求其實很低
+ * （簽核從「每週四批次」變成「隨時可核」已經是巨大改善，差幾分鐘無關緊要）。
+ *
+ * 一致性怎麼保證：**簽核動作一定會清掉快取**（submitDecision 成功後 invalidate），
+ * 所以「剛核完卻還看到那筆」不會發生。快取只會讓「業務新開的單」晚幾分鐘出現。
+ *
+ * 搭配 warmCache() 的時間觸發器，主管開頁時幾乎總是熱的。
+ */
+function getPendingCached_() {
+  var cache = CacheService.getScriptCache();
+  try {
+    var hit = cache.get(CACHE_KEY);
+    if (hit) {
+      var obj = JSON.parse(hit);
+      if (obj && obj.rows) return { rows: obj.rows, at: obj.at, cached: true };
+    }
+  } catch (err) {
+    Logger.log('讀取快取失敗，改為即時掃描：' + err);   // 快取壞掉不能讓功能停擺
+  }
+
+  var rows = getPending_();
+  var at = Utilities.formatDate(new Date(), TZ, 'HH:mm');
+  try {
+    var payload = JSON.stringify({ rows: rows, at: at });
+    if (payload.length <= CACHE_MAX_BYTES) {
+      cache.put(CACHE_KEY, payload, CACHE_TTL);
+    } else {
+      // 顯性失敗：不要讓人以為快取在生效卻其實每次都在重掃
+      Logger.log('⚠ 待核清單 ' + payload.length + ' bytes 超過快取上限 ' +
+        CACHE_MAX_BYTES + '，本次未寫入快取（開頁會維持慢速）。');
+    }
+  } catch (err) {
+    Logger.log('寫入快取失敗：' + err);
+  }
+  return { rows: rows, at: at, cached: false };
+}
+
+/** 簽核寫入後一定要呼叫，否則剛核完的單還會留在清單上 */
+function invalidatePendingCache_() {
+  try {
+    CacheService.getScriptCache().remove(CACHE_KEY);
+  } catch (err) {
+    Logger.log('清除快取失敗（下次開頁可能看到已處理的單）：' + err);
+  }
+}
+
+/**
+ * 簽核後「就地更新」快取，而不是整份丟掉。
+ *
+ * 為什麼不直接 invalidate：丟掉的話下一次開頁就要重跑 30 秒的完整掃描，
+ * 等於每簽一筆就懲罰下一個開頁的人。這一筆的變化我們完全知道，直接改掉就好。
+ *
+ * 三種結果：退回→整筆移除；主管核准→整筆移除；副主管核准→留著但升到主管層。
+ * 快取不存在就什麼都不做（下次開頁自然會重算）。
+ */
+function updatePendingCache_(orderNo, decision, stage, mark) {
+  // 整段都包在 try 裡，連取得 cache 物件都算進去。
+  // 資料此時已經寫進試算表了，快取只是加速層——它出任何問題都不能讓
+  // 一次成功的簽核被回報成失敗，否則使用者會重試，然後看到「已經被處理過了」而困惑。
+  try {
+    var cache = CacheService.getScriptCache();
+    var hit = cache.get(CACHE_KEY);
+    if (!hit) return;
+    var obj = JSON.parse(hit);
+    if (!obj || !obj.rows) return;
+
+    var out = [];
+    for (var i = 0; i < obj.rows.length; i++) {
+      var r = obj.rows[i];
+      if (r.orderNo !== orderNo) { out.push(r); continue; }
+      // 副主管核准：這筆還沒結束，改成等主管，並帶上副主管的簽核字串
+      if (decision === 'approve' && stage === 'sub') {
+        r.stage = 'boss';
+        r.subMark = mark;
+        out.push(r);
+      }
+      // 其餘（退回、主管核准）都是終局，不放回去
+    }
+    obj.rows = out;
+    cache.put(CACHE_KEY, JSON.stringify(obj), CACHE_TTL);
+  } catch (err) {
+    // 更新失敗就退回「整份丟掉」，寧可慢也不要顯示錯的清單。
+    // 連清除都失敗也只記錄，不往上拋——見上方註解。
+    Logger.log('就地更新快取失敗，改為清除：' + err);
+    invalidatePendingCache_();
+  }
+}
+
+/**
+ * 供時間驅動觸發器呼叫：每 10 分鐘把清單算好放進快取。
+ * 這樣主管開頁時拿到的是現成結果，不必等 30 秒的掃描。
+ */
+function warmCache() {
+  invalidatePendingCache_();
+  var t0 = new Date().getTime();
+  var res = getPendingCached_();
+  Logger.log('✅ 快取已更新：' + res.rows.length + ' 筆待核，耗時 ' +
+    ((new Date().getTime() - t0) / 1000).toFixed(1) + ' 秒');
+}
+
+/** 撈出所有分頁的待核清單（不經快取，checkSetup 與預熱用） */
 function getPending_() {
   var env = openSheets_();
   var out = [];
@@ -305,30 +654,56 @@ function pendingOfSheet_(ctx) {
   var since = String(PropertiesService.getScriptProperties()
     .getProperty('DISPATCH_PENDING_SINCE') || '').trim();
   var startRow = ctx.headerRow + 1;
-  var lastRow = ctx.sheet.getLastRow();
+  var lastRow = ctx.lastRow || ctx.sheet.getLastRow();
   if (lastRow < startRow) return [];
 
-  var width = ctx.sheet.getLastColumn();
-  var values = ctx.sheet.getRange(startRow, 1, lastRow - startRow + 1, width).getValues();
+  // 只讀到真正用得到的最後一欄。這些分頁的 getLastColumn() 常被最右邊的
+  // 「業務確認」欄撐到 29，而我們最遠只需要簽核欄。
+  var width = 1;
+  var wanted = [COL_ORDER_NO, COL_APPLY_AT, COL_WORKER, COL_CUSTOMER, COL_PROJECT,
+                COL_MODEL, COL_QTY, COL_PRICE, COL_DISPATCHER, COL_NOTE,
+                COL_APPROVAL, COL_SUB_APPROVAL, COL_STATUS];
+  for (var w = 0; w < wanted.length; w++) {
+    var wc = ctx.col[wanted[w]];
+    if (wc && wc > width) width = wc;
+  }
+
+  // 先只讀單號欄，找出最後一筆有單號的列。
+  // 為什麼值得多一次往返：getLastRow() 會被格式或殘留內容撐到 800~1100 列，
+  // 但實際資料只到 190 列左右。先花一次單欄讀取定出邊界，第二次就少讀 5~6 倍的格子。
+  var noCol = ctx.col[COL_ORDER_NO];
+  var span = lastRow - startRow + 1;
+  var noVals = ctx.sheet.getRange(startRow, noCol, span, 1).getValues();
+  var lastValid = -1;
+  for (var v = 0; v < noVals.length; v++) {
+    if (ORDER_NO_RE.test(String(noVals[v][0] || '').trim())) lastValid = v;
+  }
+  if (lastValid < 0) return [];
+
+  var values = ctx.sheet.getRange(startRow, 1, lastValid + 1, width).getValues();
   var out = [];
 
+  // raw／pick 提到迴圈外：原本每一列都重新建立兩個閉包，
+  // 800 列 × 18 個分頁就是一萬多個用完即丟的函式物件。
+  var row = null;
+  function raw(name) {
+    var c = ctx.col[name];
+    return (c && c <= row.length) ? row[c - 1] : '';
+  }
+  function pick(name) {
+    var v = raw(name);
+    return String(v == null ? '' : v).trim();
+  }
+
   for (var i = 0; i < values.length; i++) {
-    var row = values[i];
-    // raw 取原始值（日期欄會是 Date 物件、金額欄會是數字）；pick 取字串。
-    // 日期一定要走 raw——先轉字串的話會變成 "Wed Jul 05 2023 00:00:00 GMT+0800"。
-    var raw = function (name) {
-      var c = ctx.col[name];
-      return c ? row[c - 1] : '';
-    };
-    var pick = function (name) {
-      var v = raw(name);
-      return String(v == null ? '' : v).trim();
-    };
+    row = values[i];
 
     var orderNo = pick(COL_ORDER_NO);
     // 最上面那幾列會寫「先寄未裝」「先寄門廠/宇泰」而不是單號——那是狀態註記，還不能簽核
-    if (!orderNo || !/^[A-Za-z]{2}-\d{6}-\d+/.test(orderNo)) continue;
-    if (pick(COL_APPROVAL)) continue;   // 已處理過
+    if (!orderNo || !ORDER_NO_RE.test(orderNo)) continue;
+
+    var stage = stageOf_(ctx, pick(COL_SUB_APPROVAL), pick(COL_APPROVAL));
+    if (!stage) continue;   // 已終結（主管已處理，或副主管已退回）
 
     var applyAt = fmtDate_(raw(COL_APPLY_AT));
     // 有設定起始日才過濾；日期空白的一律保留（無從判斷，寧可多顯示也不要漏）
@@ -345,6 +720,8 @@ function pendingOfSheet_(ctx) {
       price: fmtMoney_(raw(COL_PRICE)),
       dispatcher: pick(COL_DISPATCHER),
       note: pick(COL_NOTE),
+      stage: stage,
+      subMark: pick(COL_SUB_APPROVAL),   // 主管層要看得到副主管是誰核的
       sheet: ctx.name,
       row: startRow + i
     });
@@ -353,15 +730,53 @@ function pendingOfSheet_(ctx) {
 }
 
 /**
+ * 這一列現在卡在哪一關。回傳 'sub'（等副主管）、'boss'（等主管）或 ''（已終結）。
+ *
+ * 判定順序刻意是「先看主管欄」：主管欄一填就終結，不管副主管欄是什麼狀態。
+ * 為什麼：舊資料裡有主管已手打簽核、但副主管欄從沒填過的列。若先看副主管欄，
+ * 這些單會被重新拉回副主管待核，等於把已完成的單倒退回去。
+ */
+function stageOf_(ctx, subVal, bossVal) {
+  if (bossVal) return '';
+  if (!ctx.twoStage) return 'boss';
+  if (!subVal) return 'sub';
+  if (isReject_(subVal)) return '';   // 副主管退回即終結，不往上送
+  return 'boss';
+}
+
+/**
+ * 是否為「退回」標記。只認 ❌ 開頭——那是本系統寫入的格式。
+ * 不用關鍵字比對「退回」二字：舊資料是人工手打的姓名日期，
+ * 若備註裡剛好出現「退回」就會被誤判成已退回而終結，是靜默的資料損失。
+ */
+function isReject_(v) {
+  return String(v || '').charAt(0) === '❌';
+}
+
+/**
  * 跨所有分頁找出這個發包單號在哪一列。
  * 發包單號本身已含業務代碼前綴（JW/LS/SL/VH…），全域唯一，
  * 所以不需要前端回傳分頁名稱——少一個可被竄改的輸入。
  */
-function findByOrderNo_(env, orderNo) {
+function findByOrderNo_(env, orderNo, hintSheet, hintRow) {
+  // 位置提示（前端帶回來的分頁＋列號）只用來「先看一眼」，省下掃 18 個分頁的成本。
+  // 它是可被竄改的輸入，所以一律要驗證那一格的單號真的吻合；不吻合就當提示不存在，
+  // 走完整搜尋。也就是說提示只能讓事情變快，不能讓它指向別的列。
+  if (hintSheet && hintRow) {
+    for (var h = 0; h < env.list.length; h++) {
+      var hc = env.list[h];
+      if (hc.name !== hintSheet) continue;
+      if (hintRow <= hc.headerRow || hintRow > (hc.lastRow || hc.sheet.getLastRow())) break;
+      var at = String(hc.sheet.getRange(hintRow, hc.col[COL_ORDER_NO]).getValue() || '').trim();
+      if (at === orderNo) return { ctx: hc, row: hintRow };
+      break;   // 提示對不上（有人插刪過列），改走完整搜尋
+    }
+  }
+
   for (var k = 0; k < env.list.length; k++) {
     var ctx = env.list[k];
     var startRow = ctx.headerRow + 1;
-    var lastRow = ctx.sheet.getLastRow();
+    var lastRow = ctx.lastRow || ctx.sheet.getLastRow();
     if (lastRow < startRow) continue;
     var c = ctx.col[COL_ORDER_NO];
     var vals = ctx.sheet.getRange(startRow, c, lastRow - startRow + 1, 1).getValues();
@@ -390,14 +805,63 @@ function fmtMoney_(v) {
 
 // ────────────────────────────────────────────── 稽核軌跡
 
+/**
+ * 寫一筆稽核紀錄。
+ *
+ * 依「表頭文字」定位，不靠欄位順序——沿用本檔讀發包表的同一套做法。
+ * 為什麼非這樣不可：既有的簽核紀錄分頁是早期版本的表頭（6 欄，且叫「試算表列號」
+ * 而不是「分頁」＋「列號」）。若照新順序 appendRow 8 個值，整張稽核表會錯位，
+ * 而稽核紀錄錯位是最不能接受的一種 bug——它是出事時唯一的依據。
+ *
+ * 舊表頭沒有「層級」欄時，層級併進「動作」（寫成「主管核准」），資訊不遺失。
+ */
 function appendAudit_(ss, rec) {
+  var HEAD = ['時間', '操作者', '層級', '發包單號', '動作', '說明', '分頁', '列號'];
   var sh = ss.getSheetByName(AUDIT_SHEET);
   if (!sh) {
     sh = ss.insertSheet(AUDIT_SHEET);
-    sh.appendRow(['時間', '操作者', '發包單號', '動作', '說明', '分頁', '列號']);
+    sh.appendRow(HEAD);
     sh.setFrozenRows(1);
   }
-  sh.appendRow([rec.at, rec.who, rec.orderNo, rec.action, rec.note, rec.sheet, rec.row]);
+
+  var lastCol = sh.getLastColumn();
+  var head = lastCol ? sh.getRange(1, 1, 1, lastCol).getValues()[0] : [];
+  var pos = {};
+  for (var i = 0; i < head.length; i++) {
+    var k = normHeader_(head[i]);
+    if (k && !pos[k]) pos[k] = i + 1;
+  }
+
+  // 表頭是空的（有人清過內容）就補回來，否則資料會落在沒有標題的欄位上
+  if (!pos[normHeader_('發包單號')]) {
+    sh.getRange(1, 1, 1, HEAD.length).setValues([HEAD]);
+    pos = {};
+    for (var j = 0; j < HEAD.length; j++) pos[normHeader_(HEAD[j])] = j + 1;
+    lastCol = HEAD.length;
+  }
+
+  var hasRole = !!pos[normHeader_('層級')];
+  // 舊表頭沒有「分頁」欄，只有「試算表列號」。單獨一個列號在 18 個分頁的表裡
+  // 指不到任何東西，所以降級成「分頁名!列號」，維持可追溯。
+  var hasSheetCol = !!pos[normHeader_('分頁')];
+  var vals = {};
+  vals[normHeader_('時間')] = rec.at;
+  vals[normHeader_('操作者')] = rec.who;
+  vals[normHeader_('層級')] = rec.role || '';
+  vals[normHeader_('發包單號')] = rec.orderNo;
+  vals[normHeader_('動作')] = hasRole ? rec.action : ((rec.role || '') + rec.action);
+  vals[normHeader_('說明')] = rec.note;
+  vals[normHeader_('分頁')] = rec.sheet;
+  vals[normHeader_('列號')] = rec.row;
+  vals[normHeader_('試算表列號')] = hasSheetCol ? rec.row : (rec.sheet + '!' + rec.row);
+
+  var width = Math.max(lastCol, 1);
+  var out = [];
+  for (var c = 0; c < width; c++) out.push('');
+  for (var name in vals) {
+    if (pos[name]) out[pos[name] - 1] = vals[name];
+  }
+  sh.appendRow(out);
 }
 
 // ────────────────────────────────────────────── 身分
@@ -443,7 +907,10 @@ function htmlPage_(bodyHtml) {
     '.center{text-align:center;color:#64748B;font-size:13px;padding:36px 0}' +
     '.msg{padding:10px 12px;border-radius:8px;font-size:13px;line-height:1.6;margin-bottom:10px}' +
     '.msg.fail{background:#FEE2E2;color:#991B1B}.msg.done{background:#D1FAE5;color:#065F46}' +
-    '.note{font-size:11px;color:#94A3B8;margin-top:8px;line-height:1.6}';
+    '.note{font-size:11px;color:#94A3B8;margin-top:8px;line-height:1.6}' +
+    '.sec{font-size:12.5px;font-weight:700;color:#0F2744;margin:14px 0 7px;' +
+      'display:flex;align-items:baseline;gap:7px}' +
+    '.sec span{font-weight:400;font-size:11px;color:#94A3B8}';
 
   var html =
     '<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8">' +
@@ -461,20 +928,108 @@ function errorBlock_(title, detail) {
          esc_(detail) + '</div></div>';
 }
 
-function listBlock_(email, rows) {
+function listBlock_(email, rows, allow, meta) {
+  allow = allow || { sub: true, boss: true, unrestricted: true };
+  meta = meta || {};
+
+  var role = allow.unrestricted ? ''
+    : (allow.sub && allow.boss) ? '副主管＋主管'
+    : allow.sub ? '副主管' : '主管';
+
   var head =
     '<div class="hd"><div class="ic">📋</div><div>' +
-    '<h1>發包簽核</h1><p>' + esc_(email) + '</p></div></div>' +
+    '<h1>發包簽核</h1><p>' + esc_(email) +
+    (role ? '　·　' + esc_(role) : '') + '</p></div></div>' +
     '<div id="msg"></div>';
 
-  if (!rows.length) {
-    return head + '<div class="card"><div class="center">目前沒有待核准的發包項目 👍</div></div>';
+  var subRows = [], bossRows = [];
+  for (var s = 0; s < rows.length; s++) {
+    (rows[s].stage === 'sub' ? subRows : bossRows).push(rows[s]);
+  }
+
+  // 只顯示這個人能簽的那幾層。不顯示按下去一定會被拒絕的按鈕——
+  // 主管看到 15 筆副主管待核，會先困惑、再按、被擋，然後懷疑系統壞了。
+  var hiddenSub = allow.sub ? 0 : subRows.length;
+  var hiddenBoss = allow.boss ? 0 : bossRows.length;
+  if (!allow.sub) subRows = [];
+  if (!allow.boss) bossRows = [];
+
+  // 別人那一層還有多少，用一行字說明就好。完全不提的話，
+  // 主管會以為「清單空了＝全部處理完了」，其實是卡在副主管那關。
+  var otherNote = '';
+  if (hiddenSub) otherNote += '另有 ' + hiddenSub + ' 筆待副主管核准（不在您的權限範圍）。';
+  if (hiddenBoss) otherNote += '另有 ' + hiddenBoss + ' 筆待主管核准（不在您的權限範圍）。';
+
+  if (!subRows.length && !bossRows.length) {
+    return head + '<div class="card"><div class="center">' +
+      '目前沒有需要您簽核的項目 👍' +
+      (otherNote ? '<div class="note" style="margin-top:10px">' + esc_(otherNote) + '</div>' : '') +
+      '</div></div>';
   }
 
   var cards = '';
+  if (subRows.length) {
+    cards += '<div class="sec">副主管待核（' + subRows.length + '）' +
+             '<span>核准後才會送到主管清單</span></div>' + cardsOf_(subRows, 's');
+  }
+  if (bossRows.length) {
+    cards += '<div class="sec">主管待核（' + bossRows.length + '）</div>' +
+             cardsOf_(bossRows, 'b');
+  }
+  // 不論有沒有卡片都要說明別層的筆數，否則清單看起來短、卻不知道是卡在別人那關
+  if (otherNote) {
+    cards += '<div class="note">' + esc_(otherNote) + '</div>';
+  }
+
+  var script =
+    '<script>' +
+    'function show(t,cls){var m=document.getElementById("msg");' +
+      'm.innerHTML=\'<div class="msg \'+cls+\'">\'+t+\'</div>\';window.scrollTo(0,0);}' +
+    'function act(no,dec,cardId,sh,rw){' +
+      'var note="";' +
+      'if(dec==="reject"){note=prompt("退回原因（會寫進紀錄，讓業務知道要改什麼）：")||"";' +
+        'if(!note.trim()){return;}}' +
+      'var card=document.getElementById(cardId);' +
+      'var btns=card.querySelectorAll("button");' +
+      'for(var i=0;i<btns.length;i++){btns[i].disabled=true;}' +
+      'var old=btns[0].textContent;btns[0].textContent="處理中…";' +
+      'google.script.run' +
+        '.withSuccessHandler(function(res){' +
+          'if(res.ok){card.parentNode.removeChild(card);show(res.message,"done");' +
+            'if(!document.querySelectorAll(".card").length){' +
+              'show("全部處理完畢 👍","done");}}' +
+          'else{for(var i=0;i<btns.length;i++){btns[i].disabled=false;}' +
+            'btns[0].textContent=old;show(res.message,"fail");}' +
+        '})' +
+        '.withFailureHandler(function(err){' +
+          'for(var i=0;i<btns.length;i++){btns[i].disabled=false;}' +
+          'btns[0].textContent=old;' +
+          'show("連線失敗："+err.message,"fail");})' +
+        '.submitDecision(no,dec,note,sh,rw);' +
+    '}' +
+    '</script>';
+
+  // 清單可能是幾分鐘前算的，這件事要寫在畫面上。
+  // 藏起來的話，業務剛開的單沒出現時，主管會以為系統漏單。
+  var stamp = meta.at
+    ? '清單資料時間 ' + esc_(meta.at) + (meta.cached ? '（快取）' : '（即時）') + '。' +
+      '業務新開的單最多 15 分鐘後出現；您自己剛簽的會立刻反映。'
+    : '';
+
+  var footer = '<div class="note">' + stamp +
+               '<br>簽核者身分取自您的 Google 帳號，無法手動修改。' +
+               '簽核的層級由系統依該筆目前狀態判定，不由畫面決定。' +
+               '每一筆核准／退回都會記錄在試算表的「' + AUDIT_SHEET + '」分頁。</div>';
+
+  return head + cards + footer + script;
+}
+
+/** 產生卡片群。prefix 讓兩區的 DOM id 不會撞在一起 */
+function cardsOf_(rows, prefix) {
+  var cards = '';
   for (var i = 0; i < rows.length; i++) {
     var r = rows[i];
-    var id = 'c' + i;
+    var id = prefix + i;
     cards +=
       '<div class="card" id="' + id + '">' +
         '<div class="top">' +
@@ -487,46 +1042,20 @@ function listBlock_(email, rows) {
           tr_('承包商', r.worker) +
           tr_('客戶', r.customer + (r.project ? '（' + r.project + '）' : '')) +
           tr_('型號', r.model + (r.qty ? ' × ' + r.qty : '')) +
-          '<tr><th>承包總價</th><td class="amt">' +
+          '<tr><th>' + (r.price ? '金額' : '承包總價') + '</th><td class="amt">' +
             (r.price ? 'NT$ ' + esc_(r.price) : '—') + '</td></tr>' +
           (r.note ? tr_('補充說明', r.note) : '') +
+          (r.stage === 'boss' && r.subMark ? tr_('副主管', r.subMark) : '') +
         '</table>' +
         '<div class="row">' +
-          '<button class="ok" onclick="act(\'' + jsq_(r.orderNo) + '\',\'approve\',\'' + id + '\')">✅ 核准</button>' +
-          '<button class="no-btn" onclick="act(\'' + jsq_(r.orderNo) + '\',\'reject\',\'' + id + '\')">❌ 退回</button>' +
+          '<button class="ok" onclick="act(\'' + jsq_(r.orderNo) + '\',\'approve\',\'' + id +
+            '\',\'' + jsq_(r.sheet) + '\',' + r.row + ')">✅ 核准</button>' +
+          '<button class="no-btn" onclick="act(\'' + jsq_(r.orderNo) + '\',\'reject\',\'' + id +
+            '\',\'' + jsq_(r.sheet) + '\',' + r.row + ')">❌ 退回</button>' +
         '</div>' +
       '</div>';
   }
-
-  var script =
-    '<script>' +
-    'function show(t,cls){var m=document.getElementById("msg");' +
-      'm.innerHTML=\'<div class="msg \'+cls+\'">\'+t+\'</div>\';window.scrollTo(0,0);}' +
-    'function act(no,dec,cardId){' +
-      'var note="";' +
-      'if(dec==="reject"){note=prompt("退回原因（會寫進紀錄，讓業務知道要改什麼）：")||"";' +
-        'if(!note.trim()){return;}}' +
-      'var card=document.getElementById(cardId);' +
-      'var btns=card.querySelectorAll("button");' +
-      'for(var i=0;i<btns.length;i++){btns[i].disabled=true;}' +
-      'google.script.run' +
-        '.withSuccessHandler(function(res){' +
-          'if(res.ok){card.parentNode.removeChild(card);show(res.message,"done");' +
-            'if(!document.querySelectorAll(".card").length){' +
-              'show("全部處理完畢 👍","done");}}' +
-          'else{for(var i=0;i<btns.length;i++){btns[i].disabled=false;}show(res.message,"fail");}' +
-        '})' +
-        '.withFailureHandler(function(err){' +
-          'for(var i=0;i<btns.length;i++){btns[i].disabled=false;}' +
-          'show("連線失敗："+err.message,"fail");})' +
-        '.submitDecision(no,dec,note);' +
-    '}' +
-    '</script>';
-
-  var footer = '<div class="note">簽核者身分取自您的 Google 帳號，無法手動修改。' +
-               '每一筆核准／退回都會記錄在試算表的「' + AUDIT_SHEET + '」分頁。</div>';
-
-  return head + cards + footer + script;
+  return cards;
 }
 
 function tr_(label, value) {
@@ -576,13 +1105,21 @@ function checkSetup() {
       for (var j = 0; j < need.length; j++) {
         if (!ctx.col[need[j]]) missing.push(need[j]);
       }
+      if (!ctx.col[COL_PRICE]) missing.push(COL_PRICE + '（金額會顯示為 —）');
       var rows = pendingOfSheet_(ctx);
       all = all.concat(rows);
-      Logger.log('　• ' + ctx.name + '｜表頭第 ' + ctx.headerRow + ' 列｜待核 ' + rows.length + ' 筆' +
+      var nSub = 0;
+      for (var m = 0; m < rows.length; m++) if (rows[m].stage === 'sub') nSub++;
+      Logger.log('　• ' + ctx.name + '｜表頭第 ' + ctx.headerRow + ' 列｜' +
+        (ctx.twoStage ? '兩層簽核' : '單層簽核') + '｜待核 ' + rows.length + ' 筆' +
+        (ctx.twoStage ? '（副主管 ' + nSub + '／主管 ' + (rows.length - nSub) + '）' : '') +
         (missing.length ? '｜⚠ 缺欄位：' + missing.join('、') : '｜欄位齊全'));
     }
 
-    Logger.log('合計待核：' + all.length + ' 筆（納入 ' +
+    var totalSub = 0;
+    for (var n = 0; n < all.length; n++) if (all[n].stage === 'sub') totalSub++;
+    Logger.log('合計待核：' + all.length + ' 筆（副主管層 ' + totalSub +
+      '／主管層 ' + (all.length - totalSub) + '，納入 ' +
       (env.list.length - blocked.length) + ' 個分頁）');
 
     if (blocked.length) {
@@ -611,5 +1148,125 @@ function checkSetup() {
   }
   Logger.log('DISPATCH_PENDING_SINCE = ' +
     (props.getProperty('DISPATCH_PENDING_SINCE') || '（未設定，不過濾舊資料）'));
+
+  // 兩層簽核若沒有名單，同一個人可以自己核完兩層——那就只是同一個簽名蓋兩次
+  var sub = String(props.getProperty('DISPATCH_SUB_APPROVERS') || '').trim();
+  var boss = String(props.getProperty('DISPATCH_BOSS_APPROVERS') || '').trim();
+  Logger.log('DISPATCH_SUB_APPROVERS  = ' + (sub || '❌ 未設定'));
+  Logger.log('DISPATCH_BOSS_APPROVERS = ' + (boss || '❌ 未設定'));
+  if (!sub && !boss) {
+    Logger.log('⚠ 兩份名單都沒設定：任何機構內成員都能核，' +
+      '且同一個人可以先核副主管層、再核主管層——兩層覆核形同虛設。' +
+      '（系統仍可運作，稽核紀錄會標記此降級狀態）');
+  } else if (!sub || !boss) {
+    Logger.log('⛔ 只設定了一份名單。沒設的那一層「沒有任何人有權限」，' +
+      '該層的待核項目不會顯示給任何人，也核不了——那些單會就這樣卡住。' +
+      '請把兩份都設好。');
+  }
+
   Logger.log('登入身分（在編輯器手動執行時可能為空，屬正常）：' + currentUserEmail_());
+}
+
+/**
+ * 檢查每個分頁的「受保護範圍」有沒有蓋住該分頁的簽核欄。
+ *
+ * 為什麼需要這支：18 個分頁的欄位順序不同，同一個欄位代號在不同分頁是不同東西。
+ * 逐頁人工核對 18 次很容易漏，而漏掉的後果是「簽核看起來有效、其實可被任意手改」——
+ * 這種失效不會有任何錯誤訊息。順帶也抓出鎖錯欄（例如鎖到金額欄，業務會填不進去）。
+ *
+ * 唯讀，不會修改任何保護設定。
+ */
+function checkProtections() {
+  var env;
+  try {
+    env = openSheets_();
+  } catch (err) {
+    Logger.log('❌ ' + err);
+    return;
+  }
+
+  var bad = [], wrong = [];
+
+  for (var i = 0; i < env.list.length; i++) {
+    var ctx = env.list[i];
+    var prot = ctx.sheet.getProtections(SpreadsheetApp.ProtectionType.RANGE);
+
+    // 蒐集被保護的欄號
+    var locked = {};
+    var desc = [];
+    for (var p = 0; p < prot.length; p++) {
+      var rg = prot[p].getRange();
+      if (!rg) continue;
+      var c1 = rg.getColumn(), c2 = c1 + rg.getNumColumns() - 1;
+      for (var c = c1; c <= c2; c++) locked[c] = true;
+      desc.push(rg.getA1Notation());
+    }
+    var sheetProt = ctx.sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET).length > 0;
+
+    var need = [{ col: ctx.col[COL_APPROVAL], name: COL_APPROVAL }];
+    if (ctx.twoStage) need.push({ col: ctx.col[COL_SUB_APPROVAL], name: COL_SUB_APPROVAL });
+    if (ctx.col[COL_STATUS]) need.push({ col: ctx.col[COL_STATUS], name: COL_STATUS });
+
+    var unlocked = [];
+    for (var n = 0; n < need.length; n++) {
+      if (!locked[need[n].col]) {
+        unlocked.push(need[n].name + '(' + colLetter_(need[n].col) + ')');
+      }
+    }
+
+    // 被鎖住、但不該被鎖的欄位（人工填寫欄被誤鎖，業務會填不進去）
+    var over = [];
+    for (var lc in locked) {
+      var isNeeded = false;
+      for (var m = 0; m < need.length; m++) if (String(need[m].col) === lc) isNeeded = true;
+      if (!isNeeded) {
+        var hname = headerNameOf_(ctx, Number(lc));
+        if (hname) over.push(hname + '(' + colLetter_(Number(lc)) + ')');
+      }
+    }
+
+    var line = '　' + (unlocked.length ? '⛔' : '✅') + ' ' + ctx.name +
+      '｜' + (ctx.twoStage ? '兩層' : '單層') +
+      '｜已保護：' + (desc.length ? desc.join('、') : (sheetProt ? '整個工作表' : '（無）'));
+    if (unlocked.length) line += '｜🔴 未保護：' + unlocked.join('、');
+    if (over.length) line += '｜⚠ 多鎖了：' + over.join('、');
+    Logger.log(line);
+
+    if (unlocked.length) bad.push(ctx.name);
+    if (over.length) wrong.push(ctx.name + '→' + over.join('、'));
+  }
+
+  Logger.log('──────────');
+  if (bad.length) {
+    Logger.log('⛔ ' + bad.length + ' 個分頁的簽核欄「沒有」受保護，簽核結果可被任意手改：' +
+      bad.join('、'));
+    Logger.log('　 → 依 docs/發包試算表_欄位規格.md 第三節的對照表逐頁補設。');
+  } else {
+    Logger.log('✅ 所有納入的分頁，簽核欄都在受保護範圍內。');
+  }
+  if (wrong.length) {
+    Logger.log('⚠ 以下分頁鎖到了不該鎖的欄位，該欄位的填寫人（業務／助理）會被擋住：');
+    for (var w = 0; w < wrong.length; w++) Logger.log('　 • ' + wrong[w]);
+  }
+  Logger.log('（注意：被略過的分頁不在檢查範圍內，它們連簽核欄都還沒有。）');
+}
+
+/** 欄號 → 欄字母（1→A、27→AA） */
+function colLetter_(n) {
+  var s = '';
+  while (n > 0) {
+    var r = (n - 1) % 26;
+    s = String.fromCharCode(65 + r) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+}
+
+/** 欄號 → 該分頁的表頭文字（供錯誤訊息指名道姓） */
+function headerNameOf_(ctx, colNum) {
+  for (var k in ctx.col) {
+    if (ctx.col[k] === colNum) return k;
+  }
+  var v = ctx.sheet.getRange(ctx.headerRow, colNum).getValue();
+  return normHeader_(v);
 }

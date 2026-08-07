@@ -74,20 +74,30 @@ function notifyPendingApprovals() {
     : '❌ 通知發送失敗｜HTTP ' + res.status + '｜' + res.body);
 }
 
-/** 組 Chat 訊息。Chat 支援 *粗體* 與 <網址|文字> 連結。 */
+/**
+ * 組 Chat 訊息。Chat 支援 *粗體* 與 <網址|文字> 連結。
+ *
+ * 分兩段列出：部分分頁有副主管那一關，兩層混在一份清單裡，
+ * 副主管與主管都會不確定哪幾筆該自己處理。
+ */
 function buildMessage_(rows, webappUrl) {
+  var subRows = [], bossRows = [];
+  for (var s = 0; s < rows.length; s++) {
+    (rows[s].stage === 'sub' ? subRows : bossRows).push(rows[s]);
+  }
+
   var lines = ['*發包待核准 ' + rows.length + ' 筆*', ''];
 
-  var show = Math.min(rows.length, MAX_LIST_IN_MESSAGE);
-  for (var i = 0; i < show; i++) {
-    var r = rows[i];
-    var parts = [r.orderNo];
-    if (r.worker) parts.push(r.worker);
-    if (r.customer) parts.push(r.customer);
-    if (r.price) parts.push('NT$' + r.price);
-    lines.push('• ' + parts.join('　'));
+  // 每段各自套用列出上限，避免其中一段把配額吃光、另一段整段消失
+  if (subRows.length) {
+    lines.push('*副主管待核 ' + subRows.length + ' 筆*');
+    lines = lines.concat(listLines_(subRows));
+    lines.push('');
   }
-  if (rows.length > show) lines.push('• …還有 ' + (rows.length - show) + ' 筆');
+  if (bossRows.length) {
+    lines.push('*主管待核 ' + bossRows.length + ' 筆*');
+    lines = lines.concat(listLines_(bossRows));
+  }
 
   lines.push('');
   lines.push(webappUrl
@@ -95,6 +105,22 @@ function buildMessage_(rows, webappUrl) {
     : '（尚未設定 DISPATCH_WEBAPP_URL，無法附上簽核連結）');
 
   return lines.join('\n');
+}
+
+/** 單一層的清單行，超過上限收斂成「還有 N 筆」 */
+function listLines_(rows) {
+  var out = [];
+  var show = Math.min(rows.length, MAX_LIST_IN_MESSAGE);
+  for (var i = 0; i < show; i++) {
+    var r = rows[i];
+    var parts = [r.orderNo];
+    if (r.worker) parts.push(r.worker);
+    if (r.customer) parts.push(r.customer);
+    if (r.price) parts.push('NT$' + r.price);
+    out.push('• ' + parts.join('　'));
+  }
+  if (rows.length > show) out.push('• …還有 ' + (rows.length - show) + ' 筆');
+  return out;
 }
 
 function postToChat_(webhook, text) {
