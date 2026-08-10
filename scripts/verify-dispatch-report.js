@@ -766,6 +766,65 @@ console.log('\n【9】前端 render 實際執行');
   // 看到的是 stack trace 而不是「哪一項不合格」。
   const H = (r, id) => (r.els[id] ? String(r.els[id].innerHTML) : '');
 
+  // 上一節把 props 改成非主管了，這裡要先還原成實際部署的狀態
+  props = {
+    DISPATCH_SHEET_ID: 'X', REPORT_SINCE: '2026-01-01',
+    DISPATCH_BOSS_APPROVERS: 'boss@waferlock.com',
+  };
+
+  // render 炸掉時必須看得到錯誤。靜默全白分不出「沒資料／沒權限／程式炸了」，
+  // 是最難查的一種壞法——這一組斷言就是不准它再發生。
+  {
+    reset();
+    const page0 = G.reportBlock_('boss@waferlock.com', 'apply', '2026-01-01');
+    const code0 = page0.match(/<script>([\s\S]*?)<\/script>/)[1];
+    ok(/try\{render\(/.test(code0.replace(/\s/g, '')) ||
+       /try\s*\{\s*render\(/.test(code0),
+       '🔴 render() 必須被 try/catch 包住，例外不可讓畫面靜默全白');
+    ok(/畫面組裝失敗/.test(code0), 'render 失敗時要在畫面上講明是前端的錯，資料已取回');
+    ok(/版本/.test(page0) && page0.indexOf(G.BUILD) >= 0,
+       '頁首要有版本印記，否則「沒重新部署」與「沒修好」長得一樣');
+
+    // 真的讓 render 炸一次，確認訊息會出現
+    const els = {};
+    const mk = id => ({ id, innerHTML: '', textContent: '', value: '', className: '',
+      disabled: false, style: {}, children: [], appendChild(c) { this.children.push(c); } });
+    const doc = { getElementById: id => (els[id] || (els[id] = mk(id))), createElement: () => mk('') };
+    const run = {
+      withSuccessHandler(f) { this._s = f; return this; },
+      withFailureHandler(f) { this._f = f; return this; },
+      getReport() { this._s({ ok: true, data: null, at: 'x' }); return this; },  // data=null → render 必炸
+    };
+    const c0 = vm.createContext({ document: doc, google: { script: { run } }, console });
+    let threw = null;
+    try { vm.runInContext(code0, c0); } catch (e) { threw = e; }
+    ok(!threw, 'render 炸掉時例外要被接住，不可往外拋');
+    ok(/畫面組裝失敗/.test(els.msg ? els.msg.innerHTML : ''),
+       '🔴 render 炸掉時畫面必須出現錯誤訊息，不可一片空白');
+  }
+
+  // 稽核區少了子物件不該讓整份報表消失（超額請款警示才是最重要的）
+  {
+    const els = {};
+    const mk = id => ({ id, innerHTML: '', textContent: '', value: '', className: '',
+      disabled: false, style: {}, children: [], appendChild(c) { this.children.push(c); } });
+    const doc = { getElementById: id => (els[id] || (els[id] = mk(id))), createElement: () => mk('') };
+    reset();
+    const good = G.getReport({ basis: 'apply' }).data;
+    delete good.audit.unknownDate;
+    delete good.audit.excludedByRange;
+    const run = {
+      withSuccessHandler(f) { this._s = f; return this; },
+      withFailureHandler(f) { this._f = f; return this; },
+      getReport() { this._s({ ok: true, data: good, at: 'x' }); return this; },
+    };
+    const page1 = G.reportBlock_('boss@waferlock.com', 'apply', '2026-01-01');
+    const c1 = vm.createContext({ document: doc, google: { script: { run } }, console });
+    vm.runInContext(page1.match(/<script>([\s\S]*?)<\/script>/)[1], c1);
+    ok(/超額請款/.test(els.rep ? els.rep.innerHTML : ''),
+       '稽核區缺子欄位時，報表其餘部分仍要出得來');
+  }
+
   // ① 有設 REPORT_SINCE（＝實際部署的狀態）。這一支才會走進 else 分支。
   props = {
     DISPATCH_SHEET_ID: 'X', REPORT_SINCE: '2026-01-01',

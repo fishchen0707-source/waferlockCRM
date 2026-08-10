@@ -133,6 +133,10 @@ var KNOWN_UNUSED_HEADERS = [
   '沖帳出貨單號', '出貨單號'
 ];
 
+// 版本印記，顯示在頁首。用途只有一個：讓人一眼看出「我貼上去的新程式到底有沒有部署成功」。
+// 改程式時順手往上加——沒有它，重新部署失敗與程式沒修好長得一模一樣。
+var BUILD = '2026-08-10c';
+
 var BASIS_SHIP  = 'ship';    // 出貨日：銀貨兩訖，算營收
 var BASIS_APPLY = 'apply';   // 發包申請日：看業務接單節奏
 var REPORT_CACHE_PREFIX = 'dispatch_report2_';
@@ -1150,7 +1154,8 @@ function errorBlock_(title, detail) {
 
 function reportBlock_(email, basis, since) {
   return '<div class="hd"><div class="ic">📊</div><div>' +
-    '<h1>發包報表</h1><p>' + esc_(email) + '　·　僅主管可見　·　唯讀</p></div></div>' +
+    '<h1>發包報表</h1><p>' + esc_(email) + '　·　僅主管可見　·　唯讀　·　版本 ' +
+      esc_(BUILD) + '</p></div></div>' +
     '<div class="tabs">' +
       '<div class="tab' + (basis === BASIS_SHIP ? ' on' : '') + '" id="t_ship" ' +
         'onclick="pick(\'' + BASIS_SHIP + '\')">出貨日基準</div>' +
@@ -1241,11 +1246,14 @@ function reportBlock_(email, basis, since) {
         '+\'取不到時間的筆數列在右邊，不會被當成 0 天混進平均。</div>\';' +
       'return h;}' +
 
+    // 子物件一律 ||{} 再取。少一個計數欄位不該讓整份報表消失——
+    // 稽核區是附屬資訊，超額請款警示才是這頁最重要的東西。
     'function auditCard(d){var a=d.audit||{};var h="";' +
-      'h+=\'<div class="whrow"><b>日期不明</b>出貨明細 \'+money(a.unknownDate.shipment)' +
-        '+\' 筆　發包分頁 \'+money(a.unknownDate.dispatch)+\' 筆</div>\';' +
-      'h+=\'<div class="whrow"><b>區間外排除</b>出貨明細 \'+money(a.excludedByRange.shipment)' +
-        '+\' 筆　發包分頁 \'+money(a.excludedByRange.dispatch)+\' 筆</div>\';' +
+      'var ud=a.unknownDate||{},ex=a.excludedByRange||{};' +
+      'h+=\'<div class="whrow"><b>日期不明</b>出貨明細 \'+money(ud.shipment)' +
+        '+\' 筆　發包分頁 \'+money(ud.dispatch)+\' 筆</div>\';' +
+      'h+=\'<div class="whrow"><b>區間外排除</b>出貨明細 \'+money(ex.shipment)' +
+        '+\' 筆　發包分頁 \'+money(ex.dispatch)+\' 筆</div>\';' +
       'h+=\'<div class="whrow"><b>未鍵出貨單號</b>\'+money(a.noShipNo)+\' 筆（不計入營收）</div>\';' +
       'h+=\'<div class="whrow"><b>無進價</b>\'+money(a.noCost)+\' 筆（毛利不含這些）</div>\';' +
       'if((a.outliers||[]).length){h+=\'<div class="whlab">金額極端值</div><table>\'' +
@@ -1323,7 +1331,13 @@ function reportBlock_(email, basis, since) {
           'busy=false;g("f_go").disabled=false;g("f_go").textContent="套用";' +
           'g("loadcard").style.display="none";' +
           'if(!res.ok){show(esc(res.message),"fail");return;}' +
-          'render(res.data);' +
+          // render 一旦擲例外，下面的程式全部不會跑，畫面就停在「篩選列以下全空、
+          // 什麼訊息都沒有」——那是最難查的一種壞法（分不出是沒資料、沒權限，
+          // 還是程式炸了）。一律接住並把錯誤印在畫面上。
+          'try{render(res.data);}catch(ex){' +
+            'show("🔴 畫面組裝失敗（資料已取回，是前端的錯）：<br>"+esc(ex&&ex.message||ex)+' +
+              '"<br><span style=\\"font-size:11px\\">版本 ' + esc_(BUILD) + '</span>","fail");' +
+            'return;}' +
           'if(res.unrestricted){var m=g("msg");m.innerHTML+=' +
             '\'<div class="msg warn">⚠ 未設定主管名單（DISPATCH_BOSS_APPROVERS／DISPATCH_SUB_APPROVERS），\'' +
             '+\'目前任何登入者都看得到金額與毛利。</div>\';}' +
