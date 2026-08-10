@@ -983,6 +983,60 @@ console.log('\n【10】簡表（日期／承包商／承包金額／承包數量
     reset();
   }
 
+  // 🔴 實際資料：某承包商合計 112 億／95 筆。平均一筆 1.18 億，顯然是一兩列的
+  //    垃圾數字。只印總額等於要人回試算表翻 95 列，所以要直接把那幾列指出來。
+  {
+    reset();
+    const g = BOOK['零售-Johnson'];
+    const bad = H_J.map(() => '');
+    bad[H_J.indexOf('發包申請日期')] = ser('2026-07-02');
+    bad[H_J.indexOf('發包單號')] = 'JW-260702-99';
+    bad[H_J.indexOf('承包商')] = '蔣家工程行';
+    bad[H_J.indexOf('客戶')] = '爆表客戶';
+    bad[H_J.indexOf('報價單數量')] = 1;
+    bad[H_J.indexOf('承包總價')] = 11200000000;
+    g.push(bad);
+
+    const t = G.getSimple({ from: '2026-01-01', to: '2026-12-31' }).data;
+    ok(t.bigCount === 1, '應抓到 1 列金額異常大的，實得 ' + t.bigCount);
+    ok(t.bigRows[0].orderNo === 'JW-260702-99', '要指出是哪一張單');
+    ok(t.bigRows[0].sheet === '零售-Johnson' && t.bigRows[0].row > 0,
+       '🔴 要帶分頁與列號，否則還是得回試算表翻');
+    ok(t.bigSum === 11200000000, '要算出這些列的合計，讓人判斷影響多大');
+    // 程式不替使用者決定哪一列是錯的——那可能是真的大案
+    const jj = t.byWorker.filter(w => w.name === '蔣家工程行')[0];
+    ok(jj.price > 11200000000,
+       '🔴 異常列仍要計入合計，程式不可自作主張排除（可能是真的大案）');
+
+    // 畫面：紅色警示卡要排在最前面
+    const els2 = {};
+    const mk2 = id => ({ id, innerHTML: '', textContent: '', value: '', className: '',
+      disabled: false, style: {}, children: [], appendChild(c) { this.children.push(c); } });
+    const doc2 = { getElementById: id => (els2[id] || (els2[id] = mk2(id))),
+      createElement: () => mk2('') };
+    const run2 = {
+      withSuccessHandler(f) { this._s = f; return this; },
+      withFailureHandler(f) { this._f = f; return this; },
+      getSimple(o) { this._s(G.getSimple(o)); return this; },
+    };
+    const p2 = G.simpleBlock_('boss@waferlock.com', '2026-01-01');
+    vm.runInContext(p2.match(/<script>([\s\S]*?)<\/script>/)[1],
+      vm.createContext({ document: doc2, google: { script: { run: run2 } }, console }));
+    const r2 = els2.rep ? els2.rep.innerHTML : '';
+    ok(/金額異常大的列/.test(r2), '🔴 有異常列時畫面要出現警示卡');
+    ok(r2.indexOf('金額異常大的列') < r2.indexOf('依承包商'), '警示卡要排在最前面');
+    ok(/零售-Johnson·/.test(r2), '警示卡要顯示分頁與列號');
+    ok(/仍然計入/.test(r2), '要講明這些列仍計入合計，不是被排除了');
+    reset();
+  }
+
+  // 沒有異常列時不可硬擠一張空的警示卡出來
+  {
+    reset();
+    const clean = G.getSimple({ from: '2026-01-01', to: '2026-12-31' }).data;
+    ok(clean.bigCount === 0, '正常資料不該有異常列，實得 ' + clean.bigCount);
+  }
+
   // 排序：問「為什麼某個承包商的錢那麼多」時，答案幾乎都是有一兩筆特別大
   {
     reset();
@@ -1025,6 +1079,7 @@ console.log('\n【10】簡表（日期／承包商／承包金額／承包數量
   ok(/只能當概估/.test(repS),
      '🔴 對客戶報價是從文字擷取的，畫面必須講明不能拿去對帳');
   ok(!/毛利|進價/.test(repS), '簡表不談毛利與進價，那是完整報表的事');
+  ok(!/金額異常大的列/.test(repS), '沒有異常列時不可擠一張空的紅色警示卡出來');
   // 一筆報價都讀不到的業務，差額不可顯示成大負數——那看起來像虧錢，其實是沒讀到
   ok(/—/.test(repS),
      '🔴 完全讀不到報價的業務，對客戶報價與差額要顯示「—」而不是 0 與負數');

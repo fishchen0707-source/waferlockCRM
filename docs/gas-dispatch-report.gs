@@ -135,7 +135,7 @@ var KNOWN_UNUSED_HEADERS = [
 
 // 版本印記，顯示在頁首。用途只有一個：讓人一眼看出「我貼上去的新程式到底有沒有部署成功」。
 // 改程式時順手往上加——沒有它，重新部署失敗與程式沒修好長得一模一樣。
-var BUILD = '2026-08-10e';
+var BUILD = '2026-08-10f';
 
 var BASIS_SHIP  = 'ship';    // 出貨日：銀貨兩訖，算營收
 var BASIS_APPLY = 'apply';   // 發包申請日：看業務接單節奏
@@ -1033,6 +1033,8 @@ function buildSimple_(o) {
   var parts = splitBook_(fetchAll_());
   var roster = rosterOf_(parts.roster);
 
+  var limit = outlierOf_();
+  var big = [];             // 金額超過極端值門檻的列
   var rows = [];
   var byWorker = {}, bySales = {};
   var workerNames = {}, salesNames = {};
@@ -1101,6 +1103,15 @@ function buildSimple_(o) {
         sales: salesDisp, sheet: ctx.name, row: r + 1
       });
 
+      // 金額異常大的列要當場指出來。實際資料出現過某承包商合計 112 億／95 筆
+      //   ——平均一筆 1.18 億，顯然是一兩列的垃圾數字，不是累積出來的。
+      // 只把總額印出來，人要自己回試算表翻 95 列才找得到；直接列出來就不用翻。
+      if (price > limit) {
+        big.push({ ymd: ymd, orderNo: orderNo, worker: worker,
+          customer: str_(row, col[COL_CUSTOMER]), qty: qty, price: price,
+          sheet: ctx.name, row: r + 1 });
+      }
+
       var wg = addStat_(byWorker, worker, { count: 0, qty: 0, price: 0 });
       wg.count++; wg.qty += qty; wg.price += price;
 
@@ -1117,7 +1128,12 @@ function buildSimple_(o) {
     total.qty += rows[t].qty; total.price += rows[t].price; total.quoted += rows[t].quoted;
   }
 
+  big.sort(function (a, b) { return b.price - a.price; });
+  var bigSum = 0;
+  for (var bi = 0; bi < big.length; bi++) bigSum += big[bi].price;
+
   return {
+    bigRows: big.slice(0, 20), bigCount: big.length, bigSum: bigSum, outlierLimit: limit,
     from: opts.from, to: opts.to, since: opts.since, sinceWarn: opts.sinceWarn,
     clamped: opts.clamped, worker: opts.worker, salesPick: opts.sales,
     options: { workers: Object.keys(workerNames).sort(), sales: Object.keys(salesNames)
@@ -1328,6 +1344,28 @@ function simpleBlock_(email, since) {
     // 依金額排序一按，那幾筆就會跳到最上面——不必回試算表翻。
     'var SORT="date";' +
     'function setSort(s){SORT=s;if(LAST)render(LAST);}' +
+    // 金額異常大的列排在最前面。合計被一兩筆垃圾數字灌爆的時候，
+    // 只給總額等於要人回試算表翻上百列——直接把那幾列連分頁列號一起指出來。
+    'function bigCard(d){' +
+      'if(!(d.bigRows||[]).length)return "";' +
+      'var pct=d.total.price?Math.round(d.bigSum/d.total.price*100):0;' +
+      'var h=\'<div class="card alert"><div class="ometa"><b>🔴 金額異常大的列</b>\'' +
+        '+\'<span>單筆超過 \'+money(d.outlierLimit)+\'</span></div>\';' +
+      'h+=\'<div class="whrow">共 <b>\'+d.bigCount+\'</b> 列，合計 <b>\'+money(d.bigSum)' +
+        '+\'</b>，占總承包金額 <b>\'+pct+\'%</b>。</div>\';' +
+      'h+=\'<table><tr><th>日期</th><th>發包單號</th><th>承包商</th><th>客戶</th>\'' +
+        '+\'<th class="n">數量</th><th class="n">金額</th><th>分頁·列</th></tr>\';' +
+      'h+=d.bigRows.map(function(r){return \'<tr><td>\'+esc(r.ymd)+\'</td><td>\'+esc(r.orderNo)' +
+        '+\'</td><td>\'+esc(r.worker)+\'</td><td>\'+esc(r.customer||"")+\'</td>\'' +
+        '+\'<td class="n">\'+money(r.qty)+\'</td><td class="n bad">\'+money(r.price)+\'</td>\'' +
+        '+\'<td class="dim">\'+esc(r.sheet)+\'·\'+r.row+\'</td></tr>\';}).join("")+\'</table>\';' +
+      'if(d.bigCount>d.bigRows.length)h+=\'<div class="note">只列出最大的 \'' +
+        '+d.bigRows.length+\' 列。</div>\';' +
+      'h+=\'<div class="note">門檻可用指令碼屬性 REPORT_OUTLIER_AMOUNT 調整。\'' +
+        '+\'這些列<b>仍然計入</b>上面的合計——先看清楚是真的大案還是打錯字，\'' +
+        '+\'再決定要不要改試算表。程式不會替你排除任何一列。</div></div>\';' +
+      'return h;}' +
+
     'function rowTable(d){' +
       'if(!(d.rows||[]).length)return \'<div class="note">（這個範圍內沒有資料）</div>\';' +
       'var rs=d.rows.slice();' +
@@ -1361,6 +1399,7 @@ function simpleBlock_(email, since) {
         '+(d.clamped?\'<br><span style="color:#92400E">起日早於 REPORT_SINCE（\'+esc(d.since)' +
           '+\'），已改成起算日。</span>\':""),"done");}' +
       'var h="";' +
+      'h+=bigCard(d);' +
       'h+=card("依承包商","筆數／數量／金額",sumTable(d));' +
       'h+=card("依業務","個別業務的量與金額",salesTable(d));' +
       'h+=card("明細","依日期新到舊",rowTable(d));' +
