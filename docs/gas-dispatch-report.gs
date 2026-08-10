@@ -135,7 +135,7 @@ var KNOWN_UNUSED_HEADERS = [
 
 // 版本印記，顯示在頁首。用途只有一個：讓人一眼看出「我貼上去的新程式到底有沒有部署成功」。
 // 改程式時順手往上加——沒有它，重新部署失敗與程式沒修好長得一模一樣。
-var BUILD = '2026-08-10c';
+var BUILD = '2026-08-10d';
 
 var BASIS_SHIP  = 'ship';    // 出貨日：銀貨兩訖，算營收
 var BASIS_APPLY = 'apply';   // 發包申請日：看業務接單節奏
@@ -996,6 +996,171 @@ function getReport(o) {
   }
 }
 
+// ══════════════════════════════════════════════ 簡表
+//
+// 使用者的話：「我只要有一些關鍵值帶出關鍵資料：日期、承包商、承包金額、
+// 承包數量、個別業務銷售額」。完整報表那六大區對日常使用來說太厚了。
+//
+// 前四項都在發包分頁上，資料齊、可靠。第五項見 parseQuote_ 的說明。
+
+/**
+ * 從「工資報價(對客戶)」擷取金額。
+ *
+ * ⚠ 這一欄實際填的是**自由文字**：「報價單為6000(未稅)一組」「報價單為1,800(未稅)一組」，
+ *   不是數字。要算「業務對客戶的報價」只能從文字裡把數字挖出來。
+ *
+ * 這是整支程式唯一一處「猜」資料的地方，所以：
+ *   ① 只取第一個數字，不做任何推理
+ *   ② 擷取不到就回 null，由呼叫端計數並顯示在畫面上，不當成 0
+ *   ③ 畫面必須標明這個數字是從文字擷取的，不可與確定可靠的承包金額混為一談
+ */
+function parseQuote_(v) {
+  if (v == null || v === '') return null;
+  if (typeof v === 'number' && isFinite(v)) return v;
+  var m = String(v).replace(/[，]/g, ',').match(/(\d[\d,]*(?:\.\d+)?)/);
+  if (!m) return null;
+  var n = Number(m[1].replace(/,/g, ''));
+  return isFinite(n) ? n : null;
+}
+
+/** 業務姓名的分組鍵。實際資料同時有 `JhihJie` 與 `Jhihjie`，不統一大小寫會被拆成兩個人。 */
+function salesKey_(name) {
+  return String(name || '').trim().toLowerCase().replace(/\s+/g, '');
+}
+
+function buildSimple_(o) {
+  var opts = optsOf_(o);
+  var parts = splitBook_(fetchAll_());
+  var roster = rosterOf_(parts.roster);
+
+  var rows = [];
+  var byWorker = {}, bySales = {};
+  var workerNames = {}, salesNames = {};
+  var noQuoteText = 0;      // 工資報價欄擷取不到數字的筆數
+  var derivedPrice = 0;     // 承包金額是用「發包單價 × 數量」推算的筆數
+  var noDate = 0;           // 日期轉不出來（手打「3/28」那種）
+  var outOfRange = 0;
+
+  for (var s = 0; s < parts.sheets.length; s++) {
+    var ctx = parts.sheets[s], col = ctx.col;
+    for (var r = ctx.headerRow; r < ctx.values.length; r++) {
+      var row = ctx.values[r];
+      var orderNo = str_(row, col[COL_ORDER_NO]);
+      if (!ORDER_NO_RE.test(orderNo)) continue;
+
+      var worker = str_(row, col[COL_WORKER]);
+      if (!worker) continue;                       // 沒有承包商就不是一筆發包
+      workerNames[worker] = true;
+
+      var ymd = toYmd_(at_(row, col[COL_APPLY_AT]));
+      if (!ymd) { noDate++; continue; }
+      if (!inRange_(ymd, opts.from, opts.to)) { outOfRange++; continue; }
+
+      // 業務：發包分頁自己就有「發包人員」，比從單號前綴推可靠。
+      // 空的才退回用代碼查對照表。
+      var sales = str_(row, col[COL_DISPATCHER]);
+      if (!sales) {
+        var code = codeOf_(orderNo);
+        sales = (code && roster[code] && roster[code].sales) ? roster[code].sales : (code || '（未標示）');
+      }
+      var sk = salesKey_(sales);
+      if (!salesNames[sk]) salesNames[sk] = sales;  // 顯示第一次出現的寫法
+      var salesDisp = salesNames[sk];
+
+      if (opts.worker && worker !== opts.worker) continue;
+      if (opts.sales && salesDisp !== opts.sales) continue;
+
+      // ⚠ 不是每個分頁都有「報價單數量」與「承包總價」。
+      //   陳俊行(廣信鎖店) 用的是「請款數量」與「發包單價」——直接讀標準欄名會讀到空的，
+      //   那一列就會顯示數量 0、金額 0，**還被加進合計**，把總額做小。
+      //   有錢的列顯示成 0 是這個專案一路踩過最貴的一種錯，所以這裡明確退而求其次。
+      var qty = num_(at_(row, col[COL_QUOTE_QTY]));
+      if (!qty && col[COL_QTY]) qty = num_(at_(row, col[COL_QTY]));
+
+      var price = num_(at_(row, col[COL_PRICE]));
+      var derived = false;
+      if (!price && col[COL_UNIT]) {
+        var unit = num_(at_(row, col[COL_UNIT]));
+        if (unit && qty) { price = unit * qty; derived = true; }
+      }
+      if (derived) derivedPrice++;
+
+      var q1 = parseQuote_(at_(row, col[COL_WAGE]));
+      if (q1 == null) noQuoteText++;
+      var quoted = (q1 == null) ? 0 : q1 * (qty || 0);
+
+      rows.push({
+        ymd: ymd, orderNo: orderNo, worker: worker,
+        customer: str_(row, col[COL_CUSTOMER]), project: str_(row, col[COL_PROJECT]),
+        qty: qty, price: price, quoted: quoted, quoteOk: q1 != null,
+        sales: salesDisp, sheet: ctx.name, row: r + 1
+      });
+
+      var wg = addStat_(byWorker, worker, { count: 0, qty: 0, price: 0 });
+      wg.count++; wg.qty += qty; wg.price += price;
+
+      var sg = addStat_(bySales, salesDisp, { count: 0, qty: 0, price: 0, quoted: 0, quoteMissing: 0 });
+      sg.count++; sg.qty += qty; sg.price += price; sg.quoted += quoted;
+      if (q1 == null) sg.quoteMissing++;
+    }
+  }
+
+  rows.sort(function (a, b) { return a.ymd < b.ymd ? 1 : (a.ymd > b.ymd ? -1 : 0); });
+
+  var total = { count: rows.length, qty: 0, price: 0, quoted: 0 };
+  for (var t = 0; t < rows.length; t++) {
+    total.qty += rows[t].qty; total.price += rows[t].price; total.quoted += rows[t].quoted;
+  }
+
+  return {
+    from: opts.from, to: opts.to, since: opts.since, sinceWarn: opts.sinceWarn,
+    clamped: opts.clamped, worker: opts.worker, salesPick: opts.sales,
+    options: { workers: Object.keys(workerNames).sort(), sales: Object.keys(salesNames)
+      .map(function (k) { return salesNames[k]; }).sort() },
+    rows: rows.slice(0, 500),
+    truncated: rows.length > 500,
+    byWorker: sortDesc_(byWorker, 'price'),
+    bySales: sortDesc_(bySales, 'price'),
+    total: total,
+    noQuoteText: noQuoteText, noDate: noDate, outOfRange: outOfRange,
+    derivedPrice: derivedPrice
+  };
+}
+
+function getSimple(o) {
+  var email = currentUserEmail_();
+  if (!email) return { ok: false, message: '無法辨識身分（部署的存取權要選「機構內的任何人」）。' };
+  var roles = stagesFor_(email);
+  if (!roles.boss && !roles.sub) {
+    return { ok: false, message: '報表僅限副主管／主管檢視（' + email + '）。' };
+  }
+  var opts = optsOf_(o);
+  var key = REPORT_CACHE_PREFIX + 's' + cacheVer_() + '|' +
+    [opts.from, opts.to, opts.worker, opts.sales].join('|');
+  try {
+    var hit = CacheService.getScriptCache().get(key);
+    if (hit) {
+      var obj = JSON.parse(hit);
+      if (obj && obj.data) return { ok: true, data: obj.data, at: obj.at, cached: true,
+        unrestricted: roles.unrestricted };
+    }
+  } catch (err) { Logger.log('讀簡表快取失敗，改為重新統計：' + err); }
+
+  try {
+    var data = buildSimple_(opts);
+    var at = Utilities.formatDate(new Date(), TZ, 'MM-dd HH:mm');
+    try {
+      var payload = JSON.stringify({ data: data, at: at });
+      if (payload.length <= CACHE_MAX_BYTES) {
+        CacheService.getScriptCache().put(key, payload, REPORT_CACHE_TTL);
+      }
+    } catch (e2) { Logger.log('寫簡表快取失敗：' + e2); }
+    return { ok: true, data: data, at: at, cached: false, unrestricted: roles.unrestricted };
+  } catch (err) {
+    return { ok: false, message: '統計失敗：' + err };
+  }
+}
+
 /**
  * 清快取。篩選條件是使用者自由組合的，快取鍵有無限多種，列舉不完，
  * 所以改成把版本號往上加一，舊的鍵自然再也對不上（15 分鐘後自己過期）。
@@ -1066,9 +1231,146 @@ function doGet(e) {
       email + ' 不在副主管或主管名單中。報表的本質是彙總金額，' +
       '「毛利」一旦顯示就等於把進價反推出來，所以整頁限制而不是遮欄位。'));
   }
+  // 預設是簡表。完整報表六大區對日常使用太厚，留在 ?view=full。
+  if (String((e && e.parameter && e.parameter.view) || '') !== 'full') {
+    return htmlPage_(simpleBlock_(email, sinceOf_().since));
+  }
   var basis = String((e && e.parameter && e.parameter.basis) || BASIS_SHIP);
   return htmlPage_(reportBlock_(email, basis === BASIS_APPLY ? BASIS_APPLY : BASIS_SHIP,
     sinceOf_().since));
+}
+
+/** 本 Web App 的 /exec 網址。相對連結在 GAS 沙箱 iframe 裡會導到空白頁，必須用絕對網址。 */
+function webAppUrl_() {
+  try { return ScriptApp.getService().getUrl() || ''; }
+  catch (err) { Logger.log('取不到 Web App 網址：' + err); return ''; }
+}
+
+function simpleBlock_(email, since) {
+  var base = webAppUrl_();
+  return '<div class="hd"><div class="ic">📋</div><div>' +
+    '<h1>發包明細</h1><p>' + esc_(email) + '　·　僅主管可見　·　唯讀　·　版本 ' +
+      esc_(BUILD) + '</p></div></div>' +
+    (base
+      ? '<div class="tabs"><div class="tab on">簡表</div>' +
+        '<a class="tab" target="_top" href="' + esc_(base) + '?view=full">完整報表</a></div>'
+      : '') +
+    '<div class="card filt">' +
+      '<div class="frow">' +
+        '<div class="fi"><label>起</label><input type="date" id="f_from" value="' +
+          esc_(since || '') + '"></div>' +
+        '<div class="fi"><label>訖</label><input type="date" id="f_to"></div>' +
+        '<div class="fi"><label>承包商</label><select id="f_worker"><option value="">全部</option></select></div>' +
+        '<div class="fi"><label>業務</label><select id="f_sales"><option value="">全部</option></select></div>' +
+        '<button id="f_go" onclick="load()">套用</button>' +
+        '<button class="ghost" onclick="resetF()">清除</button>' +
+      '</div>' +
+    '</div>' +
+    '<div id="msg"></div>' +
+    '<div class="card" id="loadcard"><div class="center" id="load">統計中…</div></div>' +
+    '<div id="rep"></div>' +
+    '<script>' +
+    'var SINCE=' + JSON.stringify(since || '') + ';' +
+    'function g(id){return document.getElementById(id);}' +
+    'function show(t,c){g("msg").innerHTML=\'<div class="msg \'+c+\'">\'+t+\'</div>\';}' +
+    'function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;")' +
+      '.replace(/</g,"&lt;").replace(/>/g,"&gt;");}' +
+    'function money(v){var n=Number(v);if(!isFinite(n))return "0";' +
+      'return String(Math.round(n)).replace(/\\B(?=(\\d{3})+(?!\\d))/g,",");}' +
+    'function resetF(){g("f_from").value=SINCE;g("f_to").value="";' +
+      'g("f_worker").value="";g("f_sales").value="";load();}' +
+    'var optsFilled=false;' +
+    'function fillOpts(o){if(optsFilled||!o)return;optsFilled=true;' +
+      '[["f_worker",o.workers],["f_sales",o.sales]].forEach(function(p){' +
+        'var el=g(p[0]);(p[1]||[]).forEach(function(v){' +
+          'var op=document.createElement("option");op.value=v;op.textContent=v;' +
+          'el.appendChild(op);});});}' +
+    'function card(t,s,b){return \'<div class="card"><div class="ometa"><b>\'+esc(t)+\'</b>\'' +
+      '+(s?\'<span>\'+esc(s)+\'</span>\':"")+\'</div>\'+b+\'</div>\';}' +
+
+    'function sumTable(d){' +
+      'var h=\'<table><tr><th>承包商</th><th class="n">筆數</th><th class="n">數量</th>\'' +
+        '+\'<th class="n">承包金額</th></tr>\';' +
+      'h+=(d.byWorker||[]).map(function(r){return \'<tr><td>\'+esc(r.name)+\'</td>\'' +
+        '+\'<td class="n">\'+r.count+\'</td><td class="n">\'+money(r.qty)+\'</td>\'' +
+        '+\'<td class="n">\'+money(r.price)+\'</td></tr>\';}).join("");' +
+      'h+=\'<tr><td><b>合計</b></td><td class="n"><b>\'+d.total.count+\'</b></td>\'' +
+        '+\'<td class="n"><b>\'+money(d.total.qty)+\'</b></td>\'' +
+        '+\'<td class="n"><b>\'+money(d.total.price)+\'</b></td></tr></table>\';' +
+      'return h;}' +
+
+    'function salesTable(d){' +
+      'var h=\'<table><tr><th>業務</th><th class="n">筆數</th><th class="n">數量</th>\'' +
+        '+\'<th class="n">對客戶報價</th><th class="n">承包金額</th><th class="n">差額</th></tr>\';' +
+      // 一筆報價都讀不到時，「差額」不可顯示成一個大負數——那看起來像虧錢，
+      // 實際上只是欄位讀不到。顯示「—」比顯示一個假的負數誠實。
+      'h+=(d.bySales||[]).map(function(r){' +
+        'var none=(r.quoteMissing>=r.count);var gap=r.quoted-r.price;' +
+        'return \'<tr><td>\'+esc(r.name)+\'</td><td class="n">\'+r.count+\'</td>\'' +
+          '+\'<td class="n">\'+money(r.qty)+\'</td>\'' +
+          '+\'<td class="n">\'+(none?"—":money(r.quoted))' +
+          '+(r.quoteMissing?\' <span class="bad">(\'+r.quoteMissing+\'/\'+r.count+\' 筆讀不到)</span>\':"")+\'</td>\'' +
+          '+\'<td class="n">\'+money(r.price)+\'</td>\'' +
+          '+\'<td class="n\'+(!none&&gap<0?" bad":"")+\'">\'+(none?"—":money(gap))+\'</td></tr>\';})' +
+        '.join("");' +
+      'h+=\'</table><div class="note">「對客戶報價」是從「工資報價(對客戶)」那一欄的<b>文字</b>\'' +
+        '+\'擷取數字再乘上數量得到的（該欄實際填的是「報價單為6000(未稅)一組」這種句子）。\'' +
+        '+\'讀不到的筆數已標在旁邊，那些算 0。<b>這個數字只能當概估，不能拿去對帳。</b>\'' +
+        '+\'要精確的售價得等「出貨明細」累積資料。</div>\';' +
+      'return h;}' +
+
+    'function rowTable(d){' +
+      'if(!(d.rows||[]).length)return \'<div class="note">（這個範圍內沒有資料）</div>\';' +
+      'var h=\'<table><tr><th>日期</th><th>發包單號</th><th>承包商</th><th>客戶／案名</th>\'' +
+        '+\'<th class="n">數量</th><th class="n">承包金額</th><th>業務</th></tr>\';' +
+      'h+=d.rows.map(function(r){return \'<tr><td>\'+esc(r.ymd)+\'</td><td>\'+esc(r.orderNo)+\'</td>\'' +
+        '+\'<td>\'+esc(r.worker)+\'</td><td>\'+esc(r.customer||"")' +
+        '+(r.project?"／"+esc(r.project):"")+\'</td>\'' +
+        '+\'<td class="n">\'+money(r.qty)+\'</td><td class="n">\'+money(r.price)+\'</td>\'' +
+        '+\'<td>\'+esc(r.sales)+\'</td></tr>\';}).join("")+\'</table>\';' +
+      'if(d.truncated)h+=\'<div class="note">筆數過多，只顯示最近 500 筆。請縮小日期範圍。</div>\';' +
+      'return h;}' +
+
+    'function render(d){' +
+      'fillOpts(d.options);' +
+      'var sel=[];if(d.worker)sel.push("承包商："+esc(d.worker));' +
+      'if(d.salesPick)sel.push("業務："+esc(d.salesPick));' +
+      'if(d.sinceWarn){show("🔴 未設定 REPORT_SINCE，以下包含全部歷史資料。","fail");}' +
+      'else{show("範圍 <b>"+esc(d.from||"不限")+"</b> ～ <b>"+esc(d.to||"今天")+"</b>"' +
+        '+(sel.length?"　·　"+sel.join("　·　"):"")' +
+        '+(d.clamped?\'<br><span style="color:#92400E">起日早於 REPORT_SINCE（\'+esc(d.since)' +
+          '+\'），已改成起算日。</span>\':""),"done");}' +
+      'var h="";' +
+      'h+=card("依承包商","筆數／數量／金額",sumTable(d));' +
+      'h+=card("依業務","個別業務的量與金額",salesTable(d));' +
+      'h+=card("明細","依日期新到舊",rowTable(d));' +
+      'var w=[];' +
+      'if(d.noDate)w.push("日期讀不出來 "+d.noDate+" 筆（已排除）");' +
+      'if(d.noQuoteText)w.push("工資報價欄讀不到數字 "+d.noQuoteText+" 筆");' +
+      'if(d.derivedPrice)w.push("承包金額用「發包單價×數量」推算 "+d.derivedPrice+" 筆（該分頁沒有承包總價欄）");' +
+      'if(w.length)h+=\'<div class="note">\'+esc(w.join("　·　"))+\'</div>\';' +
+      'g("rep").innerHTML=h;}' +
+
+    'var busy=false;' +
+    'function load(){if(busy)return;busy=true;' +
+      'g("f_go").disabled=true;g("f_go").textContent="統計中…";' +
+      'g("loadcard").style.display="";g("rep").innerHTML="";' +
+      'google.script.run' +
+        '.withSuccessHandler(function(res){' +
+          'busy=false;g("f_go").disabled=false;g("f_go").textContent="套用";' +
+          'g("loadcard").style.display="none";' +
+          'if(!res.ok){show(esc(res.message),"fail");return;}' +
+          'try{render(res.data);}catch(ex){' +
+            'show("🔴 畫面組裝失敗：<br>"+esc(ex&&ex.message||ex),"fail");return;}' +
+          'var m=document.createElement("div");m.className="note";' +
+          'm.innerHTML="資料時間 "+esc(res.at)+(res.cached?"（快取）":"（即時）");' +
+          'g("rep").appendChild(m);})' +
+        '.withFailureHandler(function(e){busy=false;g("f_go").disabled=false;' +
+          'g("f_go").textContent="套用";g("load").textContent="統計失敗："+e.message;})' +
+        '.getSimple({from:g("f_from").value,to:g("f_to").value,' +
+          'worker:g("f_worker").value,sales:g("f_sales").value});}' +
+    'load();' +
+    '</script>';
 }
 
 // ────────────────────────────────────────────── 畫面

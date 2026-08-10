@@ -50,10 +50,12 @@ const DATA = {
     // 正常單
     row(H_J, {'發包申請日期': ser('2026-03-01'), '發包單號': 'JW-260301-01', '承包商': '蔣家工程行',
       '客戶': '甲客戶', '報價單數量': 10, '累計請款數量': 4, '承包總價': 8000,
+      '工資報價(對客戶）': '報價單為6000(未稅)一組',
       '主管簽核': '✅ 核准 boss@waferlock.com 2026-03-05 09:12'}),
     // 🔴 超額請款：累計 12 > 報價 10
     row(H_J, {'發包申請日期': ser('2026-03-02'), '發包單號': 'JW-260302-01', '承包商': '蔣師傅',
       '客戶': '乙客戶', '報價單數量': 10, '累計請款數量': 12, '承包總價': 5000,
+      '工資報價(對客戶）': '報價單為1,800(未稅)一組',
       '主管簽核': '✅ 核准 boss@waferlock.com 2026-03-04 15:30'}),
     // 起算日之前，且金額極端值（112 億那一類）
     row(H_J, {'發包申請日期': ser('2024-05-01'), '發包單號': 'JW-240501-01', '承包商': '蔣家工程行',
@@ -191,6 +193,7 @@ const sandbox = {
     createHtmlOutput: h => ({ _h: h, setTitle() { return this; }, addMetaTag() { return this; } })
   },
   Logger: { log: m => LOG.push(String(m)) },
+  ScriptApp: { getService: () => ({ getUrl: () => 'https://script.google.com/a/macros/w/s/AAA/exec' }) },
   CacheService: {
     getScriptCache: () => ({
       get: k => (k in CACHE ? CACHE[k] : null),
@@ -716,8 +719,10 @@ console.log('\n【18】畫面');
   ok(/\.bfill\{/.test(full) && /\.btrack\{/.test(full), '條狀圖樣式要在');
   ok(/max-width:520px/.test(full), '要有窄螢幕的 media query');
 
-  const err = G.doGet({ parameter: {} });
-  ok(/發包報表/.test(err._h), 'doGet 應回傳頁面');
+  // 預設是簡表（完整報表六大區對日常使用太厚），完整報表在 ?view=full
+  ok(/發包明細/.test(G.doGet({ parameter: {} })._h), '預設應回傳簡表');
+  ok(/發包報表/.test(G.doGet({ parameter: { view: 'full' } })._h),
+     '?view=full 應回傳完整報表');
   props = { DISPATCH_SHEET_ID: 'X', DISPATCH_BOSS_APPROVERS: 'nobody@waferlock.com' };
   ok(/僅限主管/.test(G.doGet({ parameter: {} })._h), '非主管開頁要看到擋下的訊息');
 }
@@ -884,6 +889,119 @@ console.log('\n【9】前端 render 實際執行');
   ok(!r.err, '切基準後 render() 不可擲例外｜' + (r.err && r.err.message));
   ok(H(r,'rep').length > 0, '切基準後報表區仍要有內容');
   ok(r.els.t_ship && r.els.t_ship.className.indexOf('on') >= 0, '切換後頁籤要跟著亮');
+}
+
+// ── 簡表 ──────────────────────────────────────────────────────
+console.log('\n【10】簡表（日期／承包商／承包金額／承包數量／業務銷售額）');
+{
+  props = {
+    DISPATCH_SHEET_ID: 'X', REPORT_SINCE: '2026-01-01',
+    DISPATCH_BOSS_APPROVERS: 'boss@waferlock.com',
+  };
+
+  // 工資報價欄實際填的是自由文字，這是唯一「猜」資料的地方
+  ok(G.parseQuote_('報價單為6000(未稅)一組') === 6000, '從文字擷取 6000');
+  ok(G.parseQuote_('報價單為1,800(未稅)一組') === 1800, '要處理千分位逗號');
+  ok(G.parseQuote_('報價單為800(未稅)一組(安裝工資含接室電)') === 800,
+     '只取第一個數字，不可被後面括號裡的字干擾');
+  ok(G.parseQuote_(3000) === 3000, '本來就是數字時直接用');
+  ok(G.parseQuote_('') === null && G.parseQuote_('待報價') === null,
+     '🔴 擷取不到必須回 null，不可當成 0 混進統計');
+
+  // 大小寫不同是同一個人（實際資料有 JhihJie 與 Jhihjie）
+  ok(G.salesKey_('JhihJie') === G.salesKey_('Jhihjie'),
+     '🔴 大小寫不同的同一位業務不可被拆成兩筆');
+  ok(G.salesKey_('Sean.Huang') !== G.salesKey_('JhihJie'), '不同的人不可被併起來');
+
+  reset();
+  let d = G.getSimple({ from: '2026-01-01', to: '2026-12-31' });
+  ok(d.ok, 'getSimple 應成功｜' + d.message);
+  d = d.data;
+  ok(d.rows.length > 0, '簡表要有明細列');
+  ok(d.rows.every(r => r.ymd && r.worker), '每一列都要有日期與承包商');
+  ok(d.rows[0].ymd >= d.rows[d.rows.length - 1].ymd, '明細要依日期新到舊');
+  ok(d.byWorker.length > 0 && d.byWorker[0].price >= (d.byWorker[1] || { price: 0 }).price,
+     '承包商彙總要依金額由大到小');
+  ok(d.total.count === d.rows.length, '合計筆數要與明細一致');
+  ok(d.bySales.length > 0, '要有依業務的彙總');
+
+  // 沒有承包商的列不是一筆發包（表格上方的狀態註記那種）
+  ok(d.rows.every(r => r.worker !== '不該被統計'), '雜訊列不可進入明細');
+
+  // 日期篩選要真的作用
+  reset();
+  const mar = G.getSimple({ from: '2026-03-01', to: '2026-03-31' }).data;
+  ok(mar.rows.every(r => r.ymd >= '2026-03-01' && r.ymd <= '2026-03-31'),
+     '日期範圍外的列不可出現');
+  ok(mar.rows.length < d.rows.length, '縮小範圍後筆數要變少');
+
+  // 承包商篩選
+  reset();
+  const w0 = d.byWorker[0].name;
+  const only = G.getSimple({ from: '2026-01-01', to: '2026-12-31', worker: w0 }).data;
+  ok(only.rows.every(r => r.worker === w0), '選了承包商就只能出現那一位');
+  ok(only.options.workers.length === d.options.workers.length,
+     '🔴 下拉選項不可隨篩選縮水，否則選了一位就再也選不回別人');
+
+  // 對客戶報價＝擷取到的單價 × 數量。Johnson 有 6000×10 與 1800×10，另一筆沒填。
+  reset();
+  const jw = G.getSimple({ from: '2026-01-01', to: '2026-12-31' })
+    .data.bySales.filter(x => x.name === 'Johnson')[0];
+  ok(jw && jw.quoted === 78000,
+     '對客戶報價應為 6000×10 + 1800×10 = 78000，實得 ' + (jw && jw.quoted));
+  ok(jw && jw.quoteMissing === 1, '沒填工資報價的那一筆要被算進「讀不到」，實得 ' +
+     (jw && jw.quoteMissing));
+
+  // 🔴 陳俊行(廣信鎖店) 沒有「報價單數量」也沒有「承包總價」，用的是
+  //    「請款數量」與「發包單價」。讀不到就顯示 0，那是把有錢的列做成 0 再加進合計。
+  reset();
+  const all = G.getSimple({ from: '2026-01-01', to: '2026-12-31' }).data;
+  const cj = all.rows.filter(r => r.orderNo === 'CJ-260320-01')[0];
+  ok(cj && cj.qty === 3, '🔴 缺「報價單數量」的分頁要退用「請款數量」，實得 ' + (cj && cj.qty));
+  ok(cj && cj.price === 2700,
+     '🔴 缺「承包總價」的分頁要用「發包單價×數量」推算（900×3），實得 ' + (cj && cj.price));
+  ok(all.derivedPrice >= 1, '推算出來的筆數要回報，不可讓人以為那是表上直接讀到的');
+
+  // 擷取不到報價的筆數要誠實回報
+  ok(typeof d.noQuoteText === 'number', '要回報工資報價欄讀不到數字的筆數');
+  ok(d.bySales.every(s => typeof s.quoteMissing === 'number'),
+     '每位業務都要標出有幾筆報價讀不到');
+
+  // 前端真的跑一次
+  const els = {};
+  const mk = id => ({ id, innerHTML: '', textContent: '', value: '', className: '',
+    disabled: false, style: {}, children: [], appendChild(c) { this.children.push(c); } });
+  const doc = { getElementById: id => (els[id] || (els[id] = mk(id))), createElement: () => mk('') };
+  reset();
+  const runS = {
+    withSuccessHandler(f) { this._s = f; return this; },
+    withFailureHandler(f) { this._f = f; return this; },
+    getSimple(o) { this._o = o; const res = G.getSimple(o); this._s(res); return this; },
+  };
+  const pageS = G.simpleBlock_('boss@waferlock.com', '2026-01-01');
+  let threwS = null;
+  try {
+    vm.runInContext(pageS.match(/<script>([\s\S]*?)<\/script>/)[1],
+      vm.createContext({ document: doc, google: { script: { run: runS } }, console }));
+  } catch (e) { threwS = e; }
+  ok(!threwS, '🔴 簡表 render 不可擲例外｜' + (threwS && threwS.message));
+  const repS = els.rep ? els.rep.innerHTML : '';
+  ok(/依承包商/.test(repS) && /依業務/.test(repS) && /明細/.test(repS),
+     '簡表要有三個區塊');
+  ok(/承包金額/.test(repS) && /數量/.test(repS), '要有承包金額與數量欄');
+  ok(/只能當概估/.test(repS),
+     '🔴 對客戶報價是從文字擷取的，畫面必須講明不能拿去對帳');
+  ok(!/毛利|進價/.test(repS), '簡表不談毛利與進價，那是完整報表的事');
+  // 一筆報價都讀不到的業務，差額不可顯示成大負數——那看起來像虧錢，其實是沒讀到
+  ok(/—/.test(repS),
+     '🔴 完全讀不到報價的業務，對客戶報價與差額要顯示「—」而不是 0 與負數');
+  ok(!/-30,000/.test(repS), '🔴 不可把「讀不到」呈現成 -30,000 這種假的虧損');
+  ok(/簡表/.test(pageS) && /完整報表/.test(pageS), '要能切到完整報表');
+  ok(/target="_top"/.test(pageS), '切頁連結要 target=_top（GAS 沙箱 iframe）');
+
+  // 非主管一樣擋住（前端藏起來不算權限）
+  props = { DISPATCH_SHEET_ID: 'X', DISPATCH_BOSS_APPROVERS: 'nobody@waferlock.com' };
+  ok(!G.getSimple({}).ok, '🔴 非主管直接呼叫 getSimple 也要被擋');
 }
 
 console.log('\n' + (fail ? '❌' : '✅') + ' 通過 ' + pass + '／失敗 ' + fail);
