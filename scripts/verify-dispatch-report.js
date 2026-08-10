@@ -156,7 +156,12 @@ let batchGetCalls = 0;
 
 const sandbox = {
   PropertiesService: {
-    getScriptProperties: () => ({ getProperty: k => (k in props ? props[k] : null) })
+    // setProperty 是清快取用的（把版本號往上加）。這是程式自己的設定，
+    // 與「不可寫入試算表」的唯讀保證是兩回事。
+    getScriptProperties: () => ({
+      getProperty: k => (k in props ? props[k] : null),
+      setProperty: (k, v) => { props[k] = v; }
+    })
   },
   // 進階服務。刻意只提供讀取用的兩支——程式若哪天呼叫寫入 API 會直接 TypeError。
   Sheets: {
@@ -293,7 +298,7 @@ console.log('\n【5】起算日 REPORT_SINCE');
   let d = G.buildReport_('ship');
   ok(d.sinceWarn === true, '🔴 未設定 REPORT_SINCE 必須警告');
   ok(d.since === '', '未設定時 since 為空');
-  ok(d.audit.excludedBySince.dispatch === 0, '未設定時不排除任何資料');
+  ok(d.audit.excludedByRange.dispatch === 0, '未設定時不排除任何資料');
   const withoutSince = d.months.length;
 
   props = { DISPATCH_SHEET_ID: 'X', REPORT_SINCE: '亂填' };
@@ -306,10 +311,10 @@ console.log('\n【5】起算日 REPORT_SINCE');
   ok(d.since === '2026-01-01', 'since 要帶到前端顯示');
   ok(d.months.every(m => m.month >= '2026-01'), '🔴 起算日之前的月份必須完全被排除');
   ok(d.months.length < withoutSince, '設起算日後月份數應減少（2025-12 被排掉）');
-  ok(d.audit.excludedBySince.shipment >= 1, '被排除的筆數要計數，不可靜默丟掉');
+  ok(d.audit.excludedByRange.shipment >= 1, '被排除的筆數要計數，不可靜默丟掉');
   // 發包分頁的排除要在申請日基準下看：出貨日基準時，2024 那張沒出貨的單
   // 是「查不到出貨日」而不是「早於起算日」，兩者是不同的原因，不可混為一談。
-  ok(G.buildReport_('apply').audit.excludedBySince.dispatch >= 1,
+  ok(G.buildReport_('apply').audit.excludedByRange.dispatch >= 1,
      '發包分頁被排除的筆數也要計數');
   const has2024 = d.workers.some(w => w.months.some(m => m.month < '2026-01'));
   ok(!has2024, '承包商工資也要吃起算日');
@@ -522,6 +527,16 @@ console.log('\n【14】權限與快取');
   ok(res.unrestricted === false, '有設名單時 unrestricted 應為 false');
   ok(G.getReport('ship').cached === true, '第二次應命中快取');
   ok(G.getReport('apply').cached !== true, '不同基準應分開快取');
+  // 篩選條件必須進快取鍵：不進去的話換條件會拿到上一次的結果，
+  // 看起來像「篩選沒有作用」，是最難查的那種錯
+  ok(G.getReport({ basis: 'ship', worker: '蔣家工程行' }).cached !== true,
+     '🔴 換師傅不可命中舊快取');
+  ok(G.getReport({ basis: 'ship', from: '2026-03-01' }).cached !== true,
+     '🔴 換起日不可命中舊快取');
+  ok(G.getReport({ basis: 'ship', sales: 'Johnson' }).cached !== true,
+     '🔴 換業務不可命中舊快取');
+  ok(G.getReport({ basis: 'ship', worker: '蔣家工程行' }).cached === true,
+     '同一組條件第二次要命中');
 
   props.DISPATCH_BOSS_APPROVERS = 'someone.else@waferlock.com';
   reset();
@@ -532,8 +547,15 @@ console.log('\n【14】權限與快取');
   reset();
   ok(G.getReport('ship').unrestricted === true, '未設名單時要標示「目前無權限管控」');
 
+  // 篩選條件是自由組合的，快取鍵列舉不完，所以清快取是靠版本號往上加。
+  // 要驗的是「清完之後真的重算」，不是「CACHE 這個物件被清空」。
+  reset();
+  props = { DISPATCH_SHEET_ID: 'X', REPORT_SINCE: '2026-01-01',
+            DISPATCH_BOSS_APPROVERS: 'boss@waferlock.com' };
+  ok(G.getReport('ship').cached !== true, '清空後第一次是重算');
+  ok(G.getReport('ship').cached === true, '再取一次應命中');
   G.clearReportCache();
-  ok(Object.keys(CACHE).length === 0, 'clearReportCache 應清掉兩個基準的快取');
+  ok(G.getReport('ship').cached !== true, 'clearReportCache 之後必須重新統計');
 }
 
 // ── 15. 設定缺失要顯性失敗 ──────────────────────────────────
@@ -570,13 +592,118 @@ console.log('\n【15】設定缺失');
   ok(/陳俊行/.test(txt), '自檢要指出哪些分頁無法檢查超額請款');
 }
 
-// ── 16. 畫面 ────────────────────────────────────────────────
-console.log('\n【16】畫面');
+// ── 16. 自選區間 ────────────────────────────────────────────
+console.log('\n【16】自選區間');
 {
-  const page = G.reportBlock_('boss@waferlock.com', 'ship');
+  reset();
+  props = { DISPATCH_SHEET_ID: 'X', REPORT_SINCE: '2026-01-01' };
+  const all = G.buildReport_({ basis: 'ship' });
+
+  // 只看 2026-04
+  const apr = G.buildReport_({ basis: 'ship', from: '2026-04-01', to: '2026-04-30' });
+  ok(apr.months.every(m => m.month === '2026-04'), '區間外的月份要全部排除');
+  ok(apr.months.length === 1, '只該剩一個月，實際 ' + apr.months.length);
+  ok(apr.from === '2026-04-01' && apr.to === '2026-04-30', '區間要回傳給畫面顯示');
+  ok(apr.audit.excludedByRange.shipment > all.audit.excludedByRange.shipment,
+     '被區間排除的筆數要增加並計數');
+
+  // 邊界是包含的（含當日）
+  const oneDay = G.buildReport_({ basis: 'ship', from: '2026-04-05', to: '2026-04-05' });
+  ok(oneDay.months.length === 1 && oneDay.months[0].count === 1,
+     '單日區間要含當天（4/05 那筆），實際 ' + JSON.stringify(oneDay.months));
+
+  // 起日早於 REPORT_SINCE → 夾到起算日並告知，不可讓畫面繞過起算日
+  const early = G.buildReport_({ basis: 'ship', from: '2024-01-01' });
+  ok(early.from === '2026-01-01', '🔴 起日不可早於 REPORT_SINCE');
+  ok(early.clamped === true, '被夾住時要標示出來，不可默默改掉使用者的輸入');
+  ok(G.buildReport_({ basis: 'ship', from: '2026-03-01' }).clamped === false,
+     '沒被夾住時不該標示');
+
+  // 亂填的日期當成沒填，不可讓整份報表變空
+  const junk = G.buildReport_({ basis: 'ship', from: '亂填', to: '2026-4-5' });
+  ok(junk.from === '2026-01-01' && junk.to === '',
+     '格式不對的日期要當成沒填（退回起算日／不限）');
+  ok(junk.months.length === all.months.length, '亂填日期不該讓資料消失');
+}
+
+// ── 17. 選師傅／選業務 ──────────────────────────────────────
+console.log('\n【17】師傅與業務篩選');
+{
+  reset();
+  props = { DISPATCH_SHEET_ID: 'X', REPORT_SINCE: '2026-01-01' };
+  const all = G.buildReport_({ basis: 'apply' });
+
+  // 下拉選單的選項
+  ok(all.options.workers.indexOf('蔣家工程行') >= 0 && all.options.workers.indexOf('王師傅') >= 0,
+     '師傅選單要收齊所有承包商');
+  ok(all.options.sales.indexOf('Johnson') >= 0 && all.options.sales.indexOf('Sammi') >= 0,
+     '業務選單要收齊所有業務');
+
+  // 選師傅
+  const w = G.buildReport_({ basis: 'apply', worker: '蔣家工程行' });
+  ok(w.worker === '蔣家工程行', '選到的師傅要回傳給畫面');
+  ok(w.workers.length === 1 && w.workers[0].name === '蔣家工程行',
+     '工資區只該剩選到的師傅');
+  ok(w.options.workers.length === all.options.workers.length,
+     '🔴 選單選項不可跟著被篩掉，否則選了一個人就再也選不回別人');
+  // 出貨明細沒有承包商欄，要靠發包單號回查——不回查的話營收區會維持全部。
+  // 王師傅只在陳俊行分頁有一張發包單、且那張沒有出貨，所以他的營收必須是 0；
+  // 若營收區沒被篩，這裡會看到全部的月份。
+  const wk = G.buildReport_({ basis: 'apply', worker: '王師傅' });
+  ok(wk.workers.length === 1 && wk.workers[0].name === '王師傅', '工資區只剩王師傅');
+  ok(wk.months.length === 0,
+     '🔴 選師傅時營收那幾區也要跟著篩（靠發包單號回查承包商），實際 ' +
+     JSON.stringify(wk.months));
+  ok(all.months.length > 0, '（對照組）不篩時營收區有資料');
+  const wTotal = w.months.reduce((s, m) => s + m.count, 0);
+  const allTotal = all.months.reduce((s, m) => s + m.count, 0);
+  ok(wTotal <= allTotal, '選師傅後筆數不可增加（' + wTotal + ' vs ' + allTotal + '）');
+
+  // 選業務
+  const s = G.buildReport_({ basis: 'ship', sales: 'Johnson' });
+  ok(s.salesPick === 'Johnson', '選到的業務要回傳');
+  ok(s.sales.length === 1 && s.sales[0].name === 'Johnson', '業務區只該剩 Johnson');
+  ok(s.options.sales.length >= 2, '業務選單仍要有全部選項');
+  const sammi = G.buildReport_({ basis: 'ship', sales: 'Sammi' });
+  ok(sammi.sales.length === 1 && sammi.sales[0].count === 1, 'Sammi 應只有 1 筆');
+  ok(sammi.sales[0].sale === 1200, 'Sammi 售價應為 1200，實際 ' + sammi.sales[0].sale);
+
+  // 超額請款吃師傅／業務篩選，但**不吃**日期區間
+  const ow = G.buildReport_({ basis: 'ship', worker: '蔣師傅' });
+  ok(ow.overbilling.rows.every(r => r.worker === '蔣師傅'),
+     '選了師傅，超額請款只列他的');
+  ok(ow.overbilling.rows.length >= 1, '選到的師傅確實有一筆超額');
+  const od = G.buildReport_({ basis: 'ship', from: '2026-06-01', to: '2026-06-30' });
+  ok(od.overbilling.rows.length === all.overbilling.rows.length,
+     '🔴 超額請款不可被日期區間篩掉——多付的錢沒有時效');
+
+  // 選不存在的名字要回空，不可回全部（那會讓人以為篩選成功）
+  const none = G.buildReport_({ basis: 'ship', worker: '不存在的師傅' });
+  ok(none.workers.length === 0, '選不存在的師傅要回空');
+  ok(none.months.length === 0, '🔴 選不存在的師傅時營收區也要空，不可退回全部');
+}
+
+// ── 18. 畫面 ────────────────────────────────────────────────
+console.log('\n【18】畫面');
+{
+  const page = G.reportBlock_('boss@waferlock.com', 'ship', '2026-01-01');
   ok(/發包報表/.test(page), '標題');
   ok(/出貨日基準/.test(page) && /發包申請日基準/.test(page), '要有兩種基準的切換');
-  ok(/getReport\(BASIS\)/.test(page), '前端要把基準帶回伺服器');
+  // GAS 的網頁應用程式跑在沙箱 iframe 裡，改 location 只會動到 iframe 自己的網址，
+  // doGet 不會被呼叫——按了完全沒反應。切基準一律用 google.script.run 重取。
+  ok(!/location\s*\.\s*(search|href|assign|reload)/.test(page),
+     '🔴 不可靠改 location 換基準（GAS iframe 內無效，按了沒反應）');
+  ok(/function pick\(b\)\{[^}]*BASIS=b/.test(page), '切基準要就地改 BASIS 再重取');
+  ok(/getReport\(\{basis:BASIS/.test(page), '前端要把基準與篩選條件一起帶回伺服器');
+  ok(/from:g\("f_from"\)\.value/.test(page) && /to:g\("f_to"\)\.value/.test(page),
+     '要把起訖日期帶回去');
+  ok(/worker:g\("f_worker"\)\.value/.test(page) && /sales:g\("f_sales"\)\.value/.test(page),
+     '要把師傅與業務帶回去');
+  ok(/type="date"/.test(page), '區間要用日期選擇器，不是自由文字');
+  ok(/id="f_from" value="2026-01-01"/.test(page), '起日預設帶 REPORT_SINCE');
+  ok(/fillOpts/.test(page), '師傅／業務的選項要由伺服器回傳後填入，不可寫死');
+  ok(/busy/.test(page) && /disabled=true/.test(page),
+     '取資料時要鎖住按鈕（連按會有兩個請求在飛，先回來的未必是後按的那組）');
   ok(/統計中…/.test(page), '要有載入提示（全量掃描要數秒）');
   ok(!/chart\.js|cdn|https?:\/\//i.test(page), '不可引入外部圖表庫或外部資源');
   ok(/class="bfill"/.test(page), '要用純 CSS 條狀圖');
@@ -593,6 +720,111 @@ console.log('\n【16】畫面');
   ok(/發包報表/.test(err._h), 'doGet 應回傳頁面');
   props = { DISPATCH_SHEET_ID: 'X', DISPATCH_BOSS_APPROVERS: 'nobody@waferlock.com' };
   ok(/僅限主管/.test(G.doGet({ parameter: {} })._h), '非主管開頁要看到擋下的訊息');
+}
+
+// ── 前端真的跑一次 ────────────────────────────────────────────
+// 只做 new Function() 的語法檢查抓不到「函式名當成變數用」這種錯——
+// 語法完全合法，是執行到才炸。而 render() 一炸，例外發生在
+// g("rep").innerHTML=h 之前，畫面就是**篩選列以下整片空白、連錯誤訊息都沒有**。
+// 所以這裡把內嵌 JS 接上假的 DOM 與假的 google.script.run 真的執行一遍。
+console.log('\n【9】前端 render 實際執行');
+{
+  const runPage = (page, opts) => {
+    opts = opts || {};
+    const els = {};
+    const mk = id => ({
+      id, innerHTML: '', textContent: '', value: '', className: '',
+      disabled: false, style: {}, children: [],
+      appendChild(c) { this.children.push(c); },
+    });
+    const doc = {
+      getElementById: id => (els[id] || (els[id] = mk(id))),
+      createElement: () => mk(''),
+    };
+    // 先把使用者在畫面上會有的值放進去
+    Object.keys(opts.fields || {}).forEach(k => { doc.getElementById(k).value = opts.fields[k]; });
+
+    // 用共用物件而不是區域變數——切基準會再取一次，回傳快照就看不到第二次的結果
+    const box = { els, sentTo: null, err: null, calls: 0 };
+    const run = {
+      withSuccessHandler(f) { this._s = f; return this; },
+      withFailureHandler(f) { this._f = f; return this; },
+      getReport(o) {
+        box.sentTo = o; box.calls++;
+        const res = G.getReport(o);
+        try { this._s(res); } catch (e) { box.err = e; }
+        return this;
+      },
+    };
+    box.ctx = vm.createContext({ document: doc, google: { script: { run } }, console });
+    const code = page.match(/<script>([\s\S]*?)<\/script>/)[1];
+    try { vm.runInContext(code, box.ctx); } catch (e) { box.err = box.err || e; }
+    return box;
+  };
+
+  // render 炸掉時某些元素根本沒被建出來。取值要容錯，否則測試自己會崩潰，
+  // 看到的是 stack trace 而不是「哪一項不合格」。
+  const H = (r, id) => (r.els[id] ? String(r.els[id].innerHTML) : '');
+
+  // ① 有設 REPORT_SINCE（＝實際部署的狀態）。這一支才會走進 else 分支。
+  props = {
+    DISPATCH_SHEET_ID: 'X', REPORT_SINCE: '2026-01-01',
+    DISPATCH_BOSS_APPROVERS: 'boss@waferlock.com',
+  };
+  reset();
+  let page = G.reportBlock_('boss@waferlock.com', 'apply', '2026-01-01');
+  let r = runPage(page, { fields: { f_from: '2026-01-01', f_to: '' } });
+
+  ok(!r.err, '🔴 render() 執行不可擲例外｜' + (r.err && r.err.message));
+  ok(H(r,'rep').length > 0,
+     '🔴 有設 REPORT_SINCE 時報表區必須有內容（空白＝render 中途炸掉）');
+  ok(/超額請款/.test(H(r,'rep')), '報表區應含超額請款警示');
+  ok(/每月銷售/.test(H(r,'rep')), '報表區應含每月銷售');
+  ok(/資料稽核/.test(H(r,'rep')), '報表區應含資料稽核');
+  ok(/範圍/.test(H(r,'msg')), '有設起算日時訊息列應顯示範圍，而不是警告');
+  ok(!/未設定 REPORT_SINCE/.test(H(r,'msg')), '已設起算日不該顯示未設定警告');
+  ok(r.els.loadcard && r.els.loadcard.style.display === 'none', '統計完成後載入提示要收起來');
+
+  // ② 帶篩選條件——sel 非空，才會真的走到 sel.join()，也就是原本寫成 pick.join() 的那行
+  reset();
+  const anyWorker = (G.getReport({ basis: 'apply' }).data.workers[0] || {}).name || '';
+  reset();
+  r = runPage(page, { fields: { f_from: '2026-01-01', f_worker: anyWorker } });
+  ok(!r.err, '🔴 帶師傅篩選時 render() 不可擲例外｜' + (r.err && r.err.message));
+  ok(H(r,'rep').length > 0, '帶篩選時報表區仍要有內容');
+  if (anyWorker) {
+    ok(/師傅：/.test(H(r,'msg')), '訊息列應標出目前篩選的師傅');
+  } else {
+    ok(true, '測試資料無承包商，略過篩選標示檢查');
+  }
+
+  // ③ 沒設 REPORT_SINCE（走 if 分支）。原本的 bug 只在 else 分支，
+  //    所以兩條路都要跑，不然改壞了另一條也不會有人知道。
+  props = { DISPATCH_SHEET_ID: 'X', DISPATCH_BOSS_APPROVERS: 'boss@waferlock.com' };
+  reset();
+  page = G.reportBlock_('boss@waferlock.com', 'apply', '');
+  r = runPage(page, {});
+  ok(!r.err, '未設 REPORT_SINCE 時 render() 也不可擲例外｜' + (r.err && r.err.message));
+  ok(/未設定 REPORT_SINCE/.test(H(r,'msg')), '未設起算日要顯示紅字警告');
+  ok(H(r,'rep').length > 0, '未設起算日仍要出得了報表');
+
+  // ④ 切基準會就地重取，且送出的 basis 要換過去
+  props = {
+    DISPATCH_SHEET_ID: 'X', REPORT_SINCE: '2026-01-01',
+    DISPATCH_BOSS_APPROVERS: 'boss@waferlock.com',
+  };
+  reset();
+  page = G.reportBlock_('boss@waferlock.com', 'apply', '2026-01-01');
+  r = runPage(page, { fields: { f_from: '2026-01-01' } });
+  ok(r.sentTo && r.sentTo.basis === 'apply', '首次載入應帶目前基準');
+  ok(r.calls === 1, '開頁應只取一次資料');
+  r.ctx.pick('ship');
+  ok(r.sentTo.basis === 'ship' && r.calls === 2, '切到出貨日基準應重新取一次資料');
+  r.ctx.pick('ship');
+  ok(r.calls === 2, '重複點同一個基準不該再打一次伺服器');
+  ok(!r.err, '切基準後 render() 不可擲例外｜' + (r.err && r.err.message));
+  ok(H(r,'rep').length > 0, '切基準後報表區仍要有內容');
+  ok(r.els.t_ship && r.els.t_ship.className.indexOf('on') >= 0, '切換後頁籤要跟著亮');
 }
 
 console.log('\n' + (fail ? '❌' : '✅') + ' 通過 ' + pass + '／失敗 ' + fail);

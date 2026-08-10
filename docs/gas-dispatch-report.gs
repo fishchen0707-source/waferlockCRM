@@ -567,25 +567,72 @@ function sortDesc_(map, field) {
 }
 
 /**
+ * 篩選條件正規化。接受字串（＝只給基準，沿用舊呼叫方式）或物件。
+ *
+ * 起算日與使用者選的起日取「較晚的那個」：REPORT_SINCE 存在的理由是
+ * 更早的資料本身不可信，讓畫面上的日期選擇器繞過它，等於把那個理由取消掉。
+ * 被夾住時回傳 clamped，畫面要講出來——不能讓人以為自己看到的是 2024 年的數字。
+ */
+function optsOf_(o) {
+  if (typeof o === 'string' || o == null) o = { basis: o };
+  var sinceInfo = sinceOf_();
+  var from = String(o.from || '').match(/^\d{4}-\d{2}-\d{2}$/) ? o.from : '';
+  var to = String(o.to || '').match(/^\d{4}-\d{2}-\d{2}$/) ? o.to : '';
+  var clamped = false;
+  if (sinceInfo.since && (!from || from < sinceInfo.since)) {
+    clamped = !!from;
+    from = sinceInfo.since;
+  }
+  return {
+    basis: (o.basis === BASIS_APPLY) ? BASIS_APPLY : BASIS_SHIP,
+    from: from,
+    to: to,
+    clamped: clamped,
+    worker: String(o.worker || '').trim(),
+    sales: String(o.sales || '').trim(),
+    since: sinceInfo.since,
+    sinceWarn: sinceInfo.warn
+  };
+}
+
+/** 日期在區間內嗎。空字串的邊界代表不限。 */
+function inRange_(ymd, from, to) {
+  if (!ymd) return false;
+  if (from && ymd < from) return false;
+  if (to && ymd > to) return false;
+  return true;
+}
+
+/**
  * 主統計。basis 決定「每一筆用哪個日期分組」，**金額來源不變**——
  * 換基準只換分組的日期軸，否則兩個基準的數字沒有可比性。
  * 換不到基準日期的筆數會列在「日期不明」，不會被安靜丟掉。
+ *
+ * 師傅／業務的篩選同時作用在兩邊的資料：出貨明細沒有承包商欄，
+ * 但它有發包單號，可以回查發包分頁的承包商——不做這層回查的話，
+ * 選了師傅之後「業務銷售額」會維持全部，看起來像沒篩到。
  */
-function buildReport_(basis) {
-  basis = (basis === BASIS_APPLY) ? BASIS_APPLY : BASIS_SHIP;
+function buildReport_(o) {
+  var opts = optsOf_(o);
+  var basis = opts.basis;
+  var from = opts.from, to = opts.to;
 
   var book = fetchAll_();
   var parts = splitBook_(book);
-  var sinceInfo = sinceOf_();
-  var since = sinceInfo.since;
   var limit = outlierOf_();
   var roster = rosterOf_(parts.roster);
   var channelList = channelsOf_(parts.options);
 
   var out = {
     basis: basis,
-    since: since,
-    sinceWarn: sinceInfo.warn,
+    from: from,
+    to: to,
+    clamped: opts.clamped,
+    worker: opts.worker,
+    salesPick: opts.sales,
+    options: { workers: [], sales: [] },
+    since: opts.since,
+    sinceWarn: opts.sinceWarn,
     sheetCount: parts.sheets.length,
     sheetNames: [],
     overbilling: { rows: [], uncheckable: [], checked: 0, skipped: 0 },
@@ -596,7 +643,7 @@ function buildReport_(basis) {
     gaps: {},
     audit: {
       unknownDate: { shipment: 0, dispatch: 0 },
-      excludedBySince: { shipment: 0, dispatch: 0 },
+      excludedByRange: { shipment: 0, dispatch: 0 },
       noShipNo: 0,
       nonNumeric: [],
       outliers: [],
@@ -616,6 +663,8 @@ function buildReport_(basis) {
   // 也不能當成 0 天混進平均——它是「無法計算」，要單獨計數。
   var approvedNoTs = 0;
   var byWorker = {};
+  // 出貨明細沒有承包商欄，靠發包單號回查。師傅篩選要作用在營收那幾區就得靠它。
+  var workerByNo = {};
 
   for (var s = 0; s < parts.sheets.length; s++) {
     var ctx = parts.sheets[s];
@@ -686,6 +735,7 @@ function buildReport_(basis) {
             field: COL_PRICE, value: price });
         }
       }
+      if (!workerByNo[orderNo]) workerByNo[orderNo] = wname;
       if (!byWorker[wname]) byWorker[wname] = { name: wname, count: 0, price: 0, months: {} };
       byWorker[wname]._rows = byWorker[wname]._rows || [];
       byWorker[wname]._rows.push({ orderNo: orderNo, applyYmd: applyYmd, price: price });
@@ -697,7 +747,7 @@ function buildReport_(basis) {
   // ── ② 出貨明細：出貨日索引、業務／通路銷售額 ──────────────────
   var shipByNo = {};   // 發包單號 → 最早出貨日
   var bySales = {}, byChannel = {}, byMonth = {}, otherProjects = {};
-  var unknownCodes = {};
+  var unknownCodes = {}, allSales = {};
   var gapShipToWh = [], gapApproveToShip = [];
 
   if (!parts.shipment) {
@@ -727,13 +777,29 @@ function buildReport_(basis) {
       // 營收統計：未鍵出貨單號的不計入（規格 §1：銀貨兩訖才算營收）
       if (!shipNo) { out.audit.noShipNo++; continue; }
 
+      // 業務歸屬：優先用「下單業務」，沒有就用發包單號前綴查對照表。
+      // 這一段要在所有 continue 之前算完——下拉選單得收齊**所有出現過**的業務，
+      // 放在日期檢查之後的話，沒有發包單號的那些單在申請日基準下會先被踢掉，
+      // 那位業務就從選單裡消失，看起來像系統不認得她。
+      var who = str_(srow, sc[COL_S_ORDER_BY]);
+      var code = codeOf_(dispatchNo);
+      if (!who && code && roster[code]) who = roster[code].sales || code;
+      if (!who && code) { who = code; unknownCodes[code] = (unknownCodes[code] || 0) + 1; }
+      if (!who) who = '（未標示）';
+      allSales[who] = true;
+
       var when = (basis === BASIS_SHIP) ? shipYmd : (dispatchNo ? applyByNo[dispatchNo] : '');
       if (!when) { out.audit.unknownDate.shipment++; continue; }
-      if (since && when < since) { out.audit.excludedBySince.shipment++; continue; }
+      if (!inRange_(when, from, to)) { out.audit.excludedByRange.shipment++; continue; }
 
       // 用「年-月」當鍵，不是只用月——否則 2025-12 會跟 2026-12 併在一起
       var mk = when.slice(0, 7);
       if (!/^\d{4}-\d{2}$/.test(mk)) { out.audit.unknownDate.shipment++; continue; }
+
+      if (opts.sales && who !== opts.sales) continue;
+      // 選了師傅時，出貨列靠發包單號回查承包商。沒有發包單號的出貨（料件那一類）
+      // 查不到承包商，選了師傅就不該算進來——它本來就不是那位師傅的工。
+      if (opts.worker && (workerByNo[dispatchNo] || '') !== opts.worker) continue;
 
       var saleRaw = at_(srow, sc[COL_S_SALE_PRICE]);
       var costRaw = at_(srow, sc[COL_S_COST_PRICE]);
@@ -755,12 +821,6 @@ function buildReport_(basis) {
       byMonth[mk].count++;
       byMonth[mk].sale += sale;
 
-      // 業務歸屬：優先用「下單業務」，沒有就用發包單號前綴查對照表
-      var who = str_(srow, sc[COL_S_ORDER_BY]);
-      var code = codeOf_(dispatchNo);
-      if (!who && code && roster[code]) who = roster[code].sales || code;
-      if (!who && code) { who = code; unknownCodes[code] = (unknownCodes[code] || 0) + 1; }
-      if (!who) who = '（未標示）';
       var sr = addStat_(bySales, who, { count: 0, sale: 0, profit: 0, profitRows: 0 });
       sr.count++; sr.sale += sale;
       if (hasCost) { sr.profit += (sale - cost); sr.profitRows++; }
@@ -801,7 +861,15 @@ function buildReport_(basis) {
       var rec = rows[wr];
       var when2 = (basis === BASIS_SHIP) ? (shipByNo[rec.orderNo] || '') : (rec.applyYmd || '');
       if (!when2) { out.audit.unknownDate.dispatch++; continue; }
-      if (since && when2 < since) { out.audit.excludedBySince.dispatch++; continue; }
+      if (!inRange_(when2, from, to)) { out.audit.excludedByRange.dispatch++; continue; }
+      if (opts.worker && wk.name !== opts.worker) continue;
+      // 發包分頁沒有「下單業務」欄，業務身分只能從單號前綴推。查不到對照的
+      // 就用代碼本身比對——與出貨明細那邊的規則一致（見上方 who 的推導）。
+      if (opts.sales) {
+        var c2 = codeOf_(rec.orderNo);
+        var s2 = (c2 && roster[c2] && roster[c2].sales) ? roster[c2].sales : c2;
+        if (s2 !== opts.sales) continue;
+      }
       var mk2 = when2.slice(0, 7);
       wk.count++;
       wk.price += rec.price;
@@ -816,6 +884,25 @@ function buildReport_(basis) {
     wk.months = arr;
   }
   out.workers = sortDesc_(byWorker, 'price').filter(function (x) { return x.count > 0; });
+
+  // 下拉選單的選項：收全部出現過的名字，**不受目前篩選影響**——
+  // 篩過之後才建選單的話，選了某位師傅就再也選不回別人（清單只剩他一個）。
+  out.options.workers = wkeys.slice().sort();
+  out.options.sales = Object.keys(allSales).sort();
+
+  // 超額請款不吃日期篩選（多付的錢沒有時效），但吃師傅／業務篩選——
+  // 選了某位師傅就是要看他的事，其他人的警示留在畫面上只是雜訊。
+  if (opts.worker || opts.sales) {
+    out.overbilling.rows = out.overbilling.rows.filter(function (r) {
+      if (opts.worker && r.worker !== opts.worker) return false;
+      if (opts.sales) {
+        var c3 = codeOf_(r.orderNo);
+        var s3 = (c3 && roster[c3] && roster[c3].sales) ? roster[c3].sales : c3;
+        if (s3 !== opts.sales) return false;
+      }
+      return true;
+    });
+  }
 
   // ── ④ 時間間距 ────────────────────────────────────────────
   var gapApplyToApprove = [];
@@ -866,16 +953,19 @@ function statOf_(list, label, unknown) {
  * 報表資料。**僅副主管／主管**。
  * 這裡自己再擋一次，不能只靠 doGet 的路由判斷（網址參數是使用者可以改的）。
  */
-function getReport(basis) {
+function getReport(o) {
   var email = currentUserEmail_();
   if (!email) return { ok: false, message: '無法辨識身分（部署的存取權要選「機構內的任何人」）。' };
   var roles = stagesFor_(email);
   if (!roles.boss && !roles.sub) {
     return { ok: false, message: '報表僅限副主管／主管檢視（' + email + '）。' };
   }
-  basis = (basis === BASIS_APPLY) ? BASIS_APPLY : BASIS_SHIP;
+  var opts = optsOf_(o);
 
-  var key = REPORT_CACHE_PREFIX + basis;
+  // 快取鍵含全部篩選條件：少帶任何一個，換了條件卻會拿到上一次的結果，
+  // 而那個錯誤看起來像「篩選沒有作用」，最難查。
+  var key = REPORT_CACHE_PREFIX + cacheVer_() + '|' +
+    [opts.basis, opts.from, opts.to, opts.worker, opts.sales].join('|');
   try {
     var hit = CacheService.getScriptCache().get(key);
     if (hit) {
@@ -888,7 +978,7 @@ function getReport(basis) {
   }
 
   try {
-    var data = buildReport_(basis);
+    var data = buildReport_(opts);
     var at = Utilities.formatDate(new Date(), TZ, 'MM-dd HH:mm');
     try {
       var payload = JSON.stringify({ data: data, at: at });
@@ -902,11 +992,21 @@ function getReport(basis) {
   }
 }
 
+/**
+ * 清快取。篩選條件是使用者自由組合的，快取鍵有無限多種，列舉不完，
+ * 所以改成把版本號往上加一，舊的鍵自然再也對不上（15 分鐘後自己過期）。
+ *
+ * ⚠ 這會寫入**指令碼屬性**，不是試算表。本程式的唯讀保證是對資料而言的，
+ *   自己的設定不在其中。
+ */
+function cacheVer_() {
+  return String(prop_('REPORT_CACHE_VER') || '1');
+}
+
 function clearReportCache() {
-  var c = CacheService.getScriptCache();
-  c.remove(REPORT_CACHE_PREFIX + BASIS_SHIP);
-  c.remove(REPORT_CACHE_PREFIX + BASIS_APPLY);
-  return '已清除報表快取';
+  var next = String((Number(cacheVer_()) || 1) + 1);
+  PropertiesService.getScriptProperties().setProperty('REPORT_CACHE_VER', next);
+  return '已清除報表快取（版本 → ' + next + '）';
 }
 
 /** 部署自檢：在編輯器直接執行，把設定與讀表狀況一次印出來。 */
@@ -963,7 +1063,8 @@ function doGet(e) {
       '「毛利」一旦顯示就等於把進價反推出來，所以整頁限制而不是遮欄位。'));
   }
   var basis = String((e && e.parameter && e.parameter.basis) || BASIS_SHIP);
-  return htmlPage_(reportBlock_(email, basis === BASIS_APPLY ? BASIS_APPLY : BASIS_SHIP));
+  return htmlPage_(reportBlock_(email, basis === BASIS_APPLY ? BASIS_APPLY : BASIS_SHIP,
+    sinceOf_().since));
 }
 
 // ────────────────────────────────────────────── 畫面
@@ -999,6 +1100,20 @@ function htmlPage_(bodyHtml) {
     '.tab{padding:7px 16px;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;' +
       'background:#fff;color:#64748B;border:1px solid #E2E8F0}' +
     '.tab.on{background:#0F2744;color:#fff;border-color:#0F2744}' +
+    // ── 篩選列 ──
+    '.filt .frow{display:flex;gap:9px;align-items:flex-end;flex-wrap:wrap}' +
+    '.filt .fi{display:flex;flex-direction:column;gap:3px;min-width:0}' +
+    '.filt label{font-size:11px;font-weight:700;color:#64748B}' +
+    '.filt input,.filt select{border:1px solid #E2E8F0;border-radius:7px;padding:7px 9px;' +
+      'font-size:13px;font-family:inherit;outline:none;background:#fff;color:#1E293B;' +
+      'min-height:36px;max-width:100%}' +
+    '.filt input:focus,.filt select:focus{border-color:#38BDF8}' +
+    '.filt select{min-width:112px}' +
+    '.filt button{padding:8px 18px;border:none;border-radius:7px;font-size:13.5px;' +
+      'font-weight:700;cursor:pointer;font-family:inherit;background:#0F2744;color:#fff;' +
+      'min-height:36px}' +
+    '.filt button.ghost{background:#F1F5F9;color:#475569}' +
+    '.filt button:disabled{opacity:.45;cursor:not-allowed}' +
     // 純 CSS 條狀圖：不引入外部圖表庫（GAS 網頁應用程式沒有 CDN 保證，也不想多一個依賴）
     '.brow{display:flex;align-items:center;gap:9px;margin:6px 0;font-size:12.5px}' +
     '.blab{width:96px;flex:none;color:#475569;font-weight:600;word-break:break-all}' +
@@ -1011,6 +1126,10 @@ function htmlPage_(bodyHtml) {
       '.bval{width:106px;font-size:11.5px}' +
       'body{padding:11px}' +
       '.whrow b{min-width:76px}' +
+      // 手機上四個欄位擠成一列會每個都只剩指甲寬；改成兩兩一行
+      '.filt .fi{flex:1 1 45%}' +
+      '.filt input,.filt select{width:100%}' +
+      '.filt button{flex:1 1 45%}' +
     '}';
 
   var html =
@@ -1029,7 +1148,7 @@ function errorBlock_(title, detail) {
     esc_(detail) + '</div></div>';
 }
 
-function reportBlock_(email, basis) {
+function reportBlock_(email, basis, since) {
   return '<div class="hd"><div class="ic">📊</div><div>' +
     '<h1>發包報表</h1><p>' + esc_(email) + '　·　僅主管可見　·　唯讀</p></div></div>' +
     '<div class="tabs">' +
@@ -1038,11 +1157,26 @@ function reportBlock_(email, basis) {
       '<div class="tab' + (basis === BASIS_APPLY ? ' on' : '') + '" id="t_apply" ' +
         'onclick="pick(\'' + BASIS_APPLY + '\')">發包申請日基準</div>' +
     '</div>' +
+    // 篩選列。師傅／業務的選項由伺服器回傳後填入，不寫死——
+    // 寫死的清單一定會跟試算表上的實際名字分家。
+    '<div class="card filt">' +
+      '<div class="frow">' +
+        '<div class="fi"><label>起</label><input type="date" id="f_from" value="' +
+          esc_(since || '') + '"></div>' +
+        '<div class="fi"><label>訖</label><input type="date" id="f_to"></div>' +
+        '<div class="fi"><label>師傅</label><select id="f_worker"><option value="">全部</option></select></div>' +
+        '<div class="fi"><label>業務</label><select id="f_sales"><option value="">全部</option></select></div>' +
+        '<button id="f_go" onclick="load()">套用</button>' +
+        '<button class="ghost" onclick="resetF()">清除</button>' +
+      '</div>' +
+      '<div class="note" id="quick"></div>' +
+    '</div>' +
     '<div id="msg"></div>' +
     '<div class="card" id="loadcard"><div class="center" id="load">統計中…（全量掃描，約需數秒）</div></div>' +
     '<div id="rep"></div>' +
     '<script>' +
     'var BASIS=' + JSON.stringify(basis) + ';' +
+    'var SINCE=' + JSON.stringify(since || '') + ';' +
     'function g(id){return document.getElementById(id);}' +
     'function show(t,c){g("msg").innerHTML=\'<div class="msg \'+c+\'">\'+t+\'</div>\';}' +
     'function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;")' +
@@ -1061,7 +1195,21 @@ function reportBlock_(email, basis) {
     'function card(title,sub,body,cls){' +
       'return \'<div class="card\'+(cls?" "+cls:"")+\'"><div class="ometa"><b>\'+esc(title)+\'</b>\'' +
         '+(sub?\'<span>\'+esc(sub)+\'</span>\':"")+\'</div>\'+body+\'</div>\';}' +
-    'function pick(b){if(b===BASIS)return;location.search="?basis="+b;}' +
+    // 切基準**不重新載入頁面**。GAS 網頁應用程式的內容跑在沙箱 iframe 裡，
+    // 改 location 只會動到 iframe 自己的網址，doGet 根本不會被呼叫——
+    // 按了沒反應就是這個原因。改成直接用新基準再取一次資料。
+    'function pick(b){if(b===BASIS)return;BASIS=b;' +
+      'g("t_ship").className="tab"+(b==="ship"?" on":"");' +
+      'g("t_apply").className="tab"+(b==="apply"?" on":"");load();}' +
+    'function resetF(){g("f_from").value=SINCE;g("f_to").value="";' +
+      'g("f_worker").value="";g("f_sales").value="";load();}' +
+    // 選項只在第一次填，之後保留使用者的選擇（重填會把選到的值洗掉）
+    'var optsFilled=false;' +
+    'function fillOpts(o){if(optsFilled||!o)return;optsFilled=true;' +
+      '[["f_worker",o.workers],["f_sales",o.sales]].forEach(function(p){' +
+        'var el=g(p[0]);(p[1]||[]).forEach(function(v){' +
+          'var op=document.createElement("option");op.value=v;op.textContent=v;' +
+          'el.appendChild(op);});});}' +
 
     'function overbill(d){' +
       'var o=d.overbilling||{};var h="";' +
@@ -1096,8 +1244,8 @@ function reportBlock_(email, basis) {
     'function auditCard(d){var a=d.audit||{};var h="";' +
       'h+=\'<div class="whrow"><b>日期不明</b>出貨明細 \'+money(a.unknownDate.shipment)' +
         '+\' 筆　發包分頁 \'+money(a.unknownDate.dispatch)+\' 筆</div>\';' +
-      'h+=\'<div class="whrow"><b>起算日排除</b>出貨明細 \'+money(a.excludedBySince.shipment)' +
-        '+\' 筆　發包分頁 \'+money(a.excludedBySince.dispatch)+\' 筆</div>\';' +
+      'h+=\'<div class="whrow"><b>區間外排除</b>出貨明細 \'+money(a.excludedByRange.shipment)' +
+        '+\' 筆　發包分頁 \'+money(a.excludedByRange.dispatch)+\' 筆</div>\';' +
       'h+=\'<div class="whrow"><b>未鍵出貨單號</b>\'+money(a.noShipNo)+\' 筆（不計入營收）</div>\';' +
       'h+=\'<div class="whrow"><b>無進價</b>\'+money(a.noCost)+\' 筆（毛利不含這些）</div>\';' +
       'if((a.outliers||[]).length){h+=\'<div class="whlab">金額極端值</div><table>\'' +
@@ -1123,9 +1271,19 @@ function reportBlock_(email, basis) {
 
     'function render(d){' +
       'var h="";' +
+      'var bn=(d.basis==="ship"?"出貨日":"發包申請日");' +
+      'var rng="<b>"+esc(d.from||"不限")+"</b> ～ <b>"+esc(d.to||"今天")+"</b>";' +
+      'var sel=[];if(d.worker)sel.push("師傅："+esc(d.worker));' +
+      'if(d.salesPick)sel.push("業務："+esc(d.salesPick));' +
       'if(d.sinceWarn){show("🔴 未設定 REPORT_SINCE，以下統計包含<b>全部歷史資料</b>（含早已作廢的殘留列）。'
         + '請在指令碼屬性設定起算日，例如 2026-01-01。","fail");}' +
-      'else{show("統計範圍：<b>"+esc(d.since)+"</b> 起　·　基準："+(d.basis==="ship"?"出貨日":"發包申請日"),"done");}' +
+      // ⚠ 這裡是 sel，不是 pick。pick 是上面切換基準的**函式**，
+      //   函式的 .length 是參數個數（1，truthy），接著 pick.join 就會擲例外，
+      //   而例外發生在 g("rep").innerHTML 之前 → 整片空白、連錯誤訊息都沒有。
+      'else{show("範圍 "+rng+"　·　基準："+bn+(sel.length?"　·　"+sel.join("　·　"):"")' +
+        '+(d.clamped?\'<br><span style="color:#92400E">起日早於 REPORT_SINCE（\'+esc(d.since)' +
+          '+\'），已自動改成起算日。</span>\':""),"done");}' +
+      'fillOpts(d.options);' +
       'h+=card("🔴 超額請款警示","累計請款數量 > 報價單數量",overbill(d),"alert");' +
       'h+=card("每月銷售","依"+(d.basis==="ship"?"出貨日":"發包申請日")+"分組，最多 24 個月",' +
         'bars(d.months,function(r){return r.month;},function(r){return r.sale;},' +
@@ -1152,19 +1310,31 @@ function reportBlock_(email, basis) {
         'return \'<div class="whrow">\'+esc(x)+\'</div>\';}).join(""),"alert");}' +
       'g("rep").innerHTML=h;}' +
 
-    'google.script.run' +
-      '.withSuccessHandler(function(res){' +
-        'g("loadcard").style.display="none";' +
-        'if(!res.ok){show(esc(res.message),"fail");return;}' +
-        'render(res.data);' +
-        'if(res.unrestricted){var m=g("msg");m.innerHTML+=' +
-          '\'<div class="msg warn">⚠ 未設定主管名單（DISPATCH_BOSS_APPROVERS／DISPATCH_SUB_APPROVERS），\'' +
-          '+\'目前任何登入者都看得到金額與毛利。</div>\';}' +
-        'var m2=document.createElement("div");m2.className="note";' +
-        'm2.innerHTML="資料時間 "+esc(res.at)+(res.cached?"（快取，最多 15 分鐘）":"（即時統計）");' +
-        'g("rep").appendChild(m2);})' +
-      '.withFailureHandler(function(e){' +
-        'g("load").textContent="統計失敗："+e.message;})' +
-      '.getReport(BASIS);' +
+    // 每次取資料都把按鈕鎖住。不鎖的話連按兩次「套用」會有兩個請求在飛，
+    // 先回來的那個未必是後按的那組條件，畫面就會顯示對不上篩選列的數字。
+    'var busy=false;' +
+    'function load(){' +
+      'if(busy)return;busy=true;' +
+      'g("f_go").disabled=true;g("f_go").textContent="統計中…";' +
+      'g("loadcard").style.display="";g("load").textContent="統計中…（全量掃描，約需數秒）";' +
+      'g("rep").innerHTML="";' +
+      'google.script.run' +
+        '.withSuccessHandler(function(res){' +
+          'busy=false;g("f_go").disabled=false;g("f_go").textContent="套用";' +
+          'g("loadcard").style.display="none";' +
+          'if(!res.ok){show(esc(res.message),"fail");return;}' +
+          'render(res.data);' +
+          'if(res.unrestricted){var m=g("msg");m.innerHTML+=' +
+            '\'<div class="msg warn">⚠ 未設定主管名單（DISPATCH_BOSS_APPROVERS／DISPATCH_SUB_APPROVERS），\'' +
+            '+\'目前任何登入者都看得到金額與毛利。</div>\';}' +
+          'var m2=document.createElement("div");m2.className="note";' +
+          'm2.innerHTML="資料時間 "+esc(res.at)+(res.cached?"（快取，最多 15 分鐘）":"（即時統計）");' +
+          'g("rep").appendChild(m2);})' +
+        '.withFailureHandler(function(e){' +
+          'busy=false;g("f_go").disabled=false;g("f_go").textContent="套用";' +
+          'g("load").textContent="統計失敗："+e.message;})' +
+        '.getReport({basis:BASIS,from:g("f_from").value,to:g("f_to").value,' +
+          'worker:g("f_worker").value,sales:g("f_sales").value});}' +
+    'load();' +
     '</script>';
 }
