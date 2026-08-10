@@ -2599,24 +2599,28 @@ function buildReport_() {
   } catch (err) { out.backlog.whError = String(err); }
 
   // ── ② 出貨趨勢 ＋ ③ 業務績效（來源：出貨明細）──
-  // 儲存格內換行＝一格裝了兩個數字，要相加，不可把換行跟空白一起刪掉——
-  // 那會把 "56,000⏎16,800" 黏成 5600016800。報表程式那邊踩過，某承包商合計
-  // 因此顯示 112 億（真實值 105 萬）。這裡的來源是網頁單行輸入、機率低，
-  // 但同一份試算表被兩支程式讀出不同的數字，是更難查的問題。
+  // 一格裝了兩個數字時（一列兩個品項）要**相加**，不可把分隔的空白刪掉——
+  // 那會把 "56,000 16,800" 黏成 5600016800。報表程式踩過：某承包商合計顯示
+  // 112 億（真實值 105 萬）。而且分隔字元兩種都有：有人用 Alt+Enter、有人用
+  // 空格，在試算表畫面上長得一模一樣，所以**任何空白都當分隔**。
+  // 這裡來源是網頁單行輸入、機率低，但同一份試算表被兩支程式讀出不同的數字，
+  // 比機率低的 bug 難查得多，所以規則要一致。
   var num = function (v) {
     if (typeof v === 'number') return isFinite(v) ? v : 0;
-    var s0 = String(v == null ? '' : v);
-    if (/[\r\n]/.test(s0)) {
-      var ps = s0.split(/[\r\n]+/), sum = 0, got = false;
+    var s0 = String(v == null ? '' : v).trim();
+    if (!s0) return 0;
+    var ps = s0.split(/[\s 　]+/);
+    if (ps.length > 1) {
+      var sum = 0, got = false;
       for (var pi = 0; pi < ps.length; pi++) {
-        var t0 = ps[pi].replace(/[,\s$]/g, '');
+        var t0 = ps[pi].replace(/[,$]/g, '');
         if (!t0) continue;
         var n0 = Number(t0);
         if (isFinite(n0)) { sum += n0; got = true; }
       }
       return got ? sum : 0;
     }
-    var n = Number(s0.replace(/[,\s$]/g, ''));
+    var n = Number(s0.replace(/[,$]/g, ''));
     return isNaN(n) ? 0 : n;   // 空白或非數字算 0，不可讓合計變 NaN
   };
 

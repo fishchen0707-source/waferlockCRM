@@ -135,7 +135,7 @@ var KNOWN_UNUSED_HEADERS = [
 
 // 版本印記，顯示在頁首。用途只有一個：讓人一眼看出「我貼上去的新程式到底有沒有部署成功」。
 // 改程式時順手往上加——沒有它，重新部署失敗與程式沒修好長得一模一樣。
-var BUILD = '2026-08-10g';
+var BUILD = '2026-08-10h';
 
 var BASIS_SHIP  = 'ship';    // 出貨日：銀貨兩訖，算營收
 var BASIS_APPLY = 'apply';   // 發包申請日：看業務接單節奏
@@ -212,20 +212,31 @@ function detectHeaderRowIn_(values, key) {
  * 相加才是對的：140+42 = 182 組、56,000+16,800 = 72,800 —— 與同一張單
  * 另一列彙總寫法的數字完全吻合。
  */
+// 分隔用的空白字元。寫成明確的跳脫，不在原始碼裡放肉眼分不出來的字元——
+// 這裡第一次就是因為一處放 U+00A0、一處放 U+3000 而兩邊行為不一致。
+var SPLIT_WS = /[\s\u00A0\u3000]+/;
+var SPLIT_WS_G = /[\s\u00A0\u3000]+/g;
+
 function num_(v) {
   if (typeof v === 'number') return isFinite(v) ? v : 0;
-  var s = String(v == null ? '' : v);
-  if (/[\r\n]/.test(s)) {
-    var parts = s.split(/[\r\n]+/), sum = 0, got = false;
+  var s = String(v == null ? '' : v).trim();
+  if (!s) return 0;
+
+  // 任何空白（換行、空格、Tab、全形空白）都是**分隔**，不是可以刪掉的雜訊。
+  // 第一版只認換行，結果同一份資料裡有人用 Alt+Enter、有人用空格：
+  // 第 168 列修好了、第 156 列還是 56 億——兩格在畫面上長得一模一樣。
+  var parts = s.split(SPLIT_WS);
+  if (parts.length > 1) {
+    var sum = 0, got = false;
     for (var i = 0; i < parts.length; i++) {
-      var t = parts[i].replace(/[,\s$　]/g, '');
+      var t = parts[i].replace(/[,$]/g, '');
       if (!t) continue;
       var one = Number(t);
       if (isFinite(one)) { sum += one; got = true; }
     }
     return got ? sum : 0;
   }
-  var n = Number(s.replace(/[,\s$　]/g, ''));
+  var n = Number(s.replace(/[,$]/g, ''));
   return isNaN(n) ? 0 : n;
 }
 
@@ -235,16 +246,16 @@ function isNonNumeric_(v) {
   var s = String(v == null ? '' : v).trim();
   if (!s) return false;
   if (typeof v === 'number') return !isFinite(v);
-  if (/[\r\n]/.test(s)) {
-    var parts = s.split(/[\r\n]+/);
+  var parts = s.split(SPLIT_WS);
+  if (parts.length > 1) {
     for (var i = 0; i < parts.length; i++) {
-      var t = parts[i].replace(/[,\s$　]/g, '');
+      var t = parts[i].replace(/[,$]/g, '');
       if (!t) continue;
-      if (isNaN(Number(t))) return true;   // 任一行不是數字就算有問題
+      if (isNaN(Number(t))) return true;   // 任一段不是數字就算有問題
     }
     return false;
   }
-  return isNaN(Number(s.replace(/[,\s$　]/g, '')));
+  return isNaN(Number(s.replace(/[,$]/g, '')));
 }
 
 // 試算表序列數字的原點。Google Sheets 與 Excel 一樣用 1899-12-30。
@@ -1144,8 +1155,13 @@ function buildSimple_(o) {
       //   ——平均一筆 1.18 億，顯然是一兩列的垃圾數字，不是累積出來的。
       // 只把總額印出來，人要自己回試算表翻 95 列才找得到；直接列出來就不用翻。
       if (price > limit) {
+        // 帶上原始儲存格文字，空白一律換成 ␣ 讓分隔字元「看得見」。
+        // 這次為了確認第 156 列到底是換行還是空格分隔，多花了一整輪；
+        // 下次紅卡上直接就能看出來。
         big.push({ ymd: ymd, orderNo: orderNo, worker: worker,
           customer: str_(row, col[COL_CUSTOMER]), qty: qty, price: price,
+          raw: String(at_(row, col[COL_PRICE]) == null ? '' : at_(row, col[COL_PRICE]))
+                 .replace(SPLIT_WS_G, '␣').slice(0, 40),
           sheet: ctx.name, row: r + 1 });
       }
 
@@ -1391,10 +1407,14 @@ function simpleBlock_(email, since) {
       'h+=\'<div class="whrow">共 <b>\'+d.bigCount+\'</b> 列，合計 <b>\'+money(d.bigSum)' +
         '+\'</b>，占總承包金額 <b>\'+pct+\'%</b>。</div>\';' +
       'h+=\'<table><tr><th>日期</th><th>發包單號</th><th>承包商</th><th>客戶</th>\'' +
-        '+\'<th class="n">數量</th><th class="n">金額</th><th>分頁·列</th></tr>\';' +
+        '+\'<th class="n">數量</th><th class="n">金額</th><th>原始內容</th>\'' +
+        '+\'<th>分頁·列</th></tr>\';' +
       'h+=d.bigRows.map(function(r){return \'<tr><td>\'+esc(r.ymd)+\'</td><td>\'+esc(r.orderNo)' +
         '+\'</td><td>\'+esc(r.worker)+\'</td><td>\'+esc(r.customer||"")+\'</td>\'' +
         '+\'<td class="n">\'+money(r.qty)+\'</td><td class="n bad">\'+money(r.price)+\'</td>\'' +
+        // 原始儲存格文字，空白顯示成 ␣。一格塞兩個數字時一眼就看得出來，
+        // 也看得出分隔的是換行還是空格——這兩者在試算表畫面上長得一樣。
+        '+\'<td class="dim">\'+esc(r.raw||"")+\'</td>\'' +
         '+\'<td class="dim">\'+esc(r.sheet)+\'·\'+r.row+\'</td></tr>\';}).join("")+\'</table>\';' +
       'if(d.bigCount>d.bigRows.length)h+=\'<div class="note">只列出最大的 \'' +
         '+d.bigRows.length+\' 列。</div>\';' +
