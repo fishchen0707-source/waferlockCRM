@@ -598,7 +598,9 @@ function orderBlock_(email, me) {
 
   // 選項由「選單」分頁維護。該分頁沒有「發票別」欄時沿用程式裡的既有常數——
   // 不能因為分頁還沒建好就讓發票別變成空的下拉。
-  var OPT = loadOptions_();
+  // 帶入該業務自己的分頁：若沒有「選單」分頁，就讀那個分頁儲存格上的資料驗證
+  // （使用者本來就是用資料驗證做下拉的）
+  var OPT = loadOptions_(me.sheet);
   var invList = OPT[OPT_INVOICE] || INVOICE_OPTIONS;
   var invOpts = '<option value=""></option>';
   for (var v = 0; v < invList.length; v++) {
@@ -1119,7 +1121,108 @@ function rolesFor_(email) {
  * 靠表頭文字定位，所以欄序不重要——日後要加第五個下拉欄位就多開一欄。
  * 分頁不存在時回空物件，呼叫端要退回純文字輸入（不可整頁壞掉）。
  */
-function loadOptions_() {
+/**
+ * 選項清單。兩個來源，依序嘗試：
+ *
+ *   ① 「選單」分頁（橫向排列，一欄一個欄位）
+ *   ② **該業務分頁儲存格上的「資料驗證」** ← 使用者本來就在用的方式
+ *
+ * 為什麼要支援 ②：使用者已經在試算表用資料驗證設好了下拉。
+ * 要求他再維護一張「選單」分頁，就是同一份清單存兩個地方——
+ * 遲早不一致，而不一致的那天沒有人會發現（試算表選 A、網頁選 B，都寫得進去）。
+ * 讀資料驗證的話，試算表與網頁永遠是同一份清單。
+ *
+ * 「選單」分頁優先：它能涵蓋業務分頁上沒有的欄位（例如「工項」在出貨明細，
+ * 業務分頁根本沒這一欄），而且要新增選項時不必碰資料列。
+ */
+function loadOptions_(sheetName) {
+  var fromSheet = loadOptionsSheet_();
+  var fromValid = sheetName ? loadOptionsValidation_(sheetName) : {};
+  // 逐欄合併：「選單」分頁有的用它，沒有的退而用資料驗證
+  var out = {};
+  for (var i = 0; i < OPTION_COLS.length; i++) {
+    var k = OPTION_COLS[i];
+    if (fromSheet[k]) out[k] = fromSheet[k];
+    else if (fromValid[k]) out[k] = fromValid[k];
+  }
+  return out;
+}
+
+/**
+ * 讀該分頁資料列上的「資料驗證」選項。
+ *
+ * 讀第一列資料（表頭下一列）的驗證規則。兩種 criteria 都要處理：
+ *   VALUE_IN_LIST  → 選項直接寫在規則裡
+ *   VALUE_IN_RANGE → 規則指向另一個範圍，要再讀那個範圍
+ * 後者很常見（大家習慣把清單放在角落再指過去）。
+ */
+function loadOptionsValidation_(sheetName) {
+  if (!sheetName || isSystemSheet_(sheetName)) return {};
+  var id = PropertiesService.getScriptProperties().getProperty('DISPATCH_SHEET_ID');
+  if (!id) return {};
+  try {
+    var sheet = SpreadsheetApp.openById(id).getSheetByName(sheetName);
+    if (!sheet) return {};
+    var ctx = buildCtx_(sheet);
+    if (!ctx) return {};
+
+    // 下拉欄位 → 這個分頁上對應的欄名
+    var map = {};
+    map[OPT_CHANNEL] = COL_PROJECT;
+    map[OPT_MODEL] = COL_MODEL;
+    map[OPT_WORKER] = COL_WORKER;
+
+    var out = {};
+    for (var key in map) {
+      var col = ctx.col[map[key]];
+      if (!col) continue;
+      var list = validationList_(sheet, ctx.headerRow + 1, col);
+      if (list && list.length) out[key] = list;
+    }
+    return out;
+  } catch (err) {
+    Logger.log('讀資料驗證失敗（該欄將退回文字輸入）：' + err);
+    return {};
+  }
+}
+
+/** 取單一儲存格的資料驗證選項清單。取不到回 null。 */
+function validationList_(sheet, row, col) {
+  try {
+    var rule = sheet.getRange(row, col).getDataValidation();
+    if (!rule) return null;
+    var type = String(rule.getCriteriaType());
+    var vals = rule.getCriteriaValues();
+    if (!vals || !vals.length) return null;
+
+    var raw = [];
+    if (type === 'VALUE_IN_LIST') {
+      raw = vals[0] || [];
+    } else if (type === 'VALUE_IN_RANGE') {
+      // vals[0] 是 Range 物件，要再讀一次它的值
+      var rg = vals[0];
+      if (!rg || !rg.getValues) return null;
+      var got = rg.getValues();
+      for (var i = 0; i < got.length; i++) {
+        for (var j = 0; j < got[i].length; j++) raw.push(got[i][j]);
+      }
+    } else {
+      return null;   // 其他驗證類型（數字範圍、日期…）不是選單
+    }
+
+    var list = [];
+    for (var k = 0; k < raw.length; k++) {
+      var v = String(raw[k] == null ? '' : raw[k]).trim();
+      if (v && list.indexOf(v) < 0) list.push(v);
+    }
+    return list.length ? list : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+/** 讀「選單」分頁（橫向排列，一欄一個欄位） */
+function loadOptionsSheet_() {
   var id = PropertiesService.getScriptProperties().getProperty('DISPATCH_SHEET_ID');
   if (!id) return {};
   try {

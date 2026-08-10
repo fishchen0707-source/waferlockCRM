@@ -2087,5 +2087,107 @@ console.log('【24】報表頁');
   ok(!/報表/.test(G.navBlock_('warehouse', { warehouse: true })), '倉庫不該看到');
 })();
 
+// ── 測試 25：從試算表的「資料驗證」讀下拉選項 ──
+console.log('【25】資料驗證當選項來源');
+(function () {
+  props.DISPATCH_SHEET_NAME = '*';
+  delete props.DISPATCH_ROSTER_SHEET;
+  const sHead = HEADS['零售-Sammi'];
+  const SH = G.SHIPMENT_HEADERS;
+  const RH = ['業務代碼', '業務姓名', '業務 email', '發包分頁'];
+  const rr = [['LS', 'sammi lin', 'sammi.lin@waferlock.com', '零售-Sammi']];
+  const asUser = e => { sandbox.Session.getActiveUser = () => ({ getEmail: () => e }); };
+
+  // 在 makeSheet 上補資料驗證的 stub
+  function withValidation(sh, rules) {
+    const orig = sh.getRange;
+    sh.getRange = (r, c, nr, nc) => {
+      const rg = orig(r, c, nr, nc);
+      rg.getDataValidation = () => {
+        const key = r + ',' + c;
+        return rules[key] || null;
+      };
+      return rg;
+    };
+    return sh;
+  }
+  const listRule = arr => ({
+    getCriteriaType: () => 'VALUE_IN_LIST',
+    getCriteriaValues: () => [arr],
+  });
+  const rangeRule = grid => ({
+    getCriteriaType: () => 'VALUE_IN_RANGE',
+    getCriteriaValues: () => [{ getValues: () => grid }],
+  });
+
+  const iP = sHead.indexOf('案名') + 1;
+  const iM = sHead.indexOf('型號') + 1;
+  const iW = sHead.indexOf('承包商') + 1;
+
+  // 表頭在第 2 列 → 資料驗證讀第 3 列
+  const rules = {};
+  rules['3,' + iP] = listRule(['MOMO', '蝦皮', '官網', '']);
+  rules['3,' + iM] = rangeRule([['L396'], ['D310'], [''], ['L901']]);
+  rules['3,' + iW] = listRule(['蔣家工程行', '大內高手', '蔣家工程行']);
+
+  const build = (optSheet) => {
+    const s1 = withValidation(makeSheet('零售-Sammi', sHead, [], 2), rules);
+    SHEETS = [s1, makeSheet('出貨明細', SH, [], 1), makeSheet('路由對照表', RH, rr, 1)];
+    if (optSheet) SHEETS.push(optSheet);
+    CACHE = {};
+  };
+
+  build();
+  let O = G.loadOptions_('零售-Sammi');
+  ok(O['購買通路'].join() === 'MOMO,蝦皮,官網',
+     '🔴 要能從資料驗證讀出選項（使用者本來就是這樣設的），實際 ' + O['購買通路']);
+  ok(O['型號'].join() === 'L396,D310,L901',
+     'VALUE_IN_RANGE 也要處理（清單放別處再指過去很常見），實際 ' + O['型號']);
+  ok(O['承包商'].join() === '蔣家工程行,大內高手', '重複值要去除');
+  ok(O['工項'] === undefined, '業務分頁沒有工項欄，該欄仍無選項（會退回文字輸入）');
+
+  // 下單頁應該真的出現下拉
+  asUser('sammi.lin@waferlock.com');
+  let page = G.orderBlock_('sammi.lin@waferlock.com', G.salesFor_('sammi.lin@waferlock.com'));
+  ok(/<select id="project"/.test(page) && /MOMO/.test(page),
+     '🔴 下單頁要出現下拉（先前只讀「選單」分頁，所以一直沒得選）');
+  ok(/<select id="worker"/.test(page) && /大內高手/.test(page), '承包商也要有下拉');
+  ok(/<input id="workItem"/.test(page), '沒有來源的欄位仍退回文字輸入');
+  new Function(page.match(/<script>([\s\S]*?)<\/script>/)[1]);
+  ok(true, '內嵌 JS 語法正確');
+
+  // 「選單」分頁優先，逐欄合併
+  const OH = ['購買通路', '工項'];
+  const OR = [['蝦皮商城', '裝外門'], ['PChome', '裝內門']];
+  build(makeSheet('選單', OH, OR, 1));
+  O = G.loadOptions_('零售-Sammi');
+  ok(O['購買通路'].join() === '蝦皮商城,PChome', '「選單」分頁優先於資料驗證');
+  ok(O['工項'].join() === '裝外門,裝內門', '選單分頁可補業務分頁沒有的欄位');
+  ok(O['型號'].join() === 'L396,D310,L901',
+     '選單分頁沒有的欄位要退而用資料驗證（逐欄合併，不是二選一）');
+
+  // 沒有任何來源 → 全部退回文字輸入，不可壞頁
+  SHEETS = [makeSheet('零售-Sammi', sHead, [], 2), makeSheet('出貨明細', SH, [], 1),
+            makeSheet('路由對照表', RH, rr, 1)];
+  CACHE = {};
+  ok(Object.keys(G.loadOptions_('零售-Sammi')).length === 0, '沒有來源時回空物件');
+  page = G.orderBlock_('sammi.lin@waferlock.com', G.salesFor_('sammi.lin@waferlock.com'));
+  ok(/<input id="project"/.test(page) && !/<select id="project"/.test(page),
+     '沒有選項時退回文字輸入');
+
+  // 系統分頁不可當作驗證來源
+  ok(Object.keys(G.loadOptionsValidation_('出貨明細')).length === 0, '不可讀系統分頁的驗證');
+  ok(Object.keys(G.loadOptionsValidation_('')).length === 0, '空分頁名要安全回空');
+
+  // 非選單類型的驗證（數字範圍等）不可被當成選項
+  const numRules = {};
+  numRules['3,' + iP] = { getCriteriaType: () => 'NUMBER_BETWEEN', getCriteriaValues: () => [1, 99] };
+  SHEETS = [withValidation(makeSheet('零售-Sammi', sHead, [], 2), numRules),
+            makeSheet('出貨明細', SH, [], 1), makeSheet('路由對照表', RH, rr, 1)];
+  CACHE = {};
+  ok(G.loadOptions_('零售-Sammi')['購買通路'] === undefined,
+     '數字範圍這類驗證不是選單，不可拿來當選項');
+})();
+
 console.log('\n' + (fail ? '❌' : '✅') + ' 通過 ' + pass + '／失敗 ' + fail);
 process.exit(fail ? 1 : 0);
