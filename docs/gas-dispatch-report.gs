@@ -135,7 +135,7 @@ var KNOWN_UNUSED_HEADERS = [
 
 // 版本印記，顯示在頁首。用途只有一個：讓人一眼看出「我貼上去的新程式到底有沒有部署成功」。
 // 改程式時順手往上加——沒有它，重新部署失敗與程式沒修好長得一模一樣。
-var BUILD = '2026-08-10f';
+var BUILD = '2026-08-10g';
 
 var BASIS_SHIP  = 'ship';    // 出貨日：銀貨兩訖，算營收
 var BASIS_APPLY = 'apply';   // 發包申請日：看業務接單節奏
@@ -196,17 +196,54 @@ function detectHeaderRowIn_(values, key) {
  * 一個 NaN 會讓整張報表的合計欄變成「NaN」，而那看起來像程式壞了，
  * 不像資料有問題——真正的問題（某一格填了「待確認」）反而被藏起來。
  */
+/**
+ * 儲存格轉數字。
+ *
+ * 🔴 **換行必須當成「相加」，絕不可跟一般空白一樣直接刪掉。**
+ *
+ * 實際資料裡一列會裝兩個品項，用儲存格內換行分開：
+ *   合約數量 = "140⏎42"（L372N 140 組、L396 42 組）
+ *   發包合計 = "56,000⏎16,800"
+ *
+ * 舊寫法把 `\s` 全部拿掉，於是 "56,000⏎16,800" → "5600016800"，
+ * 兩個數字被黏成一個，憑空放大約一萬倍。實機後果：某承包商合計顯示
+ * **112 億**（真實值 105 萬），而且看起來完全像是資料有問題，不像程式有問題。
+ *
+ * 相加才是對的：140+42 = 182 組、56,000+16,800 = 72,800 —— 與同一張單
+ * 另一列彙總寫法的數字完全吻合。
+ */
 function num_(v) {
   if (typeof v === 'number') return isFinite(v) ? v : 0;
-  var n = Number(String(v == null ? '' : v).replace(/[,\s$　]/g, ''));
+  var s = String(v == null ? '' : v);
+  if (/[\r\n]/.test(s)) {
+    var parts = s.split(/[\r\n]+/), sum = 0, got = false;
+    for (var i = 0; i < parts.length; i++) {
+      var t = parts[i].replace(/[,\s$　]/g, '');
+      if (!t) continue;
+      var one = Number(t);
+      if (isFinite(one)) { sum += one; got = true; }
+    }
+    return got ? sum : 0;
+  }
+  var n = Number(s.replace(/[,\s$　]/g, ''));
   return isNaN(n) ? 0 : n;
 }
 
 /** 這一格是不是「填了東西、但不是數字」。用來把資料問題與空白分開計數。 */
+/** 與 num_ 用同一套換行規則，否則兩者對同一格會講出不同的故事。 */
 function isNonNumeric_(v) {
   var s = String(v == null ? '' : v).trim();
   if (!s) return false;
   if (typeof v === 'number') return !isFinite(v);
+  if (/[\r\n]/.test(s)) {
+    var parts = s.split(/[\r\n]+/);
+    for (var i = 0; i < parts.length; i++) {
+      var t = parts[i].replace(/[,\s$　]/g, '');
+      if (!t) continue;
+      if (isNaN(Number(t))) return true;   // 任一行不是數字就算有問題
+    }
+    return false;
+  }
   return isNaN(Number(s.replace(/[,\s$　]/g, '')));
 }
 

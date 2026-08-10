@@ -2599,8 +2599,24 @@ function buildReport_() {
   } catch (err) { out.backlog.whError = String(err); }
 
   // ── ② 出貨趨勢 ＋ ③ 業務績效（來源：出貨明細）──
+  // 儲存格內換行＝一格裝了兩個數字，要相加，不可把換行跟空白一起刪掉——
+  // 那會把 "56,000⏎16,800" 黏成 5600016800。報表程式那邊踩過，某承包商合計
+  // 因此顯示 112 億（真實值 105 萬）。這裡的來源是網頁單行輸入、機率低，
+  // 但同一份試算表被兩支程式讀出不同的數字，是更難查的問題。
   var num = function (v) {
-    var n = Number(String(v == null ? '' : v).replace(/[,\s$]/g, ''));
+    if (typeof v === 'number') return isFinite(v) ? v : 0;
+    var s0 = String(v == null ? '' : v);
+    if (/[\r\n]/.test(s0)) {
+      var ps = s0.split(/[\r\n]+/), sum = 0, got = false;
+      for (var pi = 0; pi < ps.length; pi++) {
+        var t0 = ps[pi].replace(/[,\s$]/g, '');
+        if (!t0) continue;
+        var n0 = Number(t0);
+        if (isFinite(n0)) { sum += n0; got = true; }
+      }
+      return got ? sum : 0;
+    }
+    var n = Number(s0.replace(/[,\s$]/g, ''));
     return isNaN(n) ? 0 : n;   // 空白或非數字算 0，不可讓合計變 NaN
   };
 
