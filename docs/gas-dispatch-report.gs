@@ -135,7 +135,7 @@ var KNOWN_UNUSED_HEADERS = [
 
 // 版本印記，顯示在頁首。用途只有一個：讓人一眼看出「我貼上去的新程式到底有沒有部署成功」。
 // 改程式時順手往上加——沒有它，重新部署失敗與程式沒修好長得一模一樣。
-var BUILD = '2026-08-10d';
+var BUILD = '2026-08-10e';
 
 var BASIS_SHIP  = 'ship';    // 出貨日：銀貨兩訖，算營收
 var BASIS_APPLY = 'apply';   // 發包申請日：看業務接單節奏
@@ -1079,7 +1079,12 @@ function buildSimple_(o) {
 
       var price = num_(at_(row, col[COL_PRICE]));
       var derived = false;
-      if (!price && col[COL_UNIT]) {
+      // ⚠ 只在**整個分頁根本沒有承包總價這一欄**時才推算。
+      //   欄位存在但這一格空白，意思是「還沒填」——那裡憑單價乘數量生一個金額出來，
+      //   等於無中生有把總額做大。而且實際資料的乘法基準並不一致：
+      //   同一個分頁裡「強石逢甲」是 報價單數量×單價，「通豪大飯店」卻是 本次請款數量×單價。
+      //   猜錯基準就是一個看起來很合理、卻沒人查得出來的錯數字。
+      if (!col[COL_PRICE] && col[COL_UNIT]) {
         var unit = num_(at_(row, col[COL_UNIT]));
         if (unit && qty) { price = unit * qty; derived = true; }
       }
@@ -1319,20 +1324,35 @@ function simpleBlock_(email, since) {
         '+\'要精確的售價得等「出貨明細」累積資料。</div>\';' +
       'return h;}' +
 
+    // 「為什麼某個承包商的錢那麼多」是最常問的問題，而答案幾乎都是「有一兩筆特別大」。
+    // 依金額排序一按，那幾筆就會跳到最上面——不必回試算表翻。
+    'var SORT="date";' +
+    'function setSort(s){SORT=s;if(LAST)render(LAST);}' +
     'function rowTable(d){' +
       'if(!(d.rows||[]).length)return \'<div class="note">（這個範圍內沒有資料）</div>\';' +
-      'var h=\'<table><tr><th>日期</th><th>發包單號</th><th>承包商</th><th>客戶／案名</th>\'' +
-        '+\'<th class="n">數量</th><th class="n">承包金額</th><th>業務</th></tr>\';' +
-      'h+=d.rows.map(function(r){return \'<tr><td>\'+esc(r.ymd)+\'</td><td>\'+esc(r.orderNo)+\'</td>\'' +
+      'var rs=d.rows.slice();' +
+      'if(SORT==="price")rs.sort(function(a,b){return b.price-a.price;});' +
+      'else rs.sort(function(a,b){return a.ymd<b.ymd?1:(a.ymd>b.ymd?-1:0);});' +
+      'var h=\'<div class="srt">排序：\'' +
+        '+\'<button class="\'+(SORT==="date"?"on":"ghost")+\'" onclick="setSort(\\\'date\\\')">日期</button>\'' +
+        '+\'<button class="\'+(SORT==="price"?"on":"ghost")+\'" onclick="setSort(\\\'price\\\')">承包金額</button>\'' +
+        '+\'</div>\';' +
+      'h+=\'<table><tr><th>日期</th><th>發包單號</th><th>承包商</th><th>客戶／案名</th>\'' +
+        '+\'<th class="n">數量</th><th class="n">承包金額</th><th>業務</th><th>分頁·列</th></tr>\';' +
+      'h+=rs.map(function(r){return \'<tr><td>\'+esc(r.ymd)+\'</td><td>\'+esc(r.orderNo)+\'</td>\'' +
         '+\'<td>\'+esc(r.worker)+\'</td><td>\'+esc(r.customer||"")' +
         '+(r.project?"／"+esc(r.project):"")+\'</td>\'' +
         '+\'<td class="n">\'+money(r.qty)+\'</td><td class="n">\'+money(r.price)+\'</td>\'' +
-        '+\'<td>\'+esc(r.sales)+\'</td></tr>\';}).join("")+\'</table>\';' +
-      'if(d.truncated)h+=\'<div class="note">筆數過多，只顯示最近 500 筆。請縮小日期範圍。</div>\';' +
+        '+\'<td>\'+esc(r.sales)+\'</td>\'' +
+        // 分頁與列號：查到可疑的一筆要能立刻回試算表核對，不然只能瞎找
+        '+\'<td class="dim">\'+esc(r.sheet)+\'·\'+r.row+\'</td></tr>\';}).join("")+\'</table>\';' +
+      'if(d.truncated)h+=\'<div class="note">筆數過多，只顯示最近 500 筆（排序只作用在這 500 筆內）。\'' +
+        '+\'請縮小日期範圍。</div>\';' +
       'return h;}' +
 
+    'var LAST=null;' +
     'function render(d){' +
-      'fillOpts(d.options);' +
+      'LAST=d;fillOpts(d.options);' +
       'var sel=[];if(d.worker)sel.push("承包商："+esc(d.worker));' +
       'if(d.salesPick)sel.push("業務："+esc(d.salesPick));' +
       'if(d.sinceWarn){show("🔴 未設定 REPORT_SINCE，以下包含全部歷史資料。","fail");}' +
@@ -1424,6 +1444,10 @@ function htmlPage_(bodyHtml) {
     '.brow{display:flex;align-items:center;gap:9px;margin:6px 0;font-size:12.5px}' +
     '.blab{width:96px;flex:none;color:#475569;font-weight:600;word-break:break-all}' +
     '.btrack{flex:1;min-width:40px;height:22px;background:#F1F5F9;border-radius:5px;overflow:hidden}' +
+    '.srt{font-size:11.5px;color:#64748B;margin-bottom:6px;display:flex;align-items:center;gap:6px}' +
+    '.srt button{padding:3px 12px;font-size:11.5px;border-radius:6px}' +
+    '.srt button.on{background:#0F2744;color:#fff}' +
+    'td.dim{color:#94A3B8;font-size:11px;white-space:nowrap}' +
     '.bfill{height:100%;background:linear-gradient(90deg,#0F2744,#38BDF8);border-radius:5px}' +
     '.bval{width:150px;flex:none;text-align:right;color:#1E293B;line-height:1.35}' +
     '.bval span{font-size:10.5px;color:#94A3B8}' +

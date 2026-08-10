@@ -962,6 +962,39 @@ console.log('\n【10】簡表（日期／承包商／承包金額／承包數量
      '🔴 缺「承包總價」的分頁要用「發包單價×數量」推算（900×3），實得 ' + (cj && cj.price));
   ok(all.derivedPrice >= 1, '推算出來的筆數要回報，不可讓人以為那是表上直接讀到的');
 
+  // 🔴 反過來：分頁**有**承包總價欄、只是這一格空白 → 絕不可推算。
+  //    空白的意思是「還沒填」，憑單價乘數量生一個金額出來就是無中生有把總額做大。
+  //    而且乘法基準本身就不一致（同一分頁裡有 報價單數量×單價 也有 本次請款數量×單價）。
+  {
+    reset();
+    const g = BOOK['零售-Johnson'];
+    const blank = H_J.map(() => '');
+    blank[H_J.indexOf('發包申請日期')] = ser('2026-07-01');
+    blank[H_J.indexOf('發包單號')] = 'JW-260701-99';
+    blank[H_J.indexOf('承包商')] = '空白測試行';
+    blank[H_J.indexOf('報價單數量')] = 4;
+    blank[H_J.indexOf('承包報價(組)')] = 500;   // 單價有值
+    blank[H_J.indexOf('承包總價')] = '';        // 但總價空白
+    g.push(blank);
+    const t = G.getSimple({ from: '2026-01-01', to: '2026-12-31' }).data;
+    const br = t.rows.filter(r => r.orderNo === 'JW-260701-99')[0];
+    ok(br && br.price === 0,
+       '🔴 有承包總價欄但空白時不可推算（會無中生有 500×4=2000），實得 ' + (br && br.price));
+    reset();
+  }
+
+  // 排序：問「為什麼某個承包商的錢那麼多」時，答案幾乎都是有一兩筆特別大
+  {
+    reset();
+    const pageR = G.simpleBlock_('boss@waferlock.com', '2026-01-01');
+    ok(/setSort\(\\?'price\\?'\)/.test(pageR), '明細要有「依承包金額」的排序按鈕');
+    ok(/b\.price-a\.price/.test(pageR), '依金額排序要由大到小（大的那筆才是要查的）');
+    ok(/LAST=d/.test(pageR) && /if\(LAST\)render\(LAST\)/.test(pageR),
+       '重新排序要用上一次的資料重畫，不可再打一次伺服器');
+    ok(/r\.sheet/.test(pageR) && /r\.row/.test(pageR),
+       '🔴 明細要帶分頁與列號，查到可疑的一筆才回得去試算表核對');
+  }
+
   // 擷取不到報價的筆數要誠實回報
   ok(typeof d.noQuoteText === 'number', '要回報工資報價欄讀不到數字的筆數');
   ok(d.bySales.every(s => typeof s.quoteMissing === 'number'),
