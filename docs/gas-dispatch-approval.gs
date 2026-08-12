@@ -132,6 +132,13 @@ var ORDER_NO_SIGN_MARK = '✅ 免簽核（' + ORDER_KIND_PARTS + '）';
 //  3. **約一半的出貨沒有發包單**（弱電料件、鎖胚、建案整批）。
 //     那些單在業務分頁上根本沒有列可以掛，只能另開一張表收。
 var SHIPMENT_SHEET = '出貨明細';
+// 全公司唯一值（案件號）。格式與 CRM 的報修 R／客訴 C／安裝 IW 同一套：
+// `{前綴}{YYYYMMDD}{4碼流水}`，由 Supabase 的 next_case_no() 原子發號。
+//
+// ⚠ 這一欄現在**刻意允許留空**。第一階段只是把欄位與發號準備好，
+//   不強制任何人填——先立規矩再談普及，只會讓大家找理由不用。
+//   等業務下單頁會自動帶號之後，它才會開始有值。
+var COL_S_CASE_NO   = '案件號';
 var COL_S_AT        = '登錄時間';
 var COL_S_SHIP_NO   = '出貨單號';
 var COL_S_ORDER_ID  = '訂單編號';
@@ -169,6 +176,7 @@ var COL_S_WORK_TIME  = '施工時段';        // 例「平日1-4」。自由文�
 var COL_S_WORK_ITEM  = '工項';            // 例「裝外門」
 
 var SHIPMENT_HEADERS = [
+  COL_S_CASE_NO,
   COL_S_AT, COL_S_SHIP_NO, COL_S_ORDER_ID, COL_S_SHIP_DATE, COL_S_DISPATCH,
   COL_S_CUSTOMER, COL_S_PROJECT, COL_S_ITEMS,
   COL_S_TO_NAME, COL_S_TO_PHONE, COL_S_TO_ADDR, COL_S_INVOICE, COL_S_NOTE,

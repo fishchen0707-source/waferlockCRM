@@ -1465,8 +1465,10 @@ function AgentPage(){
 
   // 安裝單立案。欄位形狀比照 waferlock_crm.html 的 submitInstall（L981 起），
   // 但不在這裡排師傅——派工要看工務時刻表的時段佔用，那是 CRM 的職責。
-  const createInstallCase=(c)=>{
-    const id='IW'+Date.now();
+  const createInstallCase=async(c)=>{
+    // 與 CRM 的 submitInstall 一致：單號走 next_case_no（IW+YYYYMMDD+4碼流水）。
+    // 這個號會直接推給客戶看，格式不能是 13 位時間戳。
+    const id=(await sb.rpc('next_case_no',{p_prefix:'IW'})).data || ('IW-'+Date.now());
     const addr=(caseForm.address||c.address||'').trim();
     if(!addr){ toast('缺少安裝地址','安裝地址必填，且是客編識別的唯一鍵','warn'); return; }
     const order={id,wfId:c.wfId,name:c.name,phone:c.phone,address:addr,
@@ -1491,7 +1493,7 @@ function AgentPage(){
   const createCase=async()=>{
     const c=getCust(active?.wfId);
     if(!c){ toast('無法立案','此對話尚未綁定會員，請先請客戶完成 LINE 綁定','warn'); return; }
-    if(caseForm.kind==='install') return createInstallCase(c);
+    if(caseForm.kind==='install') return await createInstallCase(c);
     const rid=(await sb.rpc('next_case_no',{p_prefix:'R'})).data || ('R-'+Date.now());
     const newRepair={id:rid,wfId:c.wfId,name:c.name,phone:c.phone,
       district:c.district,area:c.area,building:c.address,date:today(),

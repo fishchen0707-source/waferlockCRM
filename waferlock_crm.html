@@ -1021,7 +1021,10 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
   };
 
   const submitInstall=async(common)=>{
-    const id='IW'+Date.now();
+    // 單號一律走 next_case_no，與報修 R／客訴 C 同一套格式（IW+YYYYMMDD+4碼流水）。
+    // 舊資料是 'IW'+Date.now() 的 13 位時間戳，那種號沒辦法唸、沒辦法排序，
+    // 而且同毫秒會撞號。舊號不動，只有新開的走這裡。
+    const id=(await sb.rpc('next_case_no',{p_prefix:'IW'})).data || ('IW-'+Date.now());
     const bk=await tryBook('install',id); if(!bk.ok) return;
     const key=custKey(f.name,f.address);
     const exist=(db.customers||[]).find(c=>custKey(c.name,c.address)===key);

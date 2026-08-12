@@ -79,6 +79,10 @@ var COL_R_ASSIST_MAIL= '助理email';
 var COL_R_SHEET      = '發包分頁';
 
 var SHIPMENT_SHEET = '出貨明細';
+// 全公司唯一值（案件號）。與 gas-dispatch-approval.gs 的 COL_S_CASE_NO 同一欄。
+// 本程式目前不統計它，但必須認得——否則 checkFieldParity() 會把它報成
+// 「表上有、程式不認得的欄名」，變成一條永遠消不掉的假警報。
+var COL_S_CASE_NO   = '案件號';
 var COL_S_AT        = '登錄時間';
 var COL_S_SHIP_NO   = '出貨單號';
 var COL_S_ORDER_ID  = '訂單編號';
@@ -526,7 +530,7 @@ function knownHeaderSet_() {
     COL_S_ITEMS, COL_S_TO_NAME, COL_S_TO_PHONE, COL_S_TO_ADDR, COL_S_INVOICE, COL_S_NOTE,
     COL_S_BY, COL_S_WH_STATUS, COL_S_WH_BY, COL_S_WH_AT, COL_S_WH_NOTE, COL_S_SHIP_DATE,
     COL_S_CHANNEL_NO, COL_S_CUST_NAME, COL_S_CUST_PHONE, COL_S_CUST_ADDR, COL_S_SALE_PRICE,
-    COL_S_COST_PRICE, COL_S_ORDER_BY, COL_S_WORK_TIME, COL_S_WORK_ITEM,
+    COL_S_COST_PRICE, COL_S_ORDER_BY, COL_S_WORK_TIME, COL_S_WORK_ITEM, COL_S_CASE_NO,
     COL_R_CODE, COL_R_SALES, COL_R_SALES_MAIL, COL_R_TYPE, COL_R_ASSIST, COL_R_ASSIST_MAIL,
     COL_R_SHEET, OPT_CHANNEL, OPT_MODEL, OPT_ITEM, OPT_WORKER, OPT_INVOICE];
   for (var i = 0; i < std.length; i++) set[normHeader_(std[i])] = true;
