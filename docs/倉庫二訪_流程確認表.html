@@ -1,0 +1,294 @@
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>成品出貨流程確認表</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:"Noto Sans TC",-apple-system,"Microsoft JhengHei",sans-serif}
+body{background:#EEF2F7;color:#1E293B;padding:14px;max-width:820px;margin:0 auto;line-height:1.65}
+.hd{background:#0F2744;color:#fff;border-radius:12px;padding:16px 18px;margin-bottom:14px}
+.hd h1{font-size:18px;margin-bottom:6px}
+.hd p{font-size:13px;opacity:.9}
+.card{background:#fff;border-radius:12px;padding:15px 17px;margin-bottom:12px;
+  box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.sec{font-size:15px;font-weight:800;color:#0F2744;margin-bottom:4px}
+.sub{font-size:12px;color:#64748B;margin-bottom:12px}
+.step{display:flex;gap:10px;padding:9px 0;border-bottom:1px dashed #E2E8F0}
+.step:last-child{border-bottom:none}
+.num{flex:none;width:26px;height:26px;border-radius:50%;background:#0F2744;color:#fff;
+  font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.body{flex:1;min-width:0}
+.what{font-size:14px;font-weight:600}
+.det{font-size:12.5px;color:#64748B;margin-top:2px;white-space:pre-wrap}
+.who{display:inline-block;font-size:11px;background:#F1F5F9;color:#475569;
+  border-radius:4px;padding:1px 7px;margin-left:6px;vertical-align:middle}
+.q{padding:11px 0;border-bottom:1px solid #F1F5F9}
+.q:last-child{border-bottom:none}
+.qt{font-size:14px;font-weight:600;margin-bottom:3px}
+.guess{font-size:13px;color:#334155;background:#F8FAFC;border-left:3px solid #38BDF8;
+  padding:7px 10px;border-radius:0 6px 6px 0;margin:5px 0;white-space:pre-wrap}
+.opts{display:flex;gap:6px;flex-wrap:wrap;margin:7px 0 4px}
+label.o{font-size:13px;border:1.5px solid #E2E8F0;border-radius:7px;padding:6px 13px;
+  cursor:pointer;background:#fff;user-select:none}
+label.o input{display:none}
+label.o.on{border-color:#0F2744;background:#0F2744;color:#fff}
+label.o.no.on{border-color:#B91C1C;background:#B91C1C}
+label.o.dk.on{border-color:#92400E;background:#FEF3C7;color:#92400E}
+textarea{width:100%;border:1px solid #E2E8F0;border-radius:7px;padding:8px 10px;
+  font-size:13.5px;font-family:inherit;resize:vertical;margin-top:5px}
+textarea:focus{outline:none;border-color:#38BDF8}
+.hint{font-size:11.5px;color:#94A3B8;margin-top:3px}
+.warn{background:#FEF3C7;color:#92400E;border-radius:8px;padding:10px 12px;
+  font-size:13px;margin-bottom:12px}
+button{width:100%;min-height:48px;border:none;border-radius:9px;background:#10B981;
+  color:#fff;font-size:16px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:6px}
+button.sec2{background:#0F2744}
+#out{width:100%;min-height:220px;font-family:ui-monospace,monospace;font-size:12px}
+.done{background:#D1FAE5;color:#065F46;border-radius:8px;padding:10px 12px;
+  font-size:13.5px;margin-top:10px;display:none}
+@media(max-width:480px){.det{font-size:12px}.qt{font-size:13.5px}}
+</style>
+
+<div class="hd">
+  <h1>成品出貨流程確認表</h1>
+  <p>上次訪談整理出來的流程，麻煩您幫我看哪裡寫錯了。<br>
+  <b>大部分應該是對的，只要改錯的地方就好</b>——不用從頭寫。<br>
+  不確定或該問別人的，選「不確定」就可以跳過。</p>
+</div>
+
+<div class="warn">
+⏱ 預計 5～10 分鐘。可以分段填，填到哪都能按最下面的按鈕產生結果。
+</div>
+
+<div class="card">
+  <div class="sec">一、我理解的一天流程</div>
+  <div class="sub">以 4004 成品出貨為例。有錯的步驟請在下一段告訴我。</div>
+
+  <div class="step"><div class="num">1</div><div class="body">
+    <div class="what">業助在 BPM 開單並送簽<span class="who">業助</span></div>
+    <div class="det">有時前一天下午四點後就先丟；有時當天早上才開始</div></div></div>
+
+  <div class="step"><div class="num">2</div><div class="body">
+    <div class="what">主管簽核<span class="who">主管</span></div>
+    <div class="det">簽核完，單據才會流到倉庫</div></div></div>
+
+  <div class="step"><div class="num">3</div><div class="body">
+    <div class="what">業助在 Teams 丟出貨資訊<span class="who">業助</span></div>
+    <div class="det">截止 13:30。有時忘記送簽，Teams 有訊息但系統查不到單</div></div></div>
+
+  <div class="step"><div class="num">4</div><div class="body">
+    <div class="what">倉庫從 BPM 看單：下載 → 確認派送<span class="who">倉庫</span></div>
+    <div class="det">兩個動作。只接收當天日期的單，不預收隔天的</div></div></div>
+
+  <div class="step"><div class="num">5</div><div class="body">
+    <div class="what">到 TipTop（AXMT620）查單號 → 核單<span class="who">倉庫</span></div>
+    <div class="det">5501 直接變「可」；5506 要再按一次確認才變「可」</div></div></div>
+
+  <div class="step"><div class="num">6</div><div class="body">
+    <div class="what">印出貨單<span class="who">倉庫</span></div>
+    <div class="det">機器慢、畫面會卡；印完要關掉視窗</div></div></div>
+
+  <div class="step"><div class="num">7</div><div class="body">
+    <div class="what">需要發票的再開發票<span class="who">倉庫</span></div>
+    <div class="det">又約四個步驟。二聯用發票機（感熱紙）、三聯印 A4</div></div></div>
+
+  <div class="step"><div class="num">8</div><div class="body">
+    <div class="what">在單子上手寫註記<span class="who">倉庫</span></div>
+    <div class="det">北／中／南、日期、第幾筆、特殊需求（貨與發票分開寄、自取、要加什麼東西）
+——不寫會漏掉</div></div></div>
+
+  <div class="step"><div class="num">9</div><div class="body">
+    <div class="what">依出貨單上的倉別＋儲位＋批號去撿料<span class="who">倉庫</span></div>
+    <div class="det">儲位顯示不全時，要回電腦查另一份 Excel</div></div></div>
+
+  <div class="step"><div class="num">10</div><div class="body">
+    <div class="what">包裝<span class="who">？</span></div>
+    <div class="det">這一段我還不清楚，見下面問題</div></div></div>
+
+  <div class="step"><div class="num">11</div><div class="body">
+    <div class="what">打託運貼紙（大榮／新竹系統）<span class="who">倉庫</span></div>
+    <div class="det">要回頭找「第幾筆」才知道對應哪張單。貨運號碼由物流系統自動帶出</div></div></div>
+
+  <div class="step"><div class="num">12</div><div class="body">
+    <div class="what">交貨運<span class="who">倉庫</span></div>
+    <div class="det">大榮 14:00 收、新竹 15:30～16:00 收。15:30 前要完成當天所有出貨</div></div></div>
+
+  <div class="step"><div class="num">13</div><div class="body">
+    <div class="what">要另外寄的發票，最後一起處理<span class="who">倉庫</span></div>
+    <div class="det">貨出完後坐回來，一筆一筆印寄送地址、貼上、把發票塞進去</div></div></div>
+
+  <div class="step"><div class="num">14</div><div class="body">
+    <div class="what">下班前把貨運單資訊丟到貨運通知群組<span class="who">倉庫</span></div>
+    <div class="det">讓業助對「今天丟的單是不是都出了」</div></div></div>
+
+  <div class="step"><div class="num">15</div><div class="body">
+    <div class="what">16:00 後：入庫與整理儲位<span class="who">倉庫</span></div>
+    <div class="det">ADI 把做好的成品推下來，要安排儲位放好</div></div></div>
+</div>
+
+<div class="card" id="qs">
+  <div class="sec">二、麻煩確認</div>
+  <div class="sub">預設都是「對」，只要改錯的。不確定的選「不確定」跳過就好。</div>
+</div>
+
+<div class="card">
+  <button class="sec2" onclick="gen()">📋 產生結果（然後複製貼給我）</button>
+  <div class="done" id="done">已產生，請按下方按鈕複製，或直接全選複製這段文字。</div>
+  <textarea id="out" placeholder="按上面按鈕後，結果會出現在這裡" style="margin-top:10px"></textarea>
+  <button onclick="cp()">📄 複製全部</button>
+</div>
+
+<script>
+// 每題：標題、我的猜測、是否要補充說明
+var QS = [
+  ['上面 15 個步驟，順序對嗎？',
+   '我猜大致順序是對的，可能漏掉「包裝」和「檢查」的細節。',
+   '哪一步錯了／漏了什麼？'],
+
+  ['包貨是誰在包？跟撿料的是同一個人嗎？',
+   '我猜是撿料的人自己包。',
+   '如果不是，是誰包？'],
+
+  ['出貨前有沒有再檢查一次的動作？',
+   '我猜沒有固定的檢查表，靠撿料的人自己確認。',
+   '如果有，是誰檢？檢哪些項目（本體／配件／說明書／保證書／防撞材）？'],
+
+  ['配件（感應扣、感應貼、說明書、保證書）是誰放進去的？',
+   '我猜是包裝的時候一起放。',
+   '怎麼知道要放哪些配件？看出貨單還是看 Teams 訊息？'],
+
+  ['最近有沒有漏放配件的情況？',
+   '我猜偶爾會，但不常。',
+   '上次是什麼時候？漏了什麼？怎麼發現的？'],
+
+  ['當下撿不出料（找不到或不夠）時，那張單怎麼辦？',
+   '我猜先擱著，通知業助處理，等料到了再繼續出。',
+   '實際上是怎麼走？單子會不會作廢重開？'],
+
+  ['出貨單上的「批號」和保固用的「產品序號」，是同一組數字嗎？',
+   '我不確定。批號是生產批號（維修追溯用），保固序號可能是另一組。',
+   '如果不同，保固序號在哪裡？出貨時會記嗎？'],
+
+  ['產品本體或外箱上有條碼嗎？',
+   '我猜有印一些條碼，但出貨時沒在掃。',
+   '條碼裡是什麼（料號？批號？序號？）？'],
+
+  ['電商的單（MOMO／蝦皮／官網）也是您這邊出嗎？',
+   '我不確定，上次沒問到。',
+   '如果是，跟工程案的單處理起來哪裡不一樣？'],
+
+  ['一張出貨單會不會分兩次寄？',
+   '我猜偶爾會（料不夠時先寄一部分）。',
+   '多久發生一次？分兩次寄的話單子怎麼處理？'],
+
+  ['幾張單併成一箱的情況多嗎？',
+   '我猜工程案偶爾會（例如同一個客戶的一期二期）。',
+   '併箱時託運單號怎麼對到不同的出貨單？'],
+
+  ['要「簽回」的單多嗎？簽回的紙本收在哪？',
+   '我猜工程案比較常要簽回。',
+   '有沒有在追蹤誰還沒簽回？沒簽回會影響收款嗎？'],
+
+  ['4005 是什麼倉？',
+   '上次您列了 001、002、003、004、006、007、008，中間跳過 005。',
+   ''],
+
+  ['「5801 客戶簽收單」是什麼？',
+   '我理解 5506 工程案要請款時，業助會另外開這張單。',
+   '這張單跟「簽回」是同一件事嗎？誰開？'],
+
+  ['雜發單、銷退單的流程也是您這邊處理嗎？',
+   '上次您說先不聊這兩個，我猜也是倉庫在處理。',
+   '大概什麼情況會用到？'],
+
+  ['4006 換貨倉的流程是怎麼走的？',
+   '我完全不清楚。客戶退回或維修換出的貨會進這個倉嗎？',
+   ''],
+
+  ['發票如果都改成給電子檔，業助自己印自己寄，可行嗎？',
+   '這是您上次提到的想法。我可以做成：核單完成後上傳 PDF，業助自己下載。',
+   '二聯式一定要印紙本對嗎？還有哪些情況一定要您印？'],
+
+  ['打託運貼紙時，多貼一個「出貨單號」進去，會不會增加太多時間？',
+   '您上次說「沒差啊，其實還好」，因為本來就在複製姓名電話。',
+   '如果可行，我就能自動把託運單對回出貨單，業助不用再來問您。'],
+
+  ['儲位那份 Excel，8/31 同事回來後我可以看一下結構嗎？',
+   '我想了解它怎麼記，看能不能讓它變成大家都查得到、不只您們知道。',
+   '除了他和您，還有誰在維護／看得到這份表？'],
+
+  ['如果只能改善一件事，您會選哪一個？',
+   '我猜是印單＋開發票那一段（您說最花時間）。',
+   '如果不是，您會選什麼？']
+];
+
+var box = document.getElementById('qs');
+QS.forEach(function (q, i) {
+  var d = document.createElement('div');
+  d.className = 'q';
+  var opts = ['對／沒問題', '不對，我補充', '不確定／要問別人'];
+  var cls = ['', 'no', 'dk'];
+  var h = '<div class="qt">' + (i + 1) + '. ' + q[0] + '</div>';
+  if (q[1]) h += '<div class="guess">我的理解：' + q[1] + '</div>';
+  h += '<div class="opts">';
+  opts.forEach(function (o, j) {
+    h += '<label class="o ' + cls[j] + (j === 0 ? ' on' : '') + '" data-i="' + i +
+      '" data-j="' + j + '"><input type="radio" name="a' + i + '"' +
+      (j === 0 ? ' checked' : '') + '>' + o + '</label>';
+  });
+  h += '</div>';
+  h += '<textarea id="t' + i + '" rows="2" placeholder="' +
+    (q[2] ? q[2] : '想補充什麼都可以寫這裡（沒有就留空）') + '"></textarea>';
+  if (q[2]) h += '<div class="hint">' + q[2] + '</div>';
+  d.innerHTML = h;
+  box.appendChild(d);
+});
+
+document.querySelectorAll('label.o').forEach(function (el) {
+  el.addEventListener('click', function () {
+    var i = el.getAttribute('data-i');
+    document.querySelectorAll('label.o[data-i="' + i + '"]').forEach(function (x) {
+      x.classList.remove('on');
+    });
+    el.classList.add('on');
+  });
+});
+
+function gen() {
+  var L = ['成品出貨流程確認表 — 回覆', '填寫時間：' + new Date().toLocaleString('zh-TW'), ''];
+  var changed = 0, unsure = 0;
+  QS.forEach(function (q, i) {
+    var sel = document.querySelector('label.o[data-i="' + i + '"].on');
+    var j = sel ? Number(sel.getAttribute('data-j')) : 0;
+    var txt = (document.getElementById('t' + i).value || '').trim();
+    // 只輸出有意義的：改了、不確定、或有補充文字
+    if (j === 0 && !txt) return;
+    if (j === 1) changed++;
+    if (j === 2) unsure++;
+    var mark = ['[對]', '[不對]', '[不確定]'][j];
+    L.push((i + 1) + '. ' + q[0]);
+    L.push('   ' + mark + (txt ? ' ' + txt : ''));
+    L.push('');
+  });
+  if (L.length <= 3) {
+    L.push('（全部都對，沒有補充）');
+  } else {
+    L.splice(2, 0, '需要修正 ' + changed + ' 項、不確定 ' + unsure + ' 項', '');
+  }
+  document.getElementById('out').value = L.join('\n');
+  document.getElementById('done').style.display = 'block';
+  document.getElementById('out').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function cp() {
+  var t = document.getElementById('out');
+  if (!t.value) { gen(); }
+  t.select();
+  var ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) {}
+  if (!ok && navigator.clipboard) {
+    navigator.clipboard.writeText(t.value).then(function () { alert('已複製'); },
+      function () { alert('請手動全選複製上面的文字'); });
+    return;
+  }
+  alert(ok ? '已複製，貼給我就可以了' : '請手動全選複製上面的文字');
+}
+</script>
