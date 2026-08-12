@@ -31,6 +31,29 @@ function db(path: string): Promise<Response> {
 }
 const digits = (s: string) => (s || "").replace(/\D/g, "");
 
+// ── 客編唯一鍵：正規化地址 + 姓名 ────────────────────────────
+//
+// ⚠ 必須與 waferlock_crm.html 的 normAddr() / custKey()（約 296~303 行）完全一致。
+//   Edge Function 各自獨立部署、沒有 import，所以是複製一份；
+//   改一處就要改三處（另一處在 functions/case-intake）。
+//
+// 為什麼要正規化：「臺北市」與「台北市」是同一個地址，不正規化會各發一個客編。
+// 為什麼要含姓名：同一個地址可能有不同客戶（房東與房客、公司與員工），
+//   只比地址會把新客戶的維修單掛到別人的客編底下——比多發一個客編嚴重得多。
+// 為什麼任一為空就回 null：缺姓名或地址時無法判斷是否同一人，
+//   寧可發新客編（可事後合併）也不要猜。
+function normAddr_(s: string): string {
+  return String(s || "")
+    .replace(/[！-～]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+    .replace(/臺/g, "台")
+    .replace(/\s+/g, "")
+    .toLowerCase();
+}
+function custKey_(name: string, address: string): string | null {
+  const a = normAddr_(address), n = String(name || "").trim();
+  return (a && n) ? a + "|" + n : null;
+}
+
 // 用電話查客戶目前的維修工單進度（只回進度相關欄位，不回完整地址以保護隱私）
 async function getCaseStatus(args: { phone?: string }) {
   const phone = digits(args.phone || "");
@@ -78,13 +101,40 @@ async function createRepair(args: { name?: string; phone?: string; address?: str
   const today = new Date().toISOString().slice(0, 10);
   const createdAt = today + " AI語音報修";
 
-  // 依地址找既有客戶（客編唯一鍵＝地址）
-  const cr = await db(`customers?address=eq.${encodeURIComponent(address)}&select=wf_id,repair_ids`);
-  const custs = cr.ok ? await cr.json() : [];
+  // 找既有客戶（唯一鍵＝正規化地址＋姓名，見檔案下方 custKey_ 的說明）
+  const key = custKey_(name, address);
+  let hit: { wf_id: string; repair_ids?: string[] } | null = null;
+
+  if (key) {
+    const cr = await db(`customers?cust_key=eq.${encodeURIComponent(key)}&select=wf_id,repair_ids`);
+    const custs = cr.ok ? await cr.json() : [];
+    if (Array.isArray(custs) && custs[0]) hit = custs[0];
+
+    // 過渡期 fallback：既有客戶的 cust_key 還是 null（等 CRM 同步補），
+    // 改用地址查但**一定要在程式端再比姓名**，否則就退回成舊的漏洞
+    if (!hit) {
+      const cr2 = await db(`customers?address=eq.${encodeURIComponent(address)}` +
+        `&cust_key=is.null&select=wf_id,name,address,repair_ids`);
+      const rows2 = cr2.ok ? await cr2.json() : [];
+      if (Array.isArray(rows2)) {
+        const m = rows2.find((c: { name: string; address: string }) =>
+          custKey_(c.name, c.address) === key);
+        if (m) {
+          hit = m;
+          await fetch(`${SUPA_URL}/rest/v1/customers?wf_id=eq.${m.wf_id}`, {
+            method: "PATCH",
+            headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ cust_key: key }),
+          });
+        }
+      }
+    }
+  }
+
   let wfId: string | null, isNew = false;
-  if (Array.isArray(custs) && custs[0]) {
-    wfId = custs[0].wf_id;
-    const ids = (custs[0].repair_ids || []).concat([caseNo]);
+  if (hit) {
+    wfId = hit.wf_id;
+    const ids = (hit.repair_ids || []).concat([caseNo]);
     await fetch(`${SUPA_URL}/rest/v1/customers?wf_id=eq.${wfId}`, {
       method: "PATCH",
       headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
@@ -94,7 +144,7 @@ async function createRepair(args: { name?: string; phone?: string; address?: str
     wfId = await rpc("next_wf_id", {});
     if (!wfId) return { ok: false, message: "系統發客編失敗，請稍後再試" };
     isNew = true;
-    await dbPost("customers", { wf_id: wfId, name, phone, address, reg_type: "ai_voice", reg_date: today, tags: ["待整理"], repair_ids: [caseNo], complaint_ids: [] });
+    await dbPost("customers", { wf_id: wfId, name, phone, address, cust_key: key, reg_type: "ai_voice", reg_date: today, tags: ["待整理"], repair_ids: [caseNo], complaint_ids: [] });
   }
   // 建維修單
   const ir = await dbPost("repairs", {

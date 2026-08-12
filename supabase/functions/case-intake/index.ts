@@ -63,28 +63,77 @@ async function rpc(name: string, args: Record<string, unknown>): Promise<unknown
   try { return t ? JSON.parse(t) : true; } catch { return true; }
 }
 
-// 找客戶（地址為客編唯一鍵）；查無或無地址 → 發客編建「待整理」客戶。回 {wfId, isNew}
+// ── 客編唯一鍵：正規化地址 + 姓名 ────────────────────────────
+//
+// ⚠ 這兩支必須與 waferlock_crm.html 的 normAddr() / custKey()（約 296~303 行）
+//   完全一致。GAS／Edge Function 各自獨立部署，沒有 import，所以是複製一份；
+//   改一處就要改三處（另一處在 functions/voicebot-tools）。
+//
+// 為什麼要正規化：「臺北市」與「台北市」是同一個地址，不正規化會各發一個客編。
+// 為什麼要含姓名：同一個地址可能有不同客戶（房東與房客、公司與員工），
+//   只比地址會把新客戶的案件掛到別人的客編底下——這比多發一個客編嚴重得多。
+// 為什麼任一為空就回 null：缺姓名或缺地址時無法判斷是不是同一人，
+//   這時候寧可發新客編（可事後合併），也不要猜。
+function normAddr_(s: string): string {
+  return String(s || "")
+    .replace(/[！-～]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+    .replace(/臺/g, "台")
+    .replace(/\s+/g, "")
+    .toLowerCase();
+}
+function custKey_(name: string, address: string): string | null {
+  const a = normAddr_(address), n = String(name || "").trim();
+  return (a && n) ? a + "|" + n : null;
+}
+
+// 找客戶（唯一鍵＝正規化地址＋姓名）；查無 → 發客編建「待整理」客戶。回 {wfId, isNew}
 async function findOrCreateCustomer(p: {
   name: string; phone: string; address: string; email: string; source: string;
   caseNo: string; caseField: "repair_ids" | "complaint_ids" | null;
 }): Promise<{ wfId: string | null; isNew: boolean }> {
   const { today } = nowTW();
-  if (p.address) {
-    const r = await dbGet(`customers?address=eq.${encodeURIComponent(p.address)}&select=wf_id,repair_ids,complaint_ids`);
+  const key = custKey_(p.name, p.address);
+  let hit: { wf_id: string; repair_ids?: string[]; complaint_ids?: string[] } | null = null;
+
+  if (key) {
+    // 主路徑：用 cust_key 比對
+    const r = await dbGet(
+      `customers?cust_key=eq.${encodeURIComponent(key)}&select=wf_id,repair_ids,complaint_ids`);
     const rows = r.ok ? await r.json() : [];
-    if (Array.isArray(rows) && rows[0]) {
-      const wfId = rows[0].wf_id;
-      if (p.caseField) { // 把案號掛回客戶的案件清單（維修/客訴；安裝單靠 wf_id 關聯不用掛）
-        const ids = (rows[0][p.caseField] || []).concat([p.caseNo]);
-        await dbPatch(`customers?wf_id=eq.${encodeURIComponent(wfId)}`, { [p.caseField]: ids });
+    if (Array.isArray(rows) && rows[0]) hit = rows[0];
+
+    // 過渡期 fallback：既有客戶的 cust_key 還是 null（等 CRM 同步才會補上）。
+    // 這時改用地址查，但**一定要在程式端再比姓名**——否則就退回成舊的漏洞。
+    if (!hit) {
+      const r2 = await dbGet(`customers?address=eq.${encodeURIComponent(p.address)}` +
+        `&cust_key=is.null&select=wf_id,name,address,repair_ids,complaint_ids`);
+      const rows2 = r2.ok ? await r2.json() : [];
+      if (Array.isArray(rows2)) {
+        const m = rows2.find((c: { name: string; address: string }) =>
+          custKey_(c.name, c.address) === key);
+        if (m) {
+          hit = m;
+          // 順手把這一筆的 cust_key 補上，下次就走主路徑
+          await dbPatch(`customers?wf_id=eq.${encodeURIComponent(m.wf_id)}`, { cust_key: key });
+        }
       }
-      return { wfId, isNew: false };
     }
   }
+
+  if (hit) {
+    const wfId = hit.wf_id;
+    if (p.caseField) { // 把案號掛回客戶的案件清單（維修/客訴；安裝單靠 wf_id 關聯不用掛）
+      const ids = ((hit as Record<string, string[]>)[p.caseField] || []).concat([p.caseNo]);
+      await dbPatch(`customers?wf_id=eq.${encodeURIComponent(wfId)}`, { [p.caseField]: ids });
+    }
+    return { wfId, isNew: false };
+  }
+
   const wfId = (await rpc("next_wf_id", {})) as string | null;
   if (!wfId) return { wfId: null, isNew: false };
   await dbPost("customers", {
     wf_id: wfId, name: p.name, phone: p.phone, address: p.address, email: p.email || null,
+    cust_key: key,
     reg_type: p.source === "email" ? "email_intake" : "web_intake",
     reg_date: today, tags: ["待整理"],
     repair_ids: p.caseField === "repair_ids" ? [p.caseNo] : [],
