@@ -82,13 +82,32 @@ const sandbox = {
       return String(f)
         .replace('yyMMdd', String(Y).slice(2) + MM + DD)
         .replace('yyyyMMdd_HHmm', '' + Y + MM + DD + '_' + HH + mm)
+        .replace('yyyyMMdd-HHmm', '' + Y + MM + DD + '-' + HH + mm)
         .replace('yyyy', Y).replace('MM', MM).replace('dd', DD)
         .replace('HH', HH).replace('mm', mm);
-    }
+    },
+    base64Decode: b64 => Buffer.from(String(b64), 'base64'),
+    newBlob: (bytes, mime, name) => ({ _bytes: bytes, _mime: mime, _name: name }),
   },
   HtmlService: { createHtmlOutput: h => ({ _h: h, setTitle() { return this; }, addMetaTag() { return this; } }) },
   Logger: { log: m => LOG.push(String(m)) },
-  DriveApp: { getFolderById: () => ({}) },
+  // 發票上傳用。記下建了哪些檔，並且**不提供 setSharing**——
+  // 程式若哪天自己去開分享權限，這裡會直接 TypeError 而不是安靜地把發票變成公開。
+  DriveApp: {
+    getFolderById: id => {
+      if (id === 'BAD') throw new Error('找不到資料夾');
+      return {
+        getName: () => '發票電子檔',
+        createFile: blob => {
+          const f = { name: blob._name, bytes: blob._bytes, mime: blob._mime,
+            getUrl: () => 'https://drive.google.com/file/d/FAKE_' + blob._name + '/view',
+            getId: () => 'FAKE_' + blob._name };
+          DRIVE.push(f);
+          return f;
+        }
+      };
+    }
+  },
   ScriptApp: { getService: () => ({ getUrl: () => 'https://script.google.com/a/macros/w/s/AAA/exec' }) },
   CacheService: { getScriptCache: () => ({ get: k => (k in CACHE ? CACHE[k] : null), put: (k, v) => { CACHE[k] = v; }, remove: k => { delete CACHE[k]; } }) },
   UrlFetchApp: { fetch: () => ({ getResponseCode: () => 200, getContentText: () => 'ok' }) },
@@ -96,6 +115,7 @@ const sandbox = {
 };
 let LOG = [];
 let CACHE = {};
+let DRIVE = [];   // 發票上傳測試：記下建了哪些 Drive 檔
 vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(DIR + 'gas-dispatch-approval.gs', 'utf8'), sandbox);
 vm.runInContext(fs.readFileSync(DIR + 'gas-dispatch-notify.gs', 'utf8'), sandbox);
@@ -2195,6 +2215,159 @@ console.log('【25】資料驗證當選項來源');
   CACHE = {};
   ok(G.loadOptions_('零售-Sammi')['購買通路'] === undefined,
      '數字範圍這類驗證不是選單，不可拿來當選項');
+})();
+
+// ── 發票電子檔上傳 ────────────────────────────────────────────
+// 倉庫一訪最痛的是印單與開發票。這一段的目的是：倉庫上傳一次電子檔，
+// 助理自己從 Chat 連結取用，倉庫不必再問「你要紙本還是電子檔」、不必白印。
+console.log('\n【26】發票電子檔上傳');
+(function () {
+  const SH = G.SHIPMENT_HEADERS;
+  const mkShip = rows => makeSheet('出貨明細', SH, rows, 1);
+  const rowOf = o => SH.map(h => (h in o ? o[h] : ''));
+
+  const base = {
+    '出貨單號': 'W5501-260812001', '客戶': '王小姐', '案名': '竹北案',
+    '出貨品項': 'L396 *1', '貨指寄-地址': '新竹市光復路一段1號',
+    '登錄人': 'vivi@waferlock.com', '登錄時間': '2026-08-12 09:00',
+    '倉庫核單狀態': '待核',
+  };
+
+  const reset = () => {
+    props = {
+      DISPATCH_SHEET_ID: 'X', DISPATCH_SHEET_NAME: '*',
+      DISPATCH_WAREHOUSE: 'ray@waferlock.com',
+      DISPATCH_WAREHOUSE_WEBHOOK: 'https://example.test/hook',
+      DISPATCH_INVOICE_FOLDER_ID: 'FOLDER1',
+    };
+    SHEETS = [mkShip([rowOf(base)])];
+    CACHE = {}; LOG = []; DRIVE = []; sent = [];
+  };
+
+  let sent = [];
+  const origFetch = sandbox.UrlFetchApp.fetch;
+  sandbox.UrlFetchApp.fetch = (u, o) => {
+    sent.push(String((o && o.payload) || ''));
+    return { getResponseCode: () => 200, getContentText: () => 'ok' };
+  };
+  const asUser = e => { sandbox.Session.getActiveUser = () => ({ getEmail: () => e }); };
+  const b64 = txt => Buffer.from(txt).toString('base64');
+
+  // 🔴 安全：程式絕不可自己設定分享權限。發票含客戶名稱、地址、金額、統編。
+  //    權限交給使用者自己建立、自己控管的那個資料夾；程式一旦自己開權限，
+  //    就會出現「誰都打得開」而沒有任何人發現。
+  {
+    const src = fs.readFileSync(DIR + 'gas-dispatch-approval.gs', 'utf8')
+      .split('\n').filter(l => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
+    ok(!/setSharing|setShareableByEditors|addEditor|addViewer|Access\.ANYONE/.test(src),
+       '🔴 不可呼叫任何開放分享的 Drive API，權限一律交給資料夾');
+    ok(/createFile/.test(src), '要真的把檔案建進資料夾');
+  }
+
+  // 權限：不在倉庫名單不能上傳
+  reset(); asUser('outsider@waferlock.com');
+  let r = G.uploadInvoice('W5501-260812001', 'a.pdf', 'application/pdf', b64('x'), 2);
+  ok(!r.ok && /倉庫名單/.test(r.message), '非倉庫應被擋｜' + r.message);
+  ok(DRIVE.length === 0, '被擋下時不可建立任何檔案');
+
+  asUser('ray@waferlock.com');
+
+  // 未設資料夾 → 明確擋下並指出要設哪個屬性，不可靜默失敗
+  reset(); delete props.DISPATCH_INVOICE_FOLDER_ID;
+  r = G.uploadInvoice('W5501-260812001', 'a.pdf', 'application/pdf', b64('x'), 2);
+  ok(!r.ok && /DISPATCH_INVOICE_FOLDER_ID/.test(r.message),
+     '未設資料夾要明講是哪個指令碼屬性｜' + r.message);
+  ok(DRIVE.length === 0, '未設資料夾時不可建立檔案');
+
+  // 資料夾 ID 填錯 → 講清楚是打不開，不是上傳失敗
+  reset(); props.DISPATCH_INVOICE_FOLDER_ID = 'BAD';
+  r = G.uploadInvoice('W5501-260812001', 'a.pdf', 'application/pdf', b64('x'), 2);
+  ok(!r.ok && /打不開/.test(r.message), '資料夾打不開要講清楚原因｜' + r.message);
+
+  // 檔案型別：只收 PDF / JPG / PNG
+  reset();
+  r = G.uploadInvoice('W5501-260812001', 'a.exe', 'application/x-msdownload', b64('x'), 2);
+  ok(!r.ok && /PDF/.test(r.message), '非 PDF/JPG/PNG 應被擋｜' + r.message);
+  ok(DRIVE.length === 0, '型別不符時不可建立檔案');
+
+  // 大小上限（伺服器端也要擋，前端擋掉的只是體驗不是安全）
+  reset();
+  r = G.uploadInvoice('W5501-260812001', 'big.pdf', 'application/pdf',
+    Buffer.alloc(11 * 1024 * 1024).toString('base64'), 2);
+  ok(!r.ok && /超過上限/.test(r.message), '🔴 超過 10MB 伺服器端要自己擋｜' + r.message);
+  ok(DRIVE.length === 0, '超過上限時不可建立檔案');
+
+  // 找不到單號
+  reset();
+  r = G.uploadInvoice('W5501-NOPE', 'a.pdf', 'application/pdf', b64('x'), 2);
+  ok(!r.ok && /找不到出貨單號/.test(r.message), '單號不存在應被擋');
+
+  // ── 正常上傳 ──
+  reset();
+  r = G.uploadInvoice('W5501-260812001', '發票.pdf', 'application/pdf', b64('PDFDATA'), 2);
+  ok(r.ok, '倉庫上傳發票應成功｜' + r.message);
+  ok(DRIVE.length === 1, '應建立 1 個檔案，實得 ' + DRIVE.length);
+  ok(DRIVE[0].name.indexOf('W5501-260812001') === 0,
+     '🔴 檔名要以出貨單號開頭，光看雲端硬碟就分得出哪張是哪張，實得 ' + DRIVE[0].name);
+  ok(DRIVE[0].mime === 'application/pdf', 'MIME 要照傳');
+  ok(Buffer.from(DRIVE[0].bytes).toString() === 'PDFDATA', '檔案內容要正確解碼');
+
+  const ship = SHEETS.find(s => s._name === '出貨明細');
+  const at = n => ship._grid[0].indexOf(n);
+  ok(at('發票檔案') >= 0, '出貨明細要有「發票檔案」欄');
+  ok(/^https:\/\/drive\.google\.com\//.test(ship._grid[1][at('發票檔案')]),
+     '連結要寫回出貨明細');
+
+  // 檔名帶危險字元不可穿出去
+  reset();
+  r = G.uploadInvoice('W5501-260812001', '../../etc/passwd.pdf', 'application/pdf', b64('x'), 2);
+  ok(r.ok, '奇怪檔名仍應能上傳｜' + r.message);
+  ok(!/[\\/:*?"<>|]/.test(DRIVE[0].name.replace(/^W5501-260812001_/, '')),
+     '🔴 檔名要清掉路徑與特殊字元，實得 ' + DRIVE[0].name);
+
+  // ── 待核清單不可把 Drive 連結送到畫面上 ──
+  reset();
+  ship_url_case: {
+    const withUrl = Object.assign({}, base);
+    withUrl['發票檔案'] = 'https://drive.google.com/file/d/SECRET/view';
+    SHEETS = [mkShip([rowOf(withUrl)])];
+    CACHE = {};
+    const rows = G.getWarehousePending_();
+    ok(rows[0].invoiceUrl === true, '待核清單要標示「已上傳」');
+    const html = G.renderWarehousePage_('ray@waferlock.com',
+      G.rolesFor_('ray@waferlock.com'))._h;
+    ok(html.indexOf('SECRET') < 0,
+       '🔴 Drive 連結不可出現在畫面 HTML（會進瀏覽器紀錄與截圖）');
+    ok(/已上傳/.test(html), '畫面要讓倉庫看得出這筆傳過了');
+    ok(/uploadInvoice/.test(html) && /type="file"/.test(html), '倉庫頁要有上傳欄位');
+  }
+
+  // ── 備存通知帶連結；沒上傳要明講「未上傳」 ──
+  reset();
+  G.uploadInvoice('W5501-260812001', '發票.pdf', 'application/pdf', b64('x'), 2);
+  sent = [];
+  r = G.submitWarehouse('W5501-260812001', 'done', '', 2);
+  ok(r.ok, '核單應成功｜' + r.message);
+  ok(sent.length === 1, '核單應送出一則備存訊息');
+  ok(/發票電子檔：https:\/\/drive\.google\.com\//.test(sent[0]),
+     '🔴 備存訊息要帶發票下載連結——這正是助理不必再找倉庫的原因');
+
+  reset(); sent = [];
+  r = G.submitWarehouse('W5501-260812001', 'done', '', 2);
+  ok(/發票電子檔：未上傳/.test(sent[0]),
+     '沒上傳要明講「未上傳」，留白會讓助理以為是自己漏看又跑去問倉庫');
+
+  // 找列的邏輯只能有一份（兩份會出現「上傳找得到、核單找不到」）
+  {
+    const src = fs.readFileSync(DIR + 'gas-dispatch-approval.gs', 'utf8');
+    ok((src.match(/function findShipmentRow_/g) || []).length === 1,
+       'findShipmentRow_ 只能有一份實作');
+    ok((src.match(/findShipmentRow_\(/g) || []).length >= 3,
+       '上傳與核單都要用同一支找列函式');
+  }
+
+  sandbox.UrlFetchApp.fetch = origFetch;
+  asUser('boss@waferlock.com');
 })();
 
 console.log('\n' + (fail ? '❌' : '✅') + ' 通過 ' + pass + '／失敗 ' + fail);

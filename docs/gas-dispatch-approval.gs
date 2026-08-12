@@ -156,6 +156,9 @@ var COL_S_WH_STATUS = '倉庫核單狀態';   // 倉庫核單頁用（下一階�
 var COL_S_WH_BY     = '倉庫核單人';
 var COL_S_WH_AT     = '倉庫核單時間';
 var COL_S_WH_NOTE   = '問題說明';
+// 發票電子檔的 Drive 連結。倉庫核單時上傳，備存通知帶這條連結，助理自己下載自己寄。
+// 解掉倉庫一訪的三個痛點：紙本印了才發現對方要電子檔（白印）、寄錯發票、地址不完整被退回。
+var COL_S_INVOICE_URL = '發票檔案';
 
 // 業務下單時就填的欄位（來源：業務發給助理的 Teams 訊息，見設計文件修訂節）。
 // 這些原本以為是助理從 TipTop 抄回來的，實際上是業務提供的——
@@ -183,8 +186,23 @@ var SHIPMENT_HEADERS = [
   COL_S_CHANNEL_NO, COL_S_CUST_NAME, COL_S_CUST_PHONE, COL_S_CUST_ADDR,
   COL_S_WORK_TIME, COL_S_WORK_ITEM,
   COL_S_SALE_PRICE, COL_S_COST_PRICE,
-  COL_S_ORDER_BY, COL_S_BY, COL_S_WH_STATUS, COL_S_WH_BY, COL_S_WH_AT, COL_S_WH_NOTE
+  COL_S_ORDER_BY, COL_S_BY, COL_S_WH_STATUS, COL_S_WH_BY, COL_S_WH_AT, COL_S_WH_NOTE,
+  COL_S_INVOICE_URL
 ];
+
+// ── 發票電子檔上傳 ──────────────────────────────────────────
+//
+// 🔴 **本程式不設定任何檔案分享權限。**
+//    發票含客戶名稱、地址、金額、統編。權限由「使用者自己建立並控管的那個資料夾」決定，
+//    檔案放進去就繼承資料夾的權限。刻意不呼叫 setSharing()——
+//    程式一旦自己開權限，就會出現「誰都打得開」而沒有人發現。
+var INVOICE_FOLDER_PROP = 'DISPATCH_INVOICE_FOLDER_ID';
+var INVOICE_MAX_BYTES = 10 * 1024 * 1024;   // 10 MB。發票 PDF 遠小於此，超過多半是傳錯檔
+var INVOICE_MIME_OK = {
+  'application/pdf': '.pdf',
+  'image/jpeg': '.jpg',
+  'image/png': '.png'
+};
 
 var INVOICE_OPTIONS = ['出貨待驗無發票', '電子發票', '二聯', '三聯'];
 
@@ -810,6 +828,18 @@ function warehouseBlock_(email, rows, roles, meta) {
         (r.dispatchNo ? '<div class="whrow"><b>發包單</b>' + esc_(r.dispatchNo) + '</div>' : '') +
         (r.orderId ? '<div class="whrow"><b>訂單</b>' + esc_(r.orderId) + '</div>' : '') +
         '<div class="whby">登錄：' + esc_(r.by || '—') + '</div>' +
+        // 發票電子檔。放在核單按鈕之上，因為要先上傳、核單通知才帶得到連結。
+        '<div class="whlab">發票電子檔（選填）</div>' +
+        '<div class="upl">' +
+          '<input type="file" id="f_' + id + '" accept=".pdf,.jpg,.jpeg,.png">' +
+          '<button class="ghost" onclick="upl(\'' + jsq_(r.shipNo) + '\',\'' + id + '\',' +
+            r.row + ')">⬆ 上傳</button>' +
+        '</div>' +
+        '<div class="uplmsg" id="u_' + id + '">' +
+          (r.invoiceUrl
+            ? '✅ 已上傳（重新上傳會覆蓋連結）'
+            : '尚未上傳。上傳後，核單的備存訊息會帶下載連結，助理自己取用。') +
+        '</div>' +
         '<div class="whbtn">' +
           '<button class="ok big" onclick="wact(\'' + jsq_(r.shipNo) + '\',\'done\',\'' +
             id + '\',' + r.row + ')">✅ 已撿料完成</button>' +
@@ -828,6 +858,32 @@ function warehouseBlock_(email, rows, roles, meta) {
     '<script>' +
     'function show(t,c){var m=document.getElementById("msg");' +
       'm.innerHTML=\'<div class="msg \'+c+\'">\'+t+\'</div>\';window.scrollTo(0,0);}' +
+    // 發票上傳。google.script.run 傳不了 File 物件，要先讀成 base64 再送。
+    // 檔名／型別／大小都在伺服器端再驗一次——前端擋掉的只是體驗，不是安全。
+    'function upl(no,cardId,rw){' +
+      'var inp=document.getElementById("f_"+cardId);' +
+      'var out=document.getElementById("u_"+cardId);' +
+      'var f=inp.files&&inp.files[0];' +
+      'if(!f){out.textContent="請先選擇檔案";out.className="uplmsg bad";return;}' +
+      'if(f.size>10485760){out.textContent="檔案超過 10 MB，請確認是不是選錯檔";' +
+        'out.className="uplmsg bad";return;}' +
+      'var btn=inp.parentNode.querySelector("button");btn.disabled=true;' +
+      'var ob=btn.textContent;btn.textContent="上傳中…";' +
+      'out.textContent="上傳中…";out.className="uplmsg";' +
+      'var rd=new FileReader();' +
+      'rd.onerror=function(){btn.disabled=false;btn.textContent=ob;' +
+        'out.textContent="讀取檔案失敗";out.className="uplmsg bad";};' +
+      'rd.onload=function(){' +
+        'var b64=String(rd.result).split(",")[1]||"";' +
+        'google.script.run' +
+          '.withSuccessHandler(function(res){btn.disabled=false;btn.textContent=ob;' +
+            'if(res.ok){out.textContent="✅ "+res.name;out.className="uplmsg ok";}' +
+            'else{out.textContent=res.message;out.className="uplmsg bad";}})' +
+          '.withFailureHandler(function(e){btn.disabled=false;btn.textContent=ob;' +
+            'out.textContent="連線失敗："+e.message;out.className="uplmsg bad";})' +
+          '.uploadInvoice(no,f.name,f.type,b64,rw);};' +
+      'rd.readAsDataURL(f);' +
+    '}' +
     'function wact(no,dec,cardId,rw){' +
       'var note="";' +
       'if(dec==="issue"){note=prompt("問題說明（會通知助理與業務）：")||"";' +
@@ -3177,6 +3233,10 @@ function getWarehousePending_() {
       toPhone: pick(COL_S_TO_PHONE),
       toAddr: pick(COL_S_TO_ADDR),
       invoice: pick(COL_S_INVOICE),
+      // 只帶「有沒有上傳過」，不把 Drive 連結送到畫面上。
+      // 連結進了 HTML 就等於進了瀏覽器紀錄與任何截圖，而它指向含客戶
+      // 名稱、地址、金額、統編的檔案。倉庫要的只是「我傳過了沒」。
+      invoiceUrl: pick(COL_S_INVOICE_URL) ? true : false,
       note: pick(COL_S_NOTE),
       by: pick(COL_S_BY),
       at: pick(COL_S_AT),
@@ -3250,20 +3310,9 @@ function submitWarehouse(shipNo, decision, note, hintRow) {
       return { ok: false, message: '出貨明細找不到「' + COL_S_WH_STATUS + '」欄，未寫入任何資料。' };
     }
 
-    // 位置提示只用來省一次搜尋，一律驗證那一格的出貨單號吻合；
-    // 不吻合就當提示不存在、走完整搜尋。提示不能讓它指向別的列。
-    var last = s.sheet.getLastRow();
-    var target = 0;
-    var hr = Number(hintRow || 0);
-    if (hr >= 2 && hr <= last) {
-      if (String(s.sheet.getRange(hr, cNo).getValue() || '').trim() === shipNo) target = hr;
-    }
-    if (!target && last >= 2) {
-      var all = s.sheet.getRange(2, cNo, last - 1, 1).getValues();
-      for (var i = 0; i < all.length; i++) {
-        if (String(all[i][0] || '').trim() === shipNo) { target = i + 2; break; }
-      }
-    }
+    // 找列的邏輯與 uploadInvoice 共用（findShipmentRow_）。同一件事留兩份實作，
+    // 日後只改一邊就會出現「上傳找得到、核單找不到」這種最難查的不一致。
+    var target = findShipmentRow_(s, shipNo, hintRow);
     if (!target) return { ok: false, message: '找不到出貨單號 ' + shipNo + '，可能已被刪除。' };
 
     // 重讀當下狀態：兩個倉庫人員可能同時開著頁面
@@ -3311,6 +3360,110 @@ function submitWarehouse(shipNo, decision, note, hintRow) {
   } finally {
     lock.releaseLock();
   }
+}
+
+/**
+ * 上傳發票電子檔。倉庫核單頁用。
+ *
+ * 檔案放進使用者自己建立的 Drive 資料夾（指令碼屬性 DISPATCH_INVOICE_FOLDER_ID），
+ * **權限完全由那個資料夾決定，本函式不碰任何分享設定**——見 INVOICE_FOLDER_PROP 的說明。
+ *
+ * 連結寫回出貨明細的「發票檔案」欄，核單完成的備存通知會帶上它。
+ * 助理從 Chat 點連結自己下載自己寄，倉庫不必再印、不必再問要紙本還是電子檔。
+ */
+function uploadInvoice(shipNo, fileName, mimeType, base64, hintRow) {
+  var email = currentUserEmail_();
+  if (!email) return { ok: false, message: '無法辨識身分，未上傳任何檔案。' };
+  if (!rolesFor_(email).warehouse) {
+    return { ok: false, message: '您（' + email + '）不在倉庫名單中，未上傳任何檔案。' };
+  }
+
+  shipNo = String(shipNo || '').trim();
+  if (!shipNo) return { ok: false, message: '缺少出貨單號。' };
+  if (!base64) return { ok: false, message: '沒有收到檔案內容。' };
+
+  mimeType = String(mimeType || '').trim();
+  if (!INVOICE_MIME_OK[mimeType]) {
+    return { ok: false, message: '只接受 PDF、JPG、PNG，收到的是「' + (mimeType || '未知') + '」。' };
+  }
+
+  var folderId = String(
+    PropertiesService.getScriptProperties().getProperty(INVOICE_FOLDER_PROP) || '').trim();
+  if (!folderId) {
+    return { ok: false, message:
+      '尚未設定發票資料夾（指令碼屬性 ' + INVOICE_FOLDER_PROP + '）。' +
+      '請先在雲端硬碟建一個資料夾、設好權限，再把資料夾 ID 填進去。' };
+  }
+
+  var bytes;
+  try { bytes = Utilities.base64Decode(base64); }
+  catch (e0) { return { ok: false, message: '檔案內容解不開，請重新選擇檔案。' }; }
+  if (bytes.length > INVOICE_MAX_BYTES) {
+    return { ok: false, message: '檔案 ' + Math.round(bytes.length / 1048576) +
+      ' MB 超過上限 ' + (INVOICE_MAX_BYTES / 1048576) + ' MB。' };
+  }
+
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(20000); }
+  catch (e1) { return { ok: false, message: '系統忙碌中，請稍候再試。' }; }
+
+  try {
+    var s = openShipmentSheet_();
+    if (!s.col[COL_S_INVOICE_URL]) {
+      return { ok: false, message: '出貨明細找不到「' + COL_S_INVOICE_URL + '」欄，未上傳任何檔案。' };
+    }
+    var target = findShipmentRow_(s, shipNo, hintRow);
+    if (!target) return { ok: false, message: '找不到出貨單號 ' + shipNo + '，可能已被刪除。' };
+
+    // 檔名帶出貨單號，這樣光看雲端硬碟就分得出哪張是哪張，不必回系統查
+    var ext = INVOICE_MIME_OK[mimeType];
+    var safeName = String(fileName || '').replace(/[\\/:*?"<>|]/g, '_').slice(0, 60);
+    if (!safeName) safeName = '發票' + ext;
+    var stamp = Utilities.formatDate(new Date(), TZ, 'yyyyMMdd-HHmm');
+    var finalName = shipNo + '_' + stamp + '_' + safeName;
+
+    var folder;
+    try { folder = DriveApp.getFolderById(folderId); }
+    catch (e2) {
+      return { ok: false, message:
+        '打不開發票資料夾（ID 可能填錯，或這支程式的執行帳號沒有權限）：' + e2 };
+    }
+
+    // ⚠ 只 createFile，不呼叫 setSharing——權限交給資料夾，見上方說明
+    var file = folder.createFile(Utilities.newBlob(bytes, mimeType, finalName));
+    var url = file.getUrl();
+
+    s.sheet.getRange(target, s.col[COL_S_INVOICE_URL]).setValue(url);
+    SpreadsheetApp.flush();
+    Logger.log('發票上傳：' + shipNo + '｜' + finalName + '｜' + email);
+
+    return { ok: true, url: url, name: finalName,
+      message: '已上傳 ' + finalName + '，核單時會把連結一起送出。' };
+  } catch (err) {
+    return { ok: false, message: '上傳失敗：' + err };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * 依出貨單號找列。hintRow 只用來省一次搜尋，一律驗證那一格吻合，
+ * 不吻合就當提示不存在走完整搜尋——提示不能讓它指向別的列。
+ */
+function findShipmentRow_(s, shipNo, hintRow) {
+  var cNo = s.col[COL_S_SHIP_NO];
+  if (!cNo) return 0;
+  var last = s.sheet.getLastRow();
+  var hr = Number(hintRow || 0);
+  if (hr >= 2 && hr <= last) {
+    if (String(s.sheet.getRange(hr, cNo).getValue() || '').trim() === shipNo) return hr;
+  }
+  if (last < 2) return 0;
+  var all = s.sheet.getRange(2, cNo, last - 1, 1).getValues();
+  for (var i = 0; i < all.length; i++) {
+    if (String(all[i][0] || '').trim() === shipNo) return i + 2;
+  }
+  return 0;
 }
 
 /** 讀出貨明細的一整列，回傳 {欄名: 值} */
@@ -3371,6 +3524,9 @@ function notifyShipmentArchive_(rec) {
     if (rec[COL_S_TO_ADDR]) lines.push(rec[COL_S_TO_ADDR]);
   }
   if (rec[COL_S_INVOICE]) { lines.push(''); lines.push('發票：' + rec[COL_S_INVOICE]); }
+  // 發票電子檔連結。助理點這條自己下載自己寄，倉庫不必再印、不必再問要紙本還是電子檔。
+  // 沒上傳就明講「未上傳」——留白會讓人以為是自己漏看，然後又跑去問倉庫。
+  lines.push('發票電子檔：' + (rec[COL_S_INVOICE_URL] || '未上傳'));
   if (rec[COL_S_NOTE]) lines.push('備註：' + rec[COL_S_NOTE]);
   lines.push('');
   lines.push('登錄：' + rec[COL_S_BY] + '　' + rec[COL_S_AT]);
@@ -3864,6 +4020,12 @@ function htmlPage_(bodyHtml) {
       '.blab{width:66px;font-size:11.5px}' +
       '.bval{width:104px;font-size:11.5px}' +
     '}' +
+    '.wh .upl{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:3px}' +
+    '.wh .upl input[type=file]{flex:1;min-width:0;font-size:12px;border:1px dashed #CBD5E1;' +
+      'border-radius:7px;padding:7px 8px;background:#fff}' +
+    '.wh .upl button{padding:7px 14px;font-size:12.5px}' +
+    '.wh .uplmsg{font-size:11.5px;color:#94A3B8;margin-top:5px;line-height:1.55;word-break:break-all}' +
+    '.wh .uplmsg.ok{color:#065F46;font-weight:700}.wh .uplmsg.bad{color:#B91C1C;font-weight:700}' +
     '.wh .whbtn{display:flex;gap:9px;margin-top:13px}' +
     'button.big{flex:1;min-height:46px;font-size:15px}' +
     // 窄螢幕：按鈕改上下排列，避免兩顆都被壓到很窄而誤按
@@ -4233,6 +4395,21 @@ function checkWarehouseSetup() {
   Logger.log('DISPATCH_WAREHOUSE         = ' + (wh || '❌ 未設定（任何人都能核單）'));
   Logger.log('DISPATCH_WAREHOUSE_WEBHOOK = ' +
     (props.getProperty('DISPATCH_WAREHOUSE_WEBHOOK') ? '已設定' : '❌ 未設定（核單後不會有備存訊息）'));
+
+  // 發票資料夾。權限由這個資料夾決定，程式不碰分享設定。
+  var fid = String(props.getProperty(INVOICE_FOLDER_PROP) || '').trim();
+  if (!fid) {
+    Logger.log(INVOICE_FOLDER_PROP + ' = ❌ 未設定（倉庫按上傳會被擋下並提示，不會壞頁）');
+  } else {
+    try {
+      var fo = DriveApp.getFolderById(fid);
+      Logger.log(INVOICE_FOLDER_PROP + ' = ✅「' + fo.getName() + '」');
+      Logger.log('　 ⚠ 請自行確認這個資料夾的共用權限：發票含客戶名稱、地址、金額、統編，' +
+        '不可設成「知道連結的任何人」。程式刻意不動任何分享設定。');
+    } catch (e) {
+      Logger.log(INVOICE_FOLDER_PROP + ' = 🔴 打不開（ID 填錯，或這支程式的執行帳號沒權限）：' + e);
+    }
+  }
 
   try {
     var s = openShipmentSheet_();
