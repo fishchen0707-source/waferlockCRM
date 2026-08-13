@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>雲端服務付費項目申請 — 副總報告</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--navy:#0F2744;--navy2:#1E3A5F;--blue:#2563EB;--line:#E2E8F0;
+ --g50:#F8FAFC;--g100:#F1F5F9;--g300:#CBD5E1;--g400:#94A3B8;--g500:#64748B;--g700:#334155;--g800:#1E293B;
+ --ok:#15803D;--okbg:#DCFCE7;--warn:#B45309;--warnbg:#FEF3C7;--err:#DC2626;--errbg:#FEE2E2;}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,"Segoe UI","PingFang TC","Microsoft JhengHei",sans-serif;color:var(--g800);line-height:1.7;background:#F0F4F8;padding-bottom:70px}
+header{background:var(--navy);color:#fff;padding:20px 30px;position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+header h1{font-size:19px;font-weight:800}
+header .sub{font-size:12px;opacity:.7;margin-top:2px}
+.savebar{margin-left:auto;display:flex;align-items:center;gap:8px}
+.savebar input{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.3);border-radius:6px;padding:6px 10px;color:#fff;font-size:12.5px;outline:none;width:110px}
+.savebar input::placeholder{color:rgba(255,255,255,.5)}
+#saveBtn{background:#38BDF8;color:var(--navy);border:none;border-radius:6px;padding:7px 16px;font-size:13px;font-weight:800;cursor:pointer}
+#saveBtn:disabled{opacity:.5;cursor:wait}
+#saveMsg{font-size:11px;opacity:.85}
+main{max-width:1080px;margin:22px auto;padding:0 18px}
+section{background:#fff;border-radius:12px;padding:22px 26px;margin-bottom:16px;box-shadow:0 1px 4px rgba(15,39,68,.07)}
+h2{font-size:19px;color:var(--navy);margin-bottom:4px;display:flex;align-items:center;gap:9px}
+h2 .n{width:27px;height:27px;background:var(--navy);color:#fff;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.lead{color:var(--g500);font-size:13.5px;margin-bottom:14px}
+h3{font-size:15px;color:var(--navy2);margin:18px 0 8px}
+table{border-collapse:collapse;width:100%;margin:12px 0;font-size:13px}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top}
+th{background:var(--navy);color:#fff;font-weight:600;font-size:12.5px}
+tr:nth-child(even) td{background:var(--g50)}
+.tag{display:inline-block;padding:1px 9px;border-radius:20px;font-size:11.5px;font-weight:700;white-space:nowrap}
+.tag.have{background:var(--okbg);color:var(--ok)}
+.tag.new{background:#DBEAFE;color:#1D4ED8}
+.tag.dup{background:var(--warnbg);color:var(--warn)}
+.tag.hold{background:var(--g100);color:var(--g500)}
+.box{border-left:4px solid var(--blue);background:#EFF5FF;padding:13px 17px;border-radius:0 8px 8px 0;margin:14px 0;font-size:13.5px}
+.box.warn{border-color:var(--err);background:var(--errbg)}
+.box.warn b{color:var(--err)}
+.box.ok{border-color:var(--ok);background:var(--okbg)}
+.box.ok b{color:var(--ok)}
+.big{font-size:15px;font-weight:800;color:var(--navy)}
+ul,ol{margin:8px 0 8px 22px}li{margin:5px 0;font-size:13.5px}
+.say{background:var(--g50);border:1px dashed var(--g300);border-radius:9px;padding:15px 18px;margin:12px 0;font-size:14px;line-height:1.9}
+.say .who{font-size:11.5px;font-weight:800;color:var(--blue);letter-spacing:.5px;margin-bottom:5px}
+.qa{border:1px solid var(--line);border-radius:9px;margin:10px 0;overflow:hidden}
+.qa .q{background:var(--g100);padding:10px 15px;font-weight:700;font-size:13.5px;color:var(--navy)}
+.qa .a{padding:11px 15px;font-size:13.5px}
+.chk{display:flex;gap:9px;align-items:flex-start;padding:8px 0;border-bottom:1px dashed var(--line);font-size:13.5px}
+.chk:last-child{border-bottom:none}
+.chk input[type=checkbox]{margin-top:4px;width:16px;height:16px;flex-shrink:0;cursor:pointer}
+.chk .t{flex:1}
+.chk .t b{display:block;color:var(--navy)}
+.chk .t span{color:var(--g500);font-size:12.5px}
+.chk textarea{width:100%;margin-top:5px;border:1px solid var(--line);border-radius:6px;padding:6px 9px;font-size:12.5px;font-family:inherit;resize:vertical;min-height:38px;background:var(--g50);outline:none}
+.chk textarea:focus{background:#fff;border-color:var(--blue)}
+.stat{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:11px;margin:14px 0}
+.stat .c{background:var(--g50);border:1px solid var(--line);border-radius:9px;padding:13px 15px}
+.stat .c .v{font-size:23px;font-weight:800;color:var(--navy)}
+.stat .c .l{font-size:12px;color:var(--g500);margin-top:2px}
+.stat .c .src{font-size:10.5px;color:var(--g400);margin-top:4px}
+.toast{position:fixed;right:18px;bottom:18px;background:var(--navy);color:#fff;border-radius:8px;padding:12px 18px;font-size:13px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.25);display:none;z-index:99}
+.toast.err{background:var(--err)}
+@media(max-width:720px){header{padding:14px 16px}main{padding:0 12px}section{padding:16px 15px}table{font-size:12px}th,td{padding:6px 8px}}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>☁️ 雲端服務付費項目申請 — 報告用</h1>
+    <div class="sub">依廠商《溝通雲｜雲端 AI 與網路服務 付費項目申請清單》整理｜2026-08-04</div>
+  </div>
+  <div class="savebar">
+    <input id="author" placeholder="記錄者" maxlength="12">
+    <button id="saveBtn" onclick="save()">💾 儲存決議</button>
+    <span id="saveMsg"></span>
+  </div>
+</header>
+
+<main>
+
+<!-- 1 -->
+<section>
+  <h2><span class="n">1</span>這次要請副總裁示什麼</h2>
+  <p class="lead">一句話：<b>以公司名義開通 7 項雲端服務帳號、綁定公司信用卡自動扣款</b>；帳號主控權歸公司，廠商以受託身分協助設定與維運。</p>
+  <div class="box warn">
+    <b>⚠️ 但這份清單沒有任何金額。</b>
+    廠商在文件最後一頁列出「費用試算所需資料」，把估算責任交回我方——也就是說，
+    <b>現在無法回答「一個月要多少錢」</b>。建議報告時主動點出這件事，並用下方第 3 節我方已有的數據，
+    請廠商在 <u>本週內</u> 回覆月費區間，再談授權額度。
+  </div>
+  <div class="box ok">
+    <b>✅ 有一點值得肯定：</b>文件明確寫「由維夫拉克以公司名義建立帳號、主控權歸公司」、
+    「金鑰不寫入程式碼、不進版控」。這與我方一貫主張（能力與資料留在公司）一致，可正面表述。
+  </div>
+</section>
+
+<!-- 2 -->
+<section>
+  <h2><span class="n">2</span>七項服務：哪些是新增，哪些我們已經在用</h2>
+  <p class="lead">這是副總最可能追問的一點——「我們不是已經有了嗎？」。以下為我方系統現況對照。</p>
+  <table>
+    <tr><th style="width:30px">#</th><th>服務</th><th>用途</th><th style="width:88px">我方現況</th><th>說明</th></tr>
+    <tr><td>1</td><td><b>Claude API</b><br><span style="color:var(--g500);font-size:12px">Anthropic</span></td><td>AI 客服回覆、知識庫、AI 建議、自然語言問數據</td><td><span class="tag new">新增</span></td><td>我方現行 AI 走 Gemini；此為廠商平台的核心 AI</td></tr>
+    <tr><td>2</td><td><b>LINE 官方帳號</b><br><span style="color:var(--g500);font-size:12px">Messaging API</span></td><td>主要對外通道：訊息、推播、圖文選單、綁定</td><td><span class="tag have">已在用</span></td><td><b>不是新申請</b>，而是既有帳號可能需<u>升級方案級距</u>。須確認是否沿用同一個官方帳號</td></tr>
+    <tr><td>3</td><td><b>Render</b><br><span style="color:var(--g500);font-size:12px">Web + PostgreSQL</span></td><td>廠商平台主機與資料庫（顧客360、工單、對話全部營運資料）</td><td><span class="tag dup">可能重疊</span></td><td>我方現行系統用 Supabase（同為主機+資料庫）。<b>並行期會同時付兩份</b>，須確認重疊多久</td></tr>
+    <tr><td>4</td><td><b>Embeddings API</b><br><span style="color:var(--g500);font-size:12px">OpenAI</span></td><td>知識庫語意檢索，提升 AI 命中率</td><td><span class="tag new">新增</span></td><td>單價極低。未申請則退回關鍵字檢索，命中率明顯下降</td></tr>
+    <tr><td>5</td><td><b>Gemini API</b><br><span style="color:var(--g500);font-size:12px">Google</span></td><td>0800 即時語音客服、通話摘要</td><td><span class="tag have">已在用</span></td><td>我方語音 POC 已使用同一服務，可提供實測經驗值</td></tr>
+    <tr><td>6</td><td><b>Cloudflare TURN</b></td><td>語音通話網路中繼（跨網路可通）</td><td><span class="tag have">已在用</span></td><td>我方語音已在用，有免費額度</td></tr>
+    <tr><td>7</td><td><b>WhatsApp</b><br><span style="color:var(--g500);font-size:12px">Meta</span></td><td>WhatsApp 通道</td><td><span class="tag hold">建議暫緩</span></td><td>廠商亦建議「有海外客戶需求時再申請」</td></tr>
+  </table>
+  <div class="box">
+    <b>可以這樣講：</b>七項裡有 <b>三項（LINE、Gemini、Cloudflare）我們已經在用</b>，
+    等於是把現有服務轉到公司帳號下統一管理；<b>兩項是廠商平台必需的新服務</b>（Claude、Render）；
+    <b>一項低單價（Embeddings）</b>；<b>一項建議暫緩（WhatsApp）</b>。
+    真正的新增成本集中在 Claude 與 Render 兩項。
+  </div>
+</section>
+
+<!-- 3 -->
+<section>
+  <h2><span class="n">3</span>廠商要的試算數據：我方已能提供的部分</h2>
+  <p class="lead">以下取自我方系統實際資料，可直接回覆廠商，加速報價。</p>
+  <div class="stat">
+    <div class="c"><div class="v">≈3,900</div><div class="l">客戶進線／月（則）</div><div class="src">LINE 90 天實測 11,619 則換算</div></div>
+    <div class="c"><div class="v">≈3,500</div><div class="l">我方發送／月（則）</div><div class="src">LINE 計費以此為準</div></div>
+    <div class="c"><div class="v">1,607</div><div class="l">近 90 天互動客戶數</div><div class="src">不重複客戶</div></div>
+    <div class="c"><div class="v">≈900</div><div class="l">知識庫文件（篇）</div><div class="src">FAQ 833＋操作手冊 60</div></div>
+  </div>
+  <table>
+    <tr><th>廠商要的數據</th><th>我方目前可提供</th><th>來源／備註</th></tr>
+    <tr><td>每月客服進線總則數</td><td><b>LINE 約 3,900 則/月</b>（文字 9,155＋圖 1,851＋影片 313＋貼圖 300 ÷ 3 個月）</td><td>LINE 對話備份 2026/03/26–06/24 實測</td></tr>
+    <tr><td>每月群發推播次數與觸及人數</td><td style="background:var(--warnbg)"><b>缺——須向行銷確認</b></td><td>⚠️ 廠商明示「LINE 訊息費通常為最大宗支出，群發量越大越明顯」，<b>這是費用的關鍵變數</b></td></tr>
+    <tr><td>每月語音通話總分鐘數</td><td style="background:var(--warnbg)"><b>缺——0800 尚未由我方接手</b></td><td>現行 0800 為外部承接，須調通聯紀錄；補助計畫上線後才會產生</td></tr>
+    <tr><td>知識庫文件總頁數／字數</td><td><b>約 900 篇</b>（FAQ 833＋操作手冊 60）</td><td>一次性建索引成本，金額極低</td></tr>
+    <tr><td>資料庫資料量與成長率</td><td>現有營運資料量小；成長主要來自對話紀錄</td><td>可用上述進線量推估</td></tr>
+    <tr><td>是否有 WhatsApp 海外需求</td><td>國內市場為主，<b>建議暫緩</b></td><td>與廠商建議一致</td></tr>
+  </table>
+  <div class="box warn">
+    <b>⚠️ 兩個數字要先補齊，否則報價會失真：</b>
+    ①<b>群發推播量</b>（向行銷要）——這是 LINE 費用最大宗；
+    ②<b>0800 月通話分鐘數</b>（向現行承接單位調）——這是語音 AI 費用基礎。
+    沒有這兩個數，廠商報出來的區間參考價值有限。
+  </div>
+</section>
+
+<!-- 4 -->
+<section>
+  <h2><span class="n">4</span>四個財務與控管風險（副總會關心的）</h2>
+  <table>
+    <tr><th style="width:150px">風險</th><th>說明</th><th>建議做法</th></tr>
+    <tr>
+      <td><b>用量計費＋自動扣款<br>沒有硬性上限</b></td>
+      <td>七項中六項為用量計費。文件提到可設「預算告警」，但<b>告警不等於自動斷流</b>——異常用量（程式迴圈、外部攻擊、群發誤觸）仍可能持續扣款。</td>
+      <td>①優先使用<b>預付儲值</b>（Anthropic、Render 支援），用完即停，是最實質的上限<br>②信用卡設<b>單月刷卡額度上限</b><br>③要求廠商書面說明各服務的斷流機制</td>
+    </tr>
+    <tr>
+      <td><b>境外電子 Invoice<br>不是統一發票</b></td>
+      <td>七項中六項為境外服務（美國），開立境外電子 Invoice。涉及<b>營所稅費用列支</b>與<b>境外電子勞務相關稅務處理</b>，與一般國內採購不同。</td>
+      <td>此為財務／會計專業範疇，<b>請財務單位確認</b>認列方式與是否有代扣繳義務。LINE 部分文件建議透過台灣代理商購買以取得統一發票，可一併確認</td>
+    </tr>
+    <tr>
+      <td><b>金鑰由廠商協助設定</b></td>
+      <td>文件寫「網聯可協助建立各帳號、設定預算告警」——代表廠商在設定過程會接觸到帳號與金鑰。</td>
+      <td>①帳號<b>主帳號密碼與付款方式由公司保管</b>，廠商用子帳號或受託權限<br>②合約載明<b>終止時的金鑰更換與帳號交還</b>程序<br>③開啟兩階段驗證，綁公司門號／公司信箱</td>
+    </tr>
+    <tr>
+      <td><b>過渡期雙軌成本</b></td>
+      <td>廠商平台用 Render＋PostgreSQL，我方現行系統用 Supabase。兩套並行期間會<b>同時產生基礎設施費用</b>。</td>
+      <td>確認<b>並行期多久</b>、何時可停用其中一套；於報價中標明過渡期與穩定期的月費差異</td>
+    </tr>
+  </table>
+</section>
+
+<!-- 5 -->
+<section>
+  <h2><span class="n">5</span>我不確定、需當面請示的事項</h2>
+  <p class="lead">以下屬公司內部規章與權責，<b>非我可自行決定</b>，列出請副總裁示或指定窗口。勾選並記錄裁示結果。</p>
+  <div id="asks"></div>
+</section>
+
+<!-- 6 -->
+<section>
+  <h2><span class="n">6</span>要向廠商追問的事項</h2>
+  <p class="lead">報告後可直接發給廠商，請其補齊。</p>
+  <div id="vendor"></div>
+</section>
+
+<!-- 7 -->
+<section>
+  <h2><span class="n">7</span>擬說法</h2>
+
+  <h3>開場（約 40 秒，先講結論）</h3>
+  <div class="say">
+    <div class="who">▸ 開場</div>
+    副總，這是網聯要建置系統前，需要我們開通的雲端服務清單，總共七項。<br><br>
+    <b>要請您裁示的是：以公司名義開帳號、綁公司信用卡自動扣款</b>，帳號主控權歸我們，廠商只是受託協助設定。<br><br>
+    有三件事我想先講清楚：<br>
+    第一，<b>這份清單沒有金額</b>。廠商把試算需要的數據列給我們，要我們提供後才報價，所以今天我還無法回答一個月多少錢。<br>
+    第二，七項裡面<b>有三項我們現在就在用</b>（LINE、語音的 Gemini 跟 Cloudflare），實際新增的主要是 AI 模型跟主機兩項。<br>
+    第三，這些都是<b>用量計費、自動扣款</b>，所以我想跟您確認控管方式，還有我不清楚的請款流程。
+  </div>
+
+  <h3>預期提問與建議回答</h3>
+
+  <div class="qa"><div class="q">Q：一個月到底要多少錢？</div><div class="a">
+    目前<b>還無法給精確數字</b>，因為廠商需要我們先提供用量數據。我已經從系統撈出 LINE 的實際進線量（每月約 3,900 則、近 90 天有 1,607 位客戶互動），
+    但還缺<b>兩個關鍵數字</b>：行銷的群發推播量、以及 0800 的月通話分鐘數——廠商特別說明<b>群發是費用最大宗</b>。
+    我會在補齊後請廠商<u>本週內</u>回覆月費區間，再回來跟您報告確切金額與授權額度。
+  </div></div>
+
+  <div class="qa"><div class="q">Q：我們不是已經有 LINE 了嗎？為什麼還要申請？</div><div class="a">
+    是的，LINE 官方帳號我們現在就在用，<b>這項不是新開帳號，而是可能需要升級方案級距</b>——因為導入後訊息量會增加。
+    同樣的還有語音要用的 Gemini 和 Cloudflare，我們的語音測試就是用這兩個。
+    <b>真正全新的只有兩項</b>：AI 模型（Claude）和主機資料庫（Render），這兩項才是新增成本的主體。
+  </div></div>
+
+  <div class="qa"><div class="q">Q：用量計費會不會失控？</div><div class="a">
+    這是我最在意的一點。文件說可以設「預算告警」，但<b>告警只是通知，不會自動停止扣款</b>。
+    所以我的建議是：能用<b>預付儲值</b>的就用儲值（Anthropic 和 Render 都支援），儲值用完就停，這是最實質的上限；
+    另外請財務在<b>信用卡設單月額度上限</b>雙重保險。我也會要求廠商書面說明每項服務的斷流機制。
+  </div></div>
+
+  <div class="qa"><div class="q">Q：發票怎麼處理？可以報帳嗎？</div><div class="a">
+    七項裡<b>六項是境外服務</b>，開的是境外電子 Invoice，不是統一發票。
+    這部分涉及費用認列跟境外電子勞務的稅務處理，<b>我不確定我們公司的作法，想請財務協助確認</b>。
+    LINE 那項廠商建議可透過台灣代理商購買、取得統一發票，這點我會一併確認。
+  </div></div>
+
+  <div class="qa"><div class="q">Q：帳號跟金鑰讓廠商碰，安全嗎？</div><div class="a">
+    文件寫得還算清楚：<b>以公司名義建立、主控權歸公司、金鑰不寫進程式碼也不進版控</b>，這點跟我們一貫的主張一致。
+    我會再要求三件事：<b>主帳號密碼與付款方式由公司保管</b>、廠商用受限的子帳號、
+    以及合約載明<b>合作終止時的金鑰更換與帳號交還程序</b>。
+  </div></div>
+
+  <div class="qa"><div class="q">Q：為什麼要分三批？</div><div class="a">
+    這是廠商建議的順序，我認為合理：<b>第一批（Claude／LINE／Render）是平台跑起來的必要條件</b>；
+    第二批（Embeddings）是提升 AI 命中率，晚一點不影響上線；
+    第三批（Gemini 語音／Cloudflare）配合補助計畫的 0800 語音功能才需要。
+    <b>好處是先開的少、先看實際用量，再決定後面要不要開</b>，風險比較低。
+  </div></div>
+
+  <div class="qa"><div class="q">Q：那我們現在的系統怎麼辦？會不會付兩份錢？</div><div class="a">
+    會有一段<b>並行期</b>。我們現在的系統用 Supabase，廠商平台用 Render，兩套都是主機加資料庫。
+    我會請廠商明確說明<b>並行期多久、什麼時候可以停掉一套</b>，並在報價裡分開標示「過渡期」跟「穩定期」的月費，避免我們一直重複付。
+  </div></div>
+
+  <h3>收尾（要什麼）</h3>
+  <div class="say">
+    <div class="who">▸ 收尾</div>
+    所以今天想請副總給我三件事：<br>
+    <b>一、</b>請示這七項是否原則同意開通，還是要先看到報價再決定；<br>
+    <b>二、</b>指定財務窗口，讓我確認請款流程、信用卡綁定與境外發票的認列方式；<br>
+    <b>三、</b>核給我一個<b>月費上限</b>，超過就回來簽核，這樣我在跟廠商談的時候有依據。<br><br>
+    我這邊會同步去補齊群發量跟通話分鐘數，請廠商本週內給報價，下週回來跟您報告金額。
+  </div>
+</section>
+
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL='https://nkyanyjgfrmovjoqevro.supabase.co';
+const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5reWFueWpnZnJtb3Zqb3FldnJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2ODIxMTMsImV4cCI6MjA5NzI1ODExM30.LPnQyceYS7Z1-rlqUtXm3B8dGBOqnmnavTV-PAOSPZ8';
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+const KEY='cloud_svc_apply_report';
+
+// 需請示事項（公司內規，非我方可決定）
+const ASKS=[
+ {id:'a1',t:'請款與核決流程',d:'這類「訂閱制、金額浮動」的支出，走哪一種簽核？是每月請款、預付儲值一次簽，還是年度預算內動支？核決權限到哪一層？'},
+ {id:'a2',t:'公司信用卡綁定',d:'由哪一張卡綁定？申請程序為何？是否需要另外開一張專用卡以便控管與對帳？'},
+ {id:'a3',t:'月費上限授權',d:'請核給一個月費上限金額，超過即回報簽核——讓我與廠商議價時有依據。'},
+ {id:'a4',t:'境外發票認列',d:'六項為境外電子 Invoice（非統一發票），費用認列方式與是否涉及代扣繳，請指定財務窗口確認。'},
+ {id:'a5',t:'帳號權責歸屬',d:'帳號以公司名義開立，主帳號、密碼與兩階段驗證由誰保管？（建議：非個人信箱，用公司共用信箱＋公司門號）'},
+ {id:'a6',t:'是否先報價再決定',d:'原則同意開通、或要求先取得廠商報價區間再核定？'},
+];
+// 向廠商追問
+const VENDOR=[
+ {id:'v1',t:'月費區間報價',d:'依我方提供的用量數據，提出「過渡期」與「穩定期」的月費區間，並標明各項占比。'},
+ {id:'v2',t:'斷流機制',d:'各服務是否支援用量硬上限（非僅告警）？超過上限時的行為為何？'},
+ {id:'v3',t:'LINE 帳號是否沿用',d:'是否沿用我方現有官方帳號？若需升級方案，建議級距與試算為何？可否經台灣代理商取得統一發票？'},
+ {id:'v4',t:'Render 與現有系統並行期',d:'並行多久？何時可停用其中一套？期間費用如何計算？'},
+ {id:'v5',t:'金鑰交接程序',d:'合作終止時，帳號、金鑰、資料的交還與更換程序，請書面載明於合約。'},
+ {id:'v6',t:'用量報表',d:'文件提及每月提供用量摘要——請說明格式、提供時間，以及超出預期時的通知機制。'},
+];
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+function render(list,elId,ph){
+  document.getElementById(elId).innerHTML=list.map(x=>`
+    <div class="chk">
+      <input type="checkbox" id="${x.id}_c">
+      <div class="t"><b>${esc(x.t)}</b><span>${esc(x.d)}</span>
+        <textarea id="${x.id}_n" placeholder="${ph}"></textarea></div>
+    </div>`).join('');
+}
+render(ASKS,'asks','副總裁示／確認結果…');
+render(VENDOR,'vendor','廠商回覆…');
+
+async function load(){
+  const {data,error}=await sb.from('config').select('value').eq('key',KEY).maybeSingle();
+  if(error){toast('⚠️ 載入失敗：'+error.message,true);return;}
+  if(!data?.value)return;
+  try{
+    const s=JSON.parse(data.value);
+    document.getElementById('author').value=s.author||'';
+    [...ASKS,...VENDOR].forEach(x=>{
+      const v=s.items?.[x.id]||{};
+      const c=document.getElementById(x.id+'_c'),n=document.getElementById(x.id+'_n');
+      if(c)c.checked=!!v.done; if(n)n.value=v.note||'';
+    });
+    if(s.savedAt)document.getElementById('saveMsg').textContent=`上次儲存：${s.savedAt}｜${s.author||'—'}`;
+  }catch(e){console.error(e);}
+}
+async function save(){
+  const b=document.getElementById('saveBtn');b.disabled=true;
+  const payload={author:document.getElementById('author').value.trim(),
+    savedAt:new Date().toLocaleString('zh-TW',{hour12:false}),
+    items:Object.fromEntries([...ASKS,...VENDOR].map(x=>[x.id,{
+      done:document.getElementById(x.id+'_c').checked,
+      note:document.getElementById(x.id+'_n').value.trim()}]))};
+  const {error}=await sb.from('config').upsert({key:KEY,value:JSON.stringify(payload)});
+  b.disabled=false;
+  if(error){toast('⚠️ 儲存失敗：'+error.message,true);return;}
+  document.getElementById('saveMsg').textContent=`上次儲存：${payload.savedAt}｜${payload.author||'—'}`;
+  toast('✅ 已儲存');
+}
+function toast(m,e){const t=document.getElementById('toast');t.textContent=m;t.className='toast'+(e?' err':'');t.style.display='block';setTimeout(()=>t.style.display='none',3000);}
+load();
+</script>
+</body>
+</html>
