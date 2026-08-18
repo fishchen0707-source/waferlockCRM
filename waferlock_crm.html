@@ -1044,20 +1044,30 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
     const exist=(db.customers||[]).find(c=>custKey(c.name,c.address)===key);
     const wfId=exist?exist.wfId:(await sb.rpc('next_wf_id')).data;
     const isNew=!exist;
+    const reactivated=!!exist?.disabled; // 撈到的是已作廢客編 → 這次下單把它救回來
     updateDB(prev=>{
       let customers=prev.customers||[];
       if(isNew) customers=[...customers,{wfId,name:f.name.trim(),phone:f.phone.trim(),address:f.address,zip:f.zip,channel:f.channel,
         groupId:f.groupId||null,projectId:f.projectId||null,
         productId:f.productId,serialNo:f.serialNo,regType:'auto',regDate:today(),
         installDate:null,warrantyMonths:null,warrantyEnd:null,tags:['待安裝'],repairIds:[],complaintIds:[]}];
-      else if(f.groupId) customers=customers.map(c=>c.wfId===wfId?{...c,groupId:f.groupId,projectId:f.projectId||c.projectId}:c);
+      else {
+        // 同姓名同地址（custKey 相同）＝同一個人同一個住所 → 沿用原客編。
+        // 若該客編先前被當單作廢，這次再下單就重新啟用它；disabledReason/disabledAt 刻意不清，
+        // 留作「曾被作廢」的痕跡（爭議時要查得到）。custKey 只要有一項不同就撈不到，自然發新號。
+        customers=customers.map(c=>c.wfId!==wfId?c:{...c,
+          ...(f.groupId?{groupId:f.groupId,projectId:f.projectId||c.projectId}:{}),
+          ...(c.disabled?{disabled:false,tags:(c.tags||[]).filter(t=>t!=='已作廢')}:{})});
+      }
       const order=pushHist({id,name:f.name.trim(),phone:f.phone.trim(),address:f.address,channel:f.channel,
         productId:f.productId,serialNo:f.serialNo,locksmithId:null,wfId,scheduledDate:f.scheduledDate,
         status:'pending',createdDate:today(),createdTs:Date.now(),arrivalPushed:false,...common,...bk.fields},
-        currentUser?.name,'建立安裝工單'+(bk.fields.workerId?'＋排程':''));
+        currentUser?.name,'建立安裝工單'+(bk.fields.workerId?'＋排程':'')
+          +(reactivated?`｜🔄 客編重新啟用（原作廢於 ${exist.disabledAt||'—'}）`:''));
       return {...prev,customers,installs:{...prev.installs,[id]:order}};
     });
-    toast('📋 安裝工單已建立',isNew?`${f.name}｜已建立客編 ${wfId}`:`${f.name}｜歸入既有客編 ${wfId}`,'ok');
+    toast('📋 安裝工單已建立',isNew?`${f.name}｜已建立客編 ${wfId}`
+      :reactivated?`${f.name}｜🔄 重新啟用已作廢客編 ${wfId}`:`${f.name}｜歸入既有客編 ${wfId}`,'ok');
     onClose(id);
   };
 
@@ -1083,13 +1093,14 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
       let customers=prev.customers||[];
       if(isNew) customers=[...customers,{wfId,name:f.name.trim(),phone:f.phone.trim(),address:f.address,zip:f.zip,
         regType:'manual',regDate:today(),tags:['待整理'],repairIds:[rid],complaintIds:[]}];
-      else customers=customers.map(x=>x.wfId===wfId?{...x,repairIds:[...(x.repairIds||[]),rid]}:x);
+      else customers=customers.map(x=>x.wfId!==wfId?x:{...x,repairIds:[...(x.repairIds||[]),rid],
+        ...(x.disabled?{disabled:false,tags:(x.tags||[]).filter(t=>t!=='已作廢')}:{})}); // 已作廢客編再次來案 → 重新啟用
       return {...prev,repairs:{...prev.repairs,[rid]:newRepair},customers};
     });
     // 對話訊息改走原子 RPC，不再靠本地快照整包 upsert；畫面會由 Realtime 訂閱自動補上最新對話
     appendConvMsg(uid,pushTxt);
     pushLineTo(uid,pushTxt);
-    toast('📋 已立案',`${f.name} 報修單 ${rid} 已建立${isNew?'（新客編 '+wfId+'）':''}`,'ok');
+    toast('📋 已立案',`${f.name} 報修單 ${rid} 已建立${isNew?'（新客編 '+wfId+'）':exist?.disabled?'（🔄 重新啟用客編 '+wfId+'）':''}`,'ok');
     onClose(rid);
   };
 
@@ -2111,6 +2122,11 @@ function CRMPage(){
       <button className="crm-back" onClick={()=>{setSel(null);setPage('home');}}>← 返回首頁</button>
       
       <div className="card">
+                {!cur.disabled&&cur.disabledAt&&(
+                  <div style={{background:'var(--g50)',border:'1px solid var(--g100)',borderRadius:7,padding:'7px 11px',marginBottom:10,fontSize:11.5,color:'var(--g500)',lineHeight:1.6}}>
+                    🔄 此客編曾於 {cur.disabledAt} 作廢（{cur.disabledReason||'—'}），因同姓名同地址再次下單而重新啟用。
+                  </div>
+                )}
                 {cur.disabled&&(
                   <div style={{background:'#7F1D1D',color:'#fff',borderRadius:7,padding:'9px 12px',marginBottom:10,fontSize:12,fontWeight:700,lineHeight:1.7}}>
                     🚫 此客編已作廢停用（{cur.disabledAt||'—'}）
@@ -3108,8 +3124,9 @@ function HomePage(){
     // 清理無任何案件引用的待整理孤兒客編（正式客戶即使無案件也保留）
     const used=new Set();
     [repairsN,installsN,complaintsN].forEach(coll=>Object.values(coll).forEach(x=>x.wfId&&used.add(x.wfId)));
-    const orphanWf=customers.filter(c=>!used.has(c.wfId)&&isTempCust(c)).map(c=>c.wfId);
-    customers=customers.filter(c=>used.has(c.wfId)||!isTempCust(c));
+    // 已作廢客戶一律保留：沒裝成的客戶日後若有爭議，紀錄要查得到，不能被當孤兒清掉
+    const orphanWf=customers.filter(c=>!used.has(c.wfId)&&isTempCust(c)&&!c.disabled).map(c=>c.wfId);
+    customers=customers.filter(c=>used.has(c.wfId)||!isTempCust(c)||c.disabled);
     updateDB({...db,customers,repairs:repairsN,installs:installsN,complaints:complaintsN});
     if(orphanWf.length) sb.from('customers').delete().in('wf_id',orphanWf).then(()=>{}).catch(e=>console.error('清除孤兒客編失敗:',e));
     toast('🔗 依地址重新歸戶完成',`新建 ${created} 個客編、調整 ${fixed} 筆案件`,'ok');
