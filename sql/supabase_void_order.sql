@@ -12,6 +12,7 @@
 -- ============================================================
 
 -- 安裝單：當單理由與經手紀錄
+alter table public.installs   add column if not exists void_type   text;  -- cannot_install / customer_refuse / reschedule
 alter table public.installs   add column if not exists void_reason text;
 alter table public.installs   add column if not exists voided_at   text;
 alter table public.installs   add column if not exists voided_by   text;
