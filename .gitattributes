@@ -1,0 +1,5 @@
+# git hook 必須保持 LF 行尾。
+# 這台的 core.autocrlf=true，checkout 時預設會把 LF 轉成 CRLF，
+# 而 CRLF 的 shell script 會讓 sh 回報 bad interpreter——整支 hook 靜默失效。
+# 諷刺的是它正是用來防止「靜默漏掉」的東西，所以這行不能拿掉。
+scripts/hooks/** text eol=lf
