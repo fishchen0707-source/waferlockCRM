@@ -181,6 +181,23 @@ var COL_S_ORDER_BY   = '下單業務';        // 業務下單時帶入，與「�
 var COL_S_WORK_TIME  = '施工時段';        // 例「平日1-4」。自由文字，沿用現行寫法
 var COL_S_WORK_ITEM  = '工項';            // 例「裝外門」
 
+// 退單（2026-08-20 使用者提出，來源是群組裡的真實對話：
+// 「Molly Hsu 麻煩退單 改出貨單備註 謝謝哦」）。
+//
+// ⚠ **GAS 不能真的退單**。出貨單號是 TipTop 發的，真正的退單動作在 ERP 裡。
+//   這一欄只做「記錄、通知、把狀態顯示出來」——讓「誰要求退、為什麼、誰處理了」
+//   從群組裡一句話講完就沒了，變成有軌跡的事。
+//
+// 為什麼獨立一欄、不塞進「倉庫核單狀態」：
+//   退單可能在倉庫還沒碰到這張單的時候就發生（使用者確認「什麼階段都有」），
+//   混進去會讓倉庫的狀態機語意壞掉。而且倉庫的「有問題」是撿不了料、方向由倉庫往外，
+//   退單是業務要求改單、方向相反，兩者各自獨立（2026-08-20 使用者確認）。
+//
+// 值的格式沿用簽核欄的既有寫法（狀態＋人＋時間＋原因塞成一個字串，靠開頭字元判斷）：
+//   申請中：🔄 退單 <發起人> <時間>｜<原因>
+//   已處理：✅ 已處理 <處理人> <時間>｜<原本的原因>
+var COL_S_RETURN = '退單';
+
 var SHIPMENT_HEADERS = [
   COL_S_CASE_NO,
   COL_S_AT, COL_S_SHIP_NO, COL_S_ORDER_ID, COL_S_SHIP_DATE, COL_S_DISPATCH,
@@ -190,7 +207,8 @@ var SHIPMENT_HEADERS = [
   COL_S_WORK_TIME, COL_S_WORK_ITEM,
   COL_S_SALE_PRICE, COL_S_COST_PRICE,
   COL_S_ORDER_BY, COL_S_BY, COL_S_WH_STATUS, COL_S_WH_BY, COL_S_WH_AT, COL_S_WH_NOTE,
-  COL_S_INVOICE_URL, COL_S_INVOICE_NO
+  COL_S_INVOICE_URL, COL_S_INVOICE_NO,
+  COL_S_RETURN
 ];
 
 // ── 發票電子檔上傳 ──────────────────────────────────────────
@@ -490,7 +508,7 @@ function queryBlock_(email, roles) {
     '</div>' +
     '<div id="msg"></div><div id="res"></div>' +
     '<script>' +
-    'var NOTES=[];' +
+    'var NOTES=[];var SHIPS=[];' +
     'function g(id){return document.getElementById(id);}' +
     'function show(t,c){g("msg").innerHTML=\'<div class="msg \'+c+\'">\'+t+\'</div>\';}' +
     'function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;")' +
@@ -508,7 +526,7 @@ function queryBlock_(email, roles) {
           'if(!res.ok){show(res.message,"fail");return;}' +
           'if(!res.rows.length){show("找不到符合的資料","fail");return;}' +
           'show("找到 "+res.count+" 筆"+(res.truncated?"（已達上限 50 筆，請縮小範圍）":""),"done");' +
-          'NOTES=[];g("res").innerHTML=res.rows.map(card).join("");})' +
+          'NOTES=[];SHIPS=[];g("res").innerHTML=res.rows.map(card).join("");})' +
         '.withFailureHandler(function(e){b.disabled=false;b.textContent=old;' +
           'show("連線失敗："+e.message,"fail");})' +
         '.runQuery(q);' +
@@ -546,6 +564,18 @@ function queryBlock_(email, roles) {
         'h+=\'<div class="whrow"><b>倉庫</b>\'+esc(s["倉庫核單狀態"]||"—")+' +
           '(s["倉庫核單人"]?"　"+esc(s["倉庫核單人"]):"")+' +
           '(s["問題說明"]?"　⚠ "+esc(s["問題說明"]):"")+\'</div>\';' +
+        // 退單：已在退單中就顯示狀態，否則給按鈕。沒有出貨單號代表 TipTop 還沒開單，
+        // 那個階段沒有東西可以退，所以不給按鈕。
+        // 單號用 SHIPS 陣列傳索引，與師傅通知的 NOTES 同一個手法——
+        // 直接把單號拼進 onclick 字串要處理多層引號跳脫，是這一頁最容易出錯的地方。
+        'if(s["退單"]){h+=\'<div class="whrow"><b>退單</b>\'+esc(s["退單"])+\'</div>\';' +
+          // 還在退單中才給「已處理」按鈕；已處理的只顯示紀錄，不給任何按鈕
+          'if(s["退單"].indexOf("🔄")===0&&s["出貨單號"]){SHIPS.push(s["出貨單號"]);' +
+            'h+=\'<div class="whbtn"><button class="ok" onclick="rdone(\'+(SHIPS.length-1)+\')">\'' +
+              '+\'✅ 標記已處理</button></div>\';}}' +
+        'else if(s["出貨單號"]){SHIPS.push(s["出貨單號"]);' +
+          'h+=\'<div class="whbtn"><button class="no-btn" onclick="ret(\'+(SHIPS.length-1)+\')">\'' +
+            '+\'🔄 申請退單</button></div>\';}' +
         'if(s.techNotice){NOTES.push(s.techNotice);' +
           'h+=\'<div class="whlab">師傅通知（不含金額）</div>\'' +
             '+\'<div class="whitems">\'+esc(s.techNotice)+\'</div>\'' +
@@ -553,6 +583,33 @@ function queryBlock_(email, roles) {
             '+\'📋 複製師傅通知</button></div>\';}' +
       '});' +
       'return h+"</div>";' +
+    '}' +
+    // 退單：問原因 → 送出 → 成功後重跑查詢，讓畫面直接反映最新狀態
+    // （不自己改 DOM，避免畫面顯示的和表上實際存的不一致）
+    'function ret(i){' +
+      'var sn=SHIPS[i];' +
+      'var r=prompt("退單原因（會通知助理，請寫清楚要改什麼）：\\n"+sn)||"";' +
+      'if(!r.trim()){return;}' +
+      'show("送出中…","done");' +
+      'google.script.run' +
+        '.withSuccessHandler(function(res){' +
+          'show(res.message,res.ok?"done":"fail");' +
+          'if(res.ok){run();}})' +
+        '.withFailureHandler(function(e){show("連線失敗："+e.message,"fail");})' +
+        '.requestReturn(sn,r);' +
+    '}' +
+    // 標記退單已處理。這裡刻意用 confirm 而不是直接送出——
+    // 誤按的代價是別人以為事情做完了，而實際上 TipTop 那邊還沒改。
+    'function rdone(i){' +
+      'var sn=SHIPS[i];' +
+      'if(!confirm("確定 "+sn+" 已經在 TipTop 處理完了嗎？\\n標記後其他人會認為這筆已完成。")){return;}' +
+      'show("送出中…","done");' +
+      'google.script.run' +
+        '.withSuccessHandler(function(res){' +
+          'show(res.message,res.ok?"done":"fail");' +
+          'if(res.ok){run();}})' +
+        '.withFailureHandler(function(e){show("連線失敗："+e.message,"fail");})' +
+        '.resolveReturn(sn);' +
     '}' +
     // 複製邏輯與出貨頁共用同一份（含沙箱 iframe 的 execCommand 退路）
     'function cp(i){cpText(NOTES[i]);}' +
@@ -3944,6 +4001,150 @@ function uploadInvoice(shipNo, fileName, mimeType, base64, hintRow, invoiceNo) {
     lock.releaseLock();
   }
 }
+/** 這一欄是不是「退單申請中」。與 isApproved_ 同一個寫法：靠開頭字元判斷。 */
+function isReturning_(v) {
+  return /^🔄/.test(String(v || '').trim());
+}
+
+/**
+ * 申請退單。任何人都可以發起（2026-08-20 使用者確認），但**發起人一律由伺服器取得**，
+ * 不接受前端指定——不限制身分不等於可以冒名。
+ */
+function requestReturn(shipNo, reason, hintRow) {
+  return requestReturnAs_(currentUserEmail_(), shipNo, reason, hintRow);
+}
+
+/**
+ * 退單申請核心。身分由呼叫端指定，底線的意義見 submitDecisionAs_ 上方註解。
+ *
+ * ⚠ 這支**不會改動倉庫核單狀態**。使用者確認退單「什麼階段都有」，
+ *   如果貨已經出去了才退單，把倉庫狀態重置成「待核」會讓倉庫以為要再撿一次料。
+ *   實體動作已經發生的事只能記錄，不能假裝沒發生——要不要重走倉庫由人決定。
+ */
+function requestReturnAs_(email, shipNo, reason, hintRow) {
+  if (!email) return { ok: false, message: '無法辨識身分，未寫入任何資料。' };
+
+  shipNo = String(shipNo || '').trim();
+  if (!shipNo) return { ok: false, message: '缺少出貨單號。' };
+  reason = String(reason || '').trim();
+  // 與簽核退回、倉庫回報問題同一條規矩：沒有原因，收到的人不知道要改什麼。
+  if (!reason) return { ok: false, message: '退單必須填寫原因，讓助理知道要改什麼。' };
+
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(20000); }
+  catch (err) { return { ok: false, message: '系統忙碌中，請稍候再試。' }; }
+
+  try {
+    var s = openShipmentSheet_();
+    if (!s.col[COL_S_SHIP_NO]) {
+      return { ok: false, message: '出貨明細找不到「' + COL_S_SHIP_NO + '」欄。' };
+    }
+    if (!s.col[COL_S_RETURN]) {
+      return { ok: false, message: '出貨明細找不到「' + COL_S_RETURN + '」欄，未寫入任何資料。' };
+    }
+
+    var target = findShipmentRow_(s, shipNo, hintRow);
+    if (!target) return { ok: false, message: '找不到出貨單號 ' + shipNo + '，可能已被刪除。' };
+
+    // 重讀當下狀態：兩個人可能同時開著查詢頁對同一張單按退單
+    var already = String(s.sheet.getRange(target, s.col[COL_S_RETURN]).getValue() || '').trim();
+    if (isReturning_(already)) {
+      return { ok: false, message: '這張單已經在退單中了：' + already + '（畫面請重新整理）' };
+    }
+
+    var stamp = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm');
+    // 發起人可能是業務、助理、倉庫或客服，salesFor_ 只查得到業務，
+    // 查不到就退回 email——顯示名稱不完美好過整支壞掉。
+    var sales = salesFor_(email);
+    var byName = (sales && sales.name) ? sales.name : email;
+    var value = '🔄 退單 ' + byName + ' ' + stamp + '｜' + reason;
+
+    s.sheet.getRange(target, s.col[COL_S_RETURN]).setValue(value);
+    SpreadsheetApp.flush();
+
+    var rec = readShipmentRow_(s, target);
+    rec[COL_S_RETURN] = value;
+
+    // 通知包 try：退單已經記錄成功了，通知壞掉不該回報成失敗而讓人再按一次
+    try {
+      notifyReturnRequest_(rec, target, reason, byName, stamp);
+    } catch (eN) {
+      Logger.log('退單通知失敗（已寫入 ' + shipNo + '）：' + eN);
+    }
+
+    return { ok: true, message: '已送出退單申請：' + shipNo + '　' + reason };
+  } catch (err) {
+    return { ok: false, message: '寫入失敗：' + err };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * 標記退單已處理（助理去 TipTop 改完之後回來按）。
+ *
+ * 沒有這一步的話，退單欄會永遠停在 🔄，看表的人分不出「還沒處理」和「處理完沒人回報」——
+ * 那就跟在群組裡講一句話沒兩樣，只是換個地方留言而已。閉環才是這功能的價值。
+ */
+function resolveReturn(shipNo, hintRow) {
+  return resolveReturnAs_(currentUserEmail_(), shipNo, hintRow);
+}
+
+/** 標記退單已處理的核心。底線的意義見 submitDecisionAs_ 上方註解。 */
+function resolveReturnAs_(email, shipNo, hintRow) {
+  if (!email) return { ok: false, message: '無法辨識身分，未寫入任何資料。' };
+
+  shipNo = String(shipNo || '').trim();
+  if (!shipNo) return { ok: false, message: '缺少出貨單號。' };
+
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(20000); }
+  catch (err) { return { ok: false, message: '系統忙碌中，請稍候再試。' }; }
+
+  try {
+    var s = openShipmentSheet_();
+    if (!s.col[COL_S_RETURN]) {
+      return { ok: false, message: '出貨明細找不到「' + COL_S_RETURN + '」欄。' };
+    }
+    var target = findShipmentRow_(s, shipNo, hintRow);
+    if (!target) return { ok: false, message: '找不到出貨單號 ' + shipNo + '，可能已被刪除。' };
+
+    var cur = String(s.sheet.getRange(target, s.col[COL_S_RETURN]).getValue() || '').trim();
+    if (!isReturning_(cur)) {
+      return { ok: false, message: '這張單目前不在退單中，沒有東西要標記。（畫面請重新整理）' };
+    }
+
+    // 把原本的原因留下來——處理完了還是要看得出當初為什麼退，
+    // 蓋掉的話稽核軌跡就斷在這裡了。
+    var reason = cur.indexOf('｜') >= 0 ? cur.slice(cur.indexOf('｜') + 1) : '';
+    var stamp = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm');
+    var sales = salesFor_(email);
+    var byName = (sales && sales.name) ? sales.name : email;
+    var value = '✅ 已處理 ' + byName + ' ' + stamp + (reason ? '｜' + reason : '');
+
+    s.sheet.getRange(target, s.col[COL_S_RETURN]).setValue(value);
+    SpreadsheetApp.flush();
+
+    try {
+      var rec = readShipmentRow_(s, target);
+      var lines = ['*✅ 退單已處理*', ''];
+      lines.push('• 出貨單號：' + shipNo);
+      if (rec[COL_S_CUSTOMER]) lines.push('• 客戶：' + rec[COL_S_CUSTOMER]);
+      if (reason) lines.push('• 原退單原因：' + reason);
+      lines.push('• 處理：' + byName + '　' + stamp);
+      postWarehouseChat_(lines.join('\n'));
+    } catch (eN) {
+      Logger.log('退單處理通知失敗（已寫入 ' + shipNo + '）：' + eN);
+    }
+
+    return { ok: true, message: '已標記處理完成：' + shipNo };
+  } catch (err) {
+    return { ok: false, message: '寫入失敗：' + err };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 /**
  * 依出貨單號找列。hintRow 只用來省一次搜尋，一律驗證那一格吻合，
  * 不吻合就當提示不存在走完整搜尋——提示不能讓它指向別的列。
@@ -4078,6 +4279,58 @@ function notifyShipmentIssue_(rec) {
     lines.push('');
     lines.push('<' + link + '|➡ 開這一筆出貨明細>');
   }
+
+  return postWarehouseChat_(lines.join('\n'));
+}
+
+/**
+ * 退單申請的 Chat 通知。
+ *
+ * 這一則的存在理由，就是要取代群組裡那句「Molly Hsu 麻煩退單 改出貨單備註 謝謝哦」——
+ * 同樣是 @人 說要退單，差別在於它有單號、有原因、有連結、而且留得下軌跡。
+ *
+ * @提及對象是**助理**（退單要她去 TipTop 改），依發包單號的業務代碼查路由對照表。
+ * 沒有發包單號的出貨（弱電料件、鎖胚、建案整批）查不到對應助理，
+ * 退回 DISPATCH_ASSISTANTS 整份名單——寧可多 ping 幾個人，也不要沒有人被通知。
+ */
+function notifyReturnRequest_(rec, row, reason, byName, stamp) {
+  var uids = loadChatUids_();
+  var shipNo = rec[COL_S_SHIP_NO];
+
+  var lines = ['*🔄 退單申請*', ''];
+  lines.push('• 出貨單號：' + shipNo);
+  if (rec[COL_S_DISPATCH]) lines.push('• 發包單號：' + rec[COL_S_DISPATCH]);
+  if (rec[COL_S_CUSTOMER]) {
+    lines.push('• 客戶：' + rec[COL_S_CUSTOMER] +
+      (rec[COL_S_PROJECT] ? '（' + rec[COL_S_PROJECT] + '）' : ''));
+  }
+  if (rec[COL_S_ITEMS]) lines.push('• 品項：' + rec[COL_S_ITEMS]);
+  lines.push('• 🔴 退單原因：' + reason);
+  lines.push('• 申請：' + byName + '　' + stamp);
+
+  // 倉庫已經核過的單要特別提醒：貨可能已經動了，不是改一改就沒事
+  var whStatus = String(rec[COL_S_WH_STATUS] || '').trim();
+  if (whStatus && whStatus !== WH_PENDING) {
+    lines.push('');
+    lines.push('⚠ 這張單倉庫已經是「' + whStatus + '」，貨可能已經出了，請一併確認。');
+  }
+
+  lines.push('');
+  var person = null;
+  try {
+    person = loadRoster_()[codeOf_(rec[COL_S_DISPATCH] || '')] || null;
+  } catch (err) {
+    Logger.log('（退單通知讀路由對照表失敗，改用助理名單）' + err);
+  }
+  if (person && person.assist) {
+    lines.push('請 ' + mentionOf_(person.assistMail, person.assist, uids) + ' 到 TipTop 退單處理');
+  } else {
+    var at = mentionsFromProp_('DISPATCH_ASSISTANTS');
+    lines.push('請助理到 TipTop 退單處理' + (at ? '　' + at : ''));
+  }
+
+  var link = deepLink_({ page: 'ship', ship: shipNo });
+  if (link) { lines.push(''); lines.push('<' + link + '|➡ 開這一筆出貨明細>'); }
 
   return postWarehouseChat_(lines.join('\n'));
 }

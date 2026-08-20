@@ -2775,5 +2775,195 @@ console.log('【28】按鈕可用性與 Chat UID 格式');
   props.DISPATCH_SHEET_NAME = '*';
 })();
 
+// ── 測試 29：退單 ──
+// 來源是群組裡的真實對話：「Molly Hsu 麻煩退單 改出貨單備註 謝謝哦」。
+// GAS 不能真的退單（單號是 TipTop 發的），這裡測的是「記錄、通知、狀態」這三件事。
+console.log('');
+console.log('【29】退單');
+(() => {
+  const asUser = e => { sandbox.Session.getActiveUser = () => ({ getEmail: () => e }); };
+  const origFetch = sandbox.UrlFetchApp.fetch;
+  const SH = G.SHIPMENT_HEADERS;
+  const SHIP_NO = 'W5506-260820001';
+  const mkShip = o => {
+    const r = SH.map(() => '');
+    SH.forEach((k, i) => { if (o[k] !== undefined) r[i] = o[k]; });
+    return r;
+  };
+
+  const sent = [];
+  sandbox.UrlFetchApp.fetch = (u, o) => {
+    sent.push(JSON.parse(o.payload).text);
+    return { getResponseCode: () => 200, getContentText: () => 'ok' };
+  };
+
+  const reset = (whStatus) => {
+    SHEETS = [
+      makeSheet('出貨明細', SH, [
+        mkShip({ '出貨單號': SHIP_NO, '發包單號': 'FC-260820-01', '客戶': '維瓦第營造',
+          '出貨品項': 'L396*105組',
+          // 用 undefined 判斷而不是 ||，才傳得進空字串（＝倉庫還沒碰過這張單）
+          '倉庫核單狀態': whStatus === undefined ? '待核' : whStatus }),
+      ], 1),
+      makeSheet('人員代碼',
+        ['業務代碼', '業務姓名', '業務email', '類別', '對應助理', '助理email', '發包分頁'],
+        [['FC', 'fish chen', 'fish.chen@waferlock.com', '內銷',
+          'Ting.Hsu', 'ting.hsu@waferlock.com', '電商-Vivi']], 1),
+      makeSheet('Chat人員對照', ['email', 'Chat UID', '姓名備註'],
+        [['ting.hsu@waferlock.com', '108234567890123456789', 'Ting']], 1),
+    ];
+    props.DISPATCH_SHEET_NAME = '*';
+    props.DISPATCH_WAREHOUSE_WEBHOOK = 'https://chat.googleapis.com/FAKE';
+    props.DISPATCH_WEBAPP_URL = 'https://script.google.com/a/macros/w/s/REAL/exec';
+    CACHE = {};
+    sent.length = 0;
+  };
+
+  const readBack = () => {
+    const s = G.openShipmentSheet_();
+    return G.readShipmentRow_(s, G.findShipmentRow_(s, SHIP_NO, 0));
+  };
+
+  // ── 正常申請
+  reset();
+  asUser('fish.chen@waferlock.com');
+  {
+    const r = G.requestReturn(SHIP_NO, '改出貨單備註');
+    ok(r.ok, '正常申請退單應成功：' + r.message);
+
+    const rec = readBack();
+    ok(/^🔄 退單/.test(rec['退單']), '退單欄要以 🔄 開頭（isReturning_ 靠開頭字元判斷）');
+    ok(rec['退單'].indexOf('改出貨單備註') >= 0, '退單欄要留下原因');
+    ok(rec['退單'].indexOf('fish chen') >= 0, '退單欄要留下發起人姓名');
+    ok(G.isReturning_(rec['退單']), 'isReturning_ 要認得自己寫出來的值');
+
+    // 這一條是整個設計的核心決策，必須鎖住
+    ok(rec['倉庫核單狀態'] === '待核',
+       '🔴 退單不可以改動倉庫核單狀態——貨可能已經出了，重置成待核會讓倉庫再撿一次料');
+  }
+
+  // ── 通知
+  {
+    ok(sent.length === 1, '申請退單應送出一則 Chat 通知');
+    ok(/<users\/108234567890123456789>/.test(sent[0]),
+       '🔴 退單通知要 @提及助理——退單要她去 TipTop 改，下一棒是她');
+    ok(sent[0].indexOf('改出貨單備註') >= 0, '通知要帶原因，否則收到的人不知道要改什麼');
+    ok(sent[0].indexOf(SHIP_NO) >= 0, '通知要帶出貨單號');
+    ok(/ship=W5506-260820001/.test(sent[0]) && /page=ship/.test(sent[0]),
+       '通知要帶深連結，直接開這一筆出貨明細');
+  }
+
+  // ── 防呆
+  {
+    const dup = G.requestReturn(SHIP_NO, '再退一次');
+    ok(!dup.ok, '🔴 已經在退單中的單不可以重複申請（兩個人同時開查詢頁按退單）');
+    ok(dup.message.indexOf('退單中') >= 0, '重複申請的訊息要說明已在退單中');
+
+    reset();
+    ok(!G.requestReturn(SHIP_NO, '').ok,
+       '🔴 沒填原因要擋——與簽核退回、倉庫回報問題同一條規矩');
+    ok(!G.requestReturn(SHIP_NO, '   ').ok, '只有空白的原因也要擋');
+    ok(!G.requestReturn('', '理由').ok, '缺出貨單號要擋');
+    ok(!G.requestReturn('W9999-NOTEXIST', '理由').ok, '找不到的單號要擋');
+    ok(sent.length === 0, '被擋下的申請不可以送出任何通知');
+  }
+
+  // ── 身分：不限制誰能發起，但不可冒名
+  {
+    reset();
+    ok(!G.requestReturnAs_('', SHIP_NO, '理由').ok, '🔴 空身分要拒絕');
+    reset();
+    const r = G.requestReturnAs_('warehouse.guy@waferlock.com', SHIP_NO, '倉庫也能退');
+    ok(r.ok, '任何人都可以發起退單（使用者確認），不限業務或主管');
+    ok(readBack()['退單'].indexOf('warehouse.guy@waferlock.com') >= 0,
+       '查不到姓名時退回 email，不可以整支壞掉');
+  }
+
+  // ── 倉庫已核的單要特別提醒
+  {
+    reset('已核');
+    G.requestReturn(SHIP_NO, '客戶要改地址');
+    ok(/貨可能已經出了/.test(sent[0]),
+       '🔴 倉庫已核的單，通知要提醒貨可能已經出了——這種退單代價完全不同');
+    ok(readBack()['倉庫核單狀態'] === '已核', '倉庫已核的狀態同樣不可以被退單改掉');
+  }
+
+  // ── 倉庫還沒碰過這張單就退單（使用者說「什麼階段都有」，這是最早的階段）
+  // 這一組刻意用空的倉庫狀態：如果哪天有人讓退單順手「重置」倉庫狀態，
+  // 上面那組初始值剛好就是「待核」、重置後值沒變，測不出來——這一組才抓得到。
+  {
+    reset('');
+    G.requestReturn(SHIP_NO, '倉庫還沒撿料就要退');
+    ok(readBack()['倉庫核單狀態'] === '',
+       '🔴 倉庫還沒碰過的單，退單不可以把它寫成「待核」而讓它憑空出現在倉庫清單上');
+    ok(!/貨可能已經出了/.test(sent[0]),
+       '倉庫還沒核的單不該提醒「貨可能已經出了」——那會讓人以為事情比實際嚴重');
+  }
+
+  // ── 閉環：標記已處理
+  {
+    reset();
+    G.requestReturn(SHIP_NO, '改出貨單備註');
+    sent.length = 0;
+
+    ok(!G.resolveReturnAs_('', SHIP_NO).ok, '🔴 標記已處理也要擋空身分');
+
+    const r = G.resolveReturn(SHIP_NO);
+    ok(r.ok, '標記退單已處理應成功：' + r.message);
+
+    const rec = readBack();
+    ok(/^✅ 已處理/.test(rec['退單']), '處理完要改成 ✅ 開頭');
+    ok(!G.isReturning_(rec['退單']), '處理完後 isReturning_ 要回 false');
+    ok(rec['退單'].indexOf('改出貨單備註') >= 0,
+       '🔴 處理完仍要保留原本的退單原因——蓋掉的話稽核軌跡就斷在這裡');
+    ok(rec['退單'].indexOf('fish chen') >= 0, '要記下是誰處理的');
+    ok(sent.length === 1 && /退單已處理/.test(sent[0]), '處理完要發通知，讓申請的人知道');
+
+    const again = G.resolveReturn(SHIP_NO);
+    ok(!again.ok, '🔴 不在退單中的單不可以重複標記');
+    ok(again.message.indexOf('不在退單中') >= 0, '重複標記的訊息要說明原因');
+  }
+
+  // ── 處理完之後可以再退一次（同一張單可能退很多次）
+  {
+    const r2 = G.requestReturn(SHIP_NO, '第二次退單');
+    ok(r2.ok, '已處理完的單要能再次申請退單（同一張單可能退很多次）');
+    ok(/^🔄/.test(readBack()['退單']), '再次申請後要回到退單中狀態');
+  }
+
+  // ── 安全邊界：底線版本才是核心，無底線的只能是薄殼
+  {
+    const src = fs.readFileSync(DIR + 'gas-dispatch-approval.gs', 'utf8');
+    ok(/function requestReturnAs_\(/.test(src), 'requestReturnAs_ 應存在');
+    ok(!/function requestReturnAs\s*\(/.test(src),
+       '🔴 requestReturnAs 不可以是無底線版本——那會被 google.script.run 呼叫到，等於任意指定發起人');
+    ok(/function resolveReturnAs_\(/.test(src), 'resolveReturnAs_ 應存在');
+    ok(!/function resolveReturnAs\s*\(/.test(src),
+       '🔴 resolveReturnAs 不可以是無底線版本');
+  }
+
+  // ── 查詢頁：畫了按鈕就必須掛得動（沿用測試 28 的守門員）
+  {
+    reset();
+    asUser('fish.chen@waferlock.com');
+    const html = G.doGet({ parameter: { page: 'query' } })._h;
+    ok(html.indexOf('function ret(') >= 0,
+       '🔴 查詢頁必須含 ret 定義，否則退單按鈕按下去毫無反應');
+    const names = new Set();
+    html.split('onclick="').slice(1).forEach(seg => {
+      const cut = seg.indexOf('(');
+      if (cut < 1) return;
+      const fn = seg.slice(0, cut);
+      if (fn && !/[^A-Za-z0-9_$]/.test(fn)) names.add(fn);
+    });
+    const dangling = [...names].filter(n => html.indexOf('function ' + n + '(') < 0);
+    ok(dangling.length === 0,
+       '🔴 查詢頁有 onclick 但無定義的函式：' + (dangling.join(', ') || '無'));
+  }
+
+  sandbox.UrlFetchApp.fetch = origFetch;
+  props.DISPATCH_SHEET_NAME = '*';
+})();
+
 console.log('\n' + (fail ? '❌' : '✅') + ' 通過 ' + pass + '／失敗 ' + fail);
 process.exit(fail ? 1 : 0);
