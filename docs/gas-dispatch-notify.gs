@@ -224,6 +224,129 @@ function cleanupSnapshots_(folder, keepRaw) {
 /**
  * 手動執行這支，確認通知與備份的設定是否齊全，並實際送一則測試訊息到 Chat。
  */
+/**
+ * 測 @提及到底要用哪種格式，省下人工去挖每個人的數字 UID。
+ *
+ * 背景：Chat 的人員選擇器只給 email（`pkd-target="1:someone@corp.com"`），
+ * 數字 UID 要到「已發出的訊息」上按右鍵檢查 `data-member-id` 才挖得到，很費工。
+ * 但 Google 的使用者識別格式文件說 email 也是合法的識別方式，
+ * 如果 `<users/email>` 直接可用，那 Chat人員對照 那張表就只是備案而不是必需品。
+ *
+ * 用法：在 Apps Script 編輯器把下面的 TEST_EMAIL 換成要測的人，選這支函式按「執行」，
+ *       然後去 Chat 空間看那則訊息——**看哪一行真的變成藍色可點的 @提及**。
+ *
+ * ⚠ 這支會真的發一則訊息到 Chat 空間，測完記得跟同事說一聲那是測試。
+ */
+function checkChatMentionFormat() {
+  var TEST_EMAIL = 'ting.hsu@waferlock.com';   // ← 改成要測的人
+  var TEST_UID = '';                           // ← 把挖到的數字 UID 貼這裡再執行一次
+
+  var webhook = PropertiesService.getScriptProperties()
+    .getProperty('DISPATCH_WAREHOUSE_WEBHOOK');
+  if (!webhook) {
+    Logger.log('❌ 未設定 DISPATCH_WAREHOUSE_WEBHOOK，無法測試。');
+    return;
+  }
+
+  // 沒手動指定就退回查對照表，兩種來源都支援
+  var uid = String(TEST_UID || '').trim();
+  if (!uid) {
+    try {
+      uid = loadChatUids_()[String(TEST_EMAIL).toLowerCase()] || '';
+    } catch (err) {
+      Logger.log('（讀 Chat人員對照 失敗，略過）' + err);
+    }
+  }
+
+  var lines = [
+    '*🔧 @提及格式測試（測完可忽略）*',
+    '對象：' + TEST_EMAIL,
+    '',
+    'A. email 格式：<users/' + TEST_EMAIL + '>',
+    'B. 純文字（對照組）：' + TEST_EMAIL,
+    uid ? 'C. 數字 UID 格式：<users/' + uid + '>'
+        : 'C. 數字 UID：未提供（請把 UID 填進 TEST_UID 或 Chat人員對照）',
+    'D. 直接加小老鼠：@' + TEST_EMAIL,
+    'E. 全體提及：<users/all>'
+  ];
+
+  var res = postToChat_(webhook, lines.join('\n'));
+  Logger.log(res.ok ? '✅ 已送出，請到 Chat 看哪一行變成可點的 @提及'
+                    : '❌ 送出失敗｜HTTP ' + res.status + '｜' + res.body);
+  Logger.log('');
+  Logger.log('判讀（看哪一行變成藍色、可點的 @提及）：');
+  Logger.log('  C 行有效 → 把每個人的 UID 填進 Chat人員對照 就完成。');
+  Logger.log('  D 行有效 → 更好，連 UID 都不用挖，直接用 @email 就行。');
+  Logger.log('  E 行有效 → 至少還能「全體提及」，雖然點不到特定人，但總比沒人被通知好。');
+  Logger.log('  全都是純文字 → **webhook 不支援 @提及**，跟格式無關。');
+  Logger.log('                 要嘛改用 Chat App（需 GCP 專案），要嘛放棄 @提及。');
+}
+
+/**
+ * 列出「還缺哪些人的 Chat UID」——把挖 UID 這件苦工變成一張明確的清單。
+ *
+ * 實測結論（2026-08-20）：Chat 的 incoming webhook **支援** @提及，
+ * 但只認 `<users/數字UID>`；email 的各種寫法（<users/email>、@email）一律無效。
+ * 所以每個要被 @到的人都必須在 Chat人員對照 有一列。
+ *
+ * 這支不會發任何訊息，純粹讀設定並印出清單，可以放心重複執行。
+ */
+function listChatUidTodo() {
+  var props = PropertiesService.getScriptProperties();
+  var need = {};   // email → 角色清單
+
+  function add(email, role) {
+    var m = String(email || '').replace(/[\s　]+/g, '').toLowerCase();
+    if (!m) return;
+    if (!need[m]) need[m] = [];
+    if (need[m].indexOf(role) < 0) need[m].push(role);
+  }
+  function addList(propName, role) {
+    var raw = String(props.getProperty(propName) || '').trim();
+    if (!raw) {
+      Logger.log('（' + propName + ' 未設定＝不限制身分，無法得知該 @誰）');
+      return;
+    }
+    raw.split(',').forEach(function (e) { add(e, role); });
+  }
+
+  addList('DISPATCH_BOSS_APPROVERS', '主管簽核');
+  addList('DISPATCH_SUB_APPROVERS', '副主管簽核');
+  addList('DISPATCH_WAREHOUSE', '倉庫');
+  addList('DISPATCH_ASSISTANTS', '助理');
+
+  // 路由對照表裡的業務與助理：出貨有問題時要通知他們
+  try {
+    var roster = loadRoster_();
+    for (var code in roster) {
+      add(roster[code].assistMail, '助理(' + code + ')');
+      add(roster[code].salesMail, '業務(' + code + ')');
+    }
+  } catch (err) {
+    Logger.log('（讀人員代碼對照表失敗，業務/助理清單不完整）' + err);
+  }
+
+  var have = {};
+  try { have = loadChatUids_(); } catch (err) { Logger.log('（讀 Chat人員對照 失敗）' + err); }
+
+  var missing = [], ok = [];
+  Object.keys(need).sort().forEach(function (m) {
+    (have[m] ? ok : missing).push(m + '　［' + need[m].join('、') + '］');
+  });
+
+  Logger.log('===== Chat UID 盤點 =====');
+  Logger.log('已有 UID：' + ok.length + ' 人');
+  ok.forEach(function (l) { Logger.log('  ✓ ' + l); });
+  Logger.log('');
+  Logger.log('缺 UID：' + missing.length + ' 人　← 這些人不會被 @到，只會顯示純文字姓名');
+  missing.forEach(function (l) { Logger.log('  ✗ ' + l); });
+  Logger.log('');
+  Logger.log('挖 UID 的方法：在 Chat 裡自己 @那個人並送出 → 對送出後的 @標籤按右鍵 → 檢查');
+  Logger.log('　→ 搜尋 data-member-id，users/ 後面那串數字就是。');
+  Logger.log('　（人員選擇器的下拉只給 email，那裡挖不到。）');
+  Logger.log('填好後貼進試算表的「' + CHAT_UID_SHEET + '」分頁，欄位：email／Chat UID／姓名備註');
+}
+
 function checkNotifySetup() {
   var props = PropertiesService.getScriptProperties();
   var webhook = props.getProperty('DISPATCH_CHAT_WEBHOOK');

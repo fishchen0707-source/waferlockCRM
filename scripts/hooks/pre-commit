@@ -1,0 +1,46 @@
+#!/bin/sh
+#
+# WAFERLOCK CRM — pre-commit：改了程式就必須一併補版本紀錄。
+#
+# 為什麼要有這支：規則本來就寫在 CLAUDE.md 與 AGENTS.md 的第一屏、標 🚨、
+# 叫「第一守則」，但 2026-08-20 還是發生了「改了 123 行程式，沒補版本紀錄、
+# 也沒 commit」。問題不在有沒有規則，在於規則全靠自律、沒有任何東西會擋。
+#
+# 安裝（每台電腦各跑一次，這是本機設定，不會跟著版控走）：
+#     git config core.hooksPath scripts/hooks
+#
+# 已知限制（誠實講）：
+#   1. 只在 commit 時擋。「改了但完全不 commit」擋不到。
+#   2. git commit --no-verify 可以繞過。那是刻意行為，不是遺忘。
+
+# core.quotepath=false 讓中文檔名原樣輸出，否則會變成 ç... 比對不到
+CHANGED=$(git -c core.quotepath=false diff --cached --name-only)
+
+# 只看程式檔。純文件（.md）改動不擋，否則改個錯字也要補一筆，規則會變得討人厭而被繞過。
+# 備份檔與 node_modules 一律排除。
+CODE=$(echo "$CHANGED" | grep -E '[.](gs|js|html|py|sql)$' | grep -v '[.]backup_' | grep -v 'node_modules/')
+
+if [ -z "$CODE" ]; then
+  exit 0
+fi
+
+if echo "$CHANGED" | grep -q '版本紀錄[.]md'; then
+  exit 0
+fi
+
+echo "" >&2
+echo "🚨 commit 被擋下：改了程式，但沒有補版本紀錄。" >&2
+echo "" >&2
+echo "這次要提交的程式檔：" >&2
+echo "$CODE" | sed 's/^/    /' >&2
+echo "" >&2
+echo "請到 版本紀錄.md 最上方的「未發布（Unreleased）」區補一筆：" >&2
+echo "    - 日期｜做了什麼｜影響的檔案或功能｜（你的名字）" >&2
+echo "" >&2
+echo "補完後把它一起加進來再 commit：" >&2
+echo "    git add 版本紀錄.md" >&2
+echo "" >&2
+echo "版本紀錄是「目前做到哪、誰在做什麼」的單一真實來源。" >&2
+echo "漏一筆，下一個人（或另一台電腦上的你）就看不到你做過什麼。" >&2
+echo "" >&2
+exit 1
