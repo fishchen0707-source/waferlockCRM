@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>新裝訂單流程盤點 — Before / After</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--brand:#0F2744;--accent:#38BDF8;--ok:#10B981;--warn:#F59E0B;--err:#EF4444;
+  --g50:#F8FAFC;--g100:#F1F5F9;--g200:#E2E8F0;--g300:#CBD5E1;--g400:#94A3B8;--g500:#64748B;--g600:#475569;--g700:#334155;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Noto Sans TC',system-ui,sans-serif;background:#F0F4F8;color:var(--g700);padding-bottom:60px;}
+header{background:var(--brand);color:#fff;padding:18px 24px;position:sticky;top:0;z-index:10;
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+header h1{font-size:17px;font-weight:800;}
+header .sub{font-size:11.5px;opacity:.65;}
+.savebar{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.savebar input{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.3);border-radius:6px;
+  padding:6px 10px;color:#fff;font-size:12.5px;outline:none;width:110px;}
+.savebar input::placeholder{color:rgba(255,255,255,.5);}
+#saveBtn{background:var(--accent);color:var(--brand);border:none;border-radius:6px;padding:7px 18px;
+  font-size:13px;font-weight:800;cursor:pointer;}
+#saveBtn:disabled{opacity:.5;cursor:wait;}
+#saveMsg{font-size:11px;opacity:.85;}
+.wrap{max-width:1200px;margin:20px auto;padding:0 16px;display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+@media(max-width:900px){.wrap{grid-template-columns:1fr;}}
+.col-title{font-size:15px;font-weight:800;color:var(--brand);padding:4px 2px 10px;display:flex;align-items:center;gap:8px;}
+.col-title .tag{font-size:10.5px;font-weight:700;padding:2px 10px;border-radius:10px;}
+.tag.before{background:#FEE2E2;color:#991B1B;}
+.tag.after{background:#D1FAE5;color:#065F46;}
+.step{background:#fff;border-radius:10px;padding:14px 16px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.06);}
+.step.fuzzy{border:1.5px dashed var(--warn);background:#FFFDF5;}
+.step-h{display:flex;align-items:flex-start;gap:10px;}
+.step-no{width:26px;height:26px;border-radius:50%;background:var(--brand);color:#fff;font-size:12.5px;font-weight:800;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.step.fuzzy .step-no{background:var(--warn);}
+.after .step-no{background:var(--ok);}
+.step-t{font-size:13.5px;font-weight:700;color:var(--brand);}
+.step-d{font-size:12px;color:var(--g500);margin-top:2px;line-height:1.6;}
+.fuzzy-badge{display:inline-block;font-size:10px;font-weight:800;background:#FEF3C7;color:#92400E;
+  border-radius:8px;padding:1px 8px;margin-left:6px;vertical-align:1px;}
+.maps{font-size:10.5px;color:var(--accent);font-weight:700;margin-top:5px;}
+.fields{margin-top:10px;display:flex;flex-direction:column;gap:8px;}
+.fields label{font-size:11px;font-weight:700;color:var(--g600);display:block;margin-bottom:3px;}
+.fields textarea{width:100%;border:1px solid var(--g200);border-radius:6px;padding:8px 10px;font-size:12.5px;
+  font-family:inherit;resize:vertical;min-height:52px;outline:none;background:var(--g50);}
+.fields textarea:focus{border-color:var(--accent);background:#fff;}
+.gapbox{max-width:1200px;margin:6px auto 0;padding:0 16px;}
+.gapbox .inner{background:#FFF7ED;border:1.5px solid #FDBA74;border-radius:10px;padding:14px 18px;font-size:12.5px;line-height:1.9;color:#9A3412;}
+.gapbox b{font-size:13px;}
+.toast{position:fixed;right:18px;bottom:18px;background:var(--brand);color:#fff;border-radius:8px;
+  padding:12px 18px;font-size:13px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.25);display:none;z-index:99;}
+.toast.err{background:var(--err);}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🔄 新裝訂單流程盤點 — Before / After</h1>
+    <div class="sub">左側為現行人工流程（可填寫補充與痛點，作為調整依據）；右側為 CRM 新流程對照</div>
+  </div>
+  <div class="savebar">
+    <input id="author" placeholder="填寫人" maxlength="12">
+    <button id="saveBtn" onclick="save()">💾 儲存</button>
+    <span id="saveMsg"></span>
+  </div>
+</header>
+
+<div class="wrap">
+  <div>
+    <div class="col-title">📋 原流程（現況）<span class="tag before">Before</span></div>
+    <div id="beforeCol"></div>
+  </div>
+  <div class="after">
+    <div class="col-title">✨ CRM 新流程<span class="tag after">After</span></div>
+    <div id="afterCol"></div>
+  </div>
+</div>
+
+<div class="gapbox">
+  <div class="inner">
+    <b>⚠️ 新流程尚未涵蓋、待盤點收斂的缺口</b><br>
+    ① 門的樣式蒐集（正面/背面/側邊尺寸照片、把手高度、遮孔板判斷）— 新流程尚無對應欄位<br>
+    ② 庫存查詢 — 由誰查、在哪查（TipTop？）尚未定義，缺貨告知客戶的時點也未定<br>
+    ③ 匯款到帳確認 — 目前收款方式為紀錄性質，實際對帳仍在 ERP／銀行端<br>
+    ④ 四種業務（一般/電商/實體店面/經銷商）的流程差異 — 待與業務端確認後分岔
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL='https://nkyanyjgfrmovjoqevro.supabase.co';
+const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5reWFueWpnZnJtb3Zqb3FldnJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2ODIxMTMsImV4cCI6MjA5NzI1ODExM30.LPnQyceYS7Z1-rlqUtXm3B8dGBOqnmnavTV-PAOSPZ8';
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+const CONFIG_KEY='flow_audit_install_before';
+
+// ── Before：現行人工流程（10 步；fuzzy = 使用者標記的模糊段）──
+const BEFORE_STEPS=[
+  {id:'b1', title:'LINE@ 等管道進線', desc:'客戶透過 LINE@／電話等不同管道表達要購買電子鎖。'},
+  {id:'b2', title:'確認門的樣式', desc:'請客戶提供門的正面、背面、側邊尺寸照片，必要時確認把手高度；若舊孔位超過電子鎖尺寸，需加購遮孔板。'},
+  {id:'b3', title:'收集訂購人資料', desc:'請客戶提供訂購人姓名、電話、安裝地址等資料。'},
+  {id:'b4', title:'約定付款方式', desc:'與客戶約定「安裝完成後匯款」。'},
+  {id:'b5', title:'查庫存', desc:'確認欲購型號是否有貨；缺貨時告知客戶等待。', fuzzy:'目前不清楚由誰查、如何查（TipTop？）'},
+  {id:'b6', title:'助理下 ERP 訂單出貨', desc:'請助理在 ERP（TipTop）建立訂單並安排出貨。', fuzzy:'下單流程、出貨與安裝的銜接不明'},
+  {id:'b7', title:'安排師傅安裝', desc:'聯繫並安排師傅到府安裝。', fuzzy:'如何指派、如何確認時段不明'},
+  {id:'b8', title:'師傅簽單回報', desc:'安裝完成後，師傅取得客戶簽單並回報公司。'},
+  {id:'b9', title:'與客戶說明收款', desc:'通知客戶匯款、確認款項。'},
+  {id:'b10',title:'開立發票、開始保固', desc:'開立發票給客戶，保固自此起算。'},
+];
+
+// ── After：CRM 新流程（已上線）──
+const AFTER_STEPS=[
+  {title:'各管道進線 → CRM 建客戶主檔', desc:'LINE/電話進線後，先在 CRM 搜尋客戶（電話/姓名/案號），查無則「＋新增客戶主檔」發客編（WF）。', maps:'對應 Before 1、3'},
+  {title:'建立新安裝訂單', desc:'從客戶主檔「🔧 新增派工」開安裝單：類別細項、產品序號、台數、預估工時、收費品項（品名×數量×金額）。表單已清除維修情境欄位。', maps:'對應 Before 3、4'},
+  {title:'🚚 ERP 出貨（閘門）', desc:'安裝單顯示「待出貨」，須點「標記出貨」填 TipTop 出貨單號＋日期後，才能排安裝。未出貨前排程鎖定。', maps:'對應 Before 5、6'},
+  {title:'排程派工', desc:'工務時刻表選區域→師傅→時段（防撞單）；師傅臨時不能來可「🔁 轉單改派」，異動全留紀錄。', maps:'對應 Before 7'},
+  {title:'師傅端：到場 → 施工完成', desc:'師傅端 App 標記到場（LINE 自動通知住戶）、施工完成，全程寫入異動紀錄。', maps:'對應 Before 7、8'},
+  {title:'完工驗收 ＋ 保固登錄', desc:'驗收 Modal：現場照片＋客戶簽名＋三項功能驗收＋操作教學確認＋簽收單號（SR-）；同時填開票資訊（電子/二聯/三聯＋統編抬頭）；保固自動起算。', maps:'對應 Before 8、10'},
+  {title:'請款進度推進', desc:'完工後工單顯示「⏳ 待請款 → 📤 已請款 → 🧾 已開票」，單向推進、每步留紀錄；發票實際由 TipTop 開立。', maps:'對應 Before 9、10'},
+  {title:'LINE 全程自動通知', desc:'建單、派工、師傅出發、完工結案，客戶 LINE 自動收到通知，不需人工逐一告知。', maps:'貫穿 Before 全程的人工聯繫'},
+];
+
+// ── 渲染 ──
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+document.getElementById('beforeCol').innerHTML=BEFORE_STEPS.map((s,i)=>`
+  <div class="step ${s.fuzzy?'fuzzy':''}">
+    <div class="step-h">
+      <div class="step-no">${i+1}</div>
+      <div style="flex:1">
+        <div class="step-t">${esc(s.title)}${s.fuzzy?'<span class="fuzzy-badge">⚠️ 模糊段</span>':''}</div>
+        <div class="step-d">${esc(s.desc)}${s.fuzzy?`<br><span style="color:#B45309;font-weight:700">⚠️ ${esc(s.fuzzy)}</span>`:''}</div>
+      </div>
+    </div>
+    <div class="fields">
+      <div><label>📝 現況補充說明（實際怎麼做、誰負責）</label>
+        <textarea id="${s.id}_current" placeholder="例：由客服 XXX 用 LINE 問客戶…"></textarea></div>
+      <div><label>❓ 問題與待確認（痛點、要問誰）</label>
+        <textarea id="${s.id}_issues" placeholder="例：庫存要問倉庫還是看 TipTop？誰有權限？"></textarea></div>
+    </div>
+  </div>`).join('');
+
+document.getElementById('afterCol').innerHTML=AFTER_STEPS.map((s,i)=>`
+  <div class="step">
+    <div class="step-h">
+      <div class="step-no">${i+1}</div>
+      <div style="flex:1">
+        <div class="step-t">${esc(s.title)}</div>
+        <div class="step-d">${esc(s.desc)}</div>
+        <div class="maps">↔ ${esc(s.maps)}</div>
+      </div>
+    </div>
+  </div>`).join('');
+
+// ── 載入既有內容 ──
+async function load(){
+  const {data,error}=await sb.from('config').select('value').eq('key',CONFIG_KEY).maybeSingle();
+  if(error){ showToast('⚠️ 載入失敗：'+error.message,true); return; }
+  if(!data?.value) return;
+  try{
+    const saved=JSON.parse(data.value);
+    document.getElementById('author').value=saved.author||'';
+    BEFORE_STEPS.forEach(s=>{
+      const v=saved.steps?.[s.id]||{};
+      document.getElementById(s.id+'_current').value=v.current||'';
+      document.getElementById(s.id+'_issues').value=v.issues||'';
+    });
+    if(saved.savedAt) document.getElementById('saveMsg').textContent=`上次儲存：${saved.savedAt}｜${saved.author||'—'}`;
+  }catch(e){ console.error('解析已存內容失敗:',e); }
+}
+
+// ── 儲存（顯性失敗：檢查 .error）──
+async function save(){
+  const btn=document.getElementById('saveBtn');
+  btn.disabled=true;
+  const payload={
+    author:document.getElementById('author').value.trim(),
+    savedAt:new Date().toLocaleString('zh-TW',{hour12:false}),
+    steps:Object.fromEntries(BEFORE_STEPS.map(s=>[s.id,{
+      current:document.getElementById(s.id+'_current').value.trim(),
+      issues:document.getElementById(s.id+'_issues').value.trim(),
+    }])),
+  };
+  const {error}=await sb.from('config').upsert({key:CONFIG_KEY,value:JSON.stringify(payload)});
+  btn.disabled=false;
+  if(error){ showToast('⚠️ 儲存失敗：'+error.message,true); return; }
+  document.getElementById('saveMsg').textContent=`上次儲存：${payload.savedAt}｜${payload.author||'—'}`;
+  showToast('✅ 已儲存到雲端');
+}
+
+function showToast(msg,isErr){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.className='toast'+(isErr?' err':''); t.style.display='block';
+  setTimeout(()=>{t.style.display='none';},3000);
+}
+
+load();
+</script>
+</body>
+</html>

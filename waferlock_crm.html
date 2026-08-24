@@ -254,28 +254,52 @@ const pushLineTo = (to, text, sender={name:'維夫拉克客服'}) => {
   sb.functions.invoke('line-push', { body:{ to, text, sender } }).catch(e=>console.error('line-push', e));
 };
 
+// 對話訊息原子 append（見 sql/supabase_atomic_conv_append.sql）：取代舊版「讀本地 conversations
+// 快照 → append → 隨其他欄位一起整包 upsert」的寫法。整包 upsert 若剛好與客戶同時傳訊息的
+// webhook 寫入交錯，會用本地舊快照蓋掉對方剛存的訊息——訊息無聲消失。改由 DB 端單一陳述式
+// 原子完成，不論寫入順序都不會互相覆蓋；本地 UI 不做樂觀更新，改靠 Realtime 訂閱自然補上。
+const appendConvMsg = async (convId, text, {unreadDelta=0}={}) => {
+  if(!convId) return;
+  const msg = {id:'p'+Date.now(), from:'bot', text, time:now()};
+  const {error} = await sb.rpc('append_conversation_message', {
+    p_id:convId, p_msg:msg, p_last_msg:text, p_last_time:now(), p_unread_delta:unreadDelta,
+  });
+  if(error) console.error('append_conversation_message error:', error);
+};
+
 // ── DB 欄位轉換（camelCase <-> snake_case） ──
-const custToDb = c => ({wf_id:c.wfId,name:c.name,phone:c.phone,email:c.email,address:c.address,district:c.district,area:c.area,channel:c.channel,product_id:c.productId,serial_no:c.serialNo,install_date:c.installDate,warranty_months:c.warrantyMonths,warranty_end:c.warrantyEnd,tags:c.tags||[],reg_type:c.regType,reg_date:c.regDate,line_uid:c.lineUid,fb_id:c.fbId,ig_id:c.igId,repair_ids:c.repairIds||[],complaint_ids:c.complaintIds||[],site:c.site,unit:c.unit,order_no:c.orderNo,group_id:c.groupId,project_id:c.projectId,zip:c.zip});
-const dbToCust = r => ({wfId:r.wf_id,name:r.name,phone:r.phone,email:r.email,address:r.address,district:r.district,area:r.area,channel:r.channel,productId:r.product_id,serialNo:r.serial_no,installDate:r.install_date,warrantyMonths:r.warranty_months,warrantyEnd:r.warranty_end,tags:r.tags||[],regType:r.reg_type,regDate:r.reg_date,lineUid:r.line_uid,fbId:r.fb_id,igId:r.ig_id,repairIds:r.repair_ids||[],complaintIds:r.complaint_ids||[],site:r.site,unit:r.unit,orderNo:r.order_no,groupId:r.group_id,projectId:r.project_id,zip:r.zip});
-const repairToDb = r => ({id:r.id,wf_id:r.wfId,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,worker_id:r.workerId,scheduled_date:r.scheduledDate,desc:r.desc,contact_name:r.contactName,contact_phone:r.contactPhone,site:r.site,unit:r.unit,handling_unit:r.handlingUnit,note:r.note,warranty_in:r.warrantyIn,created_by:r.createdBy,created_at:r.createdAt,unread:r.unread,arrival_pushed:r.arrivalPushed,rating:r.rating,receipt_no:r.receiptNo,audit_note:r.auditNote,completed_date:r.completedDate,sched_date:r.schedDate,sched_start:r.schedStart,sched_span:r.schedSpan,charges:r.charges||[],charge_total:r.chargeTotal,payment_method:r.paymentMethod,paid:r.paid,txn_id:r.txnId,paid_at:r.paidAt,work_note:r.workNote,warranty_judgment:r.warrantyJudgment,exclude_reason:r.excludeReason,photos:r.photos||[],signature:r.signature,sla_level:r.slaLevel,tenant_type:r.tenantType,landlord_confirmed:r.landlordConfirmed,source_channel:r.sourceChannel,community_note:r.communityNote,zip:r.zip,category2:r.category2,time_range:r.timeRange,qty:r.qty,work_hours:r.workHours,flag_bomber:r.flagBomber,eta_at:r.etaAt,eta_text:r.etaText,accepted_at:r.acceptedAt,arrived_at:r.arrivedAt,est_distance_km:r.estDistanceKm,eta_source:r.etaSource,history:r.history||[],fault_model:r.faultModel,fault_reason_major:r.faultReasonMajor,fault_reason_detail:r.faultReasonDetail,handling_result:r.handlingResult});
-const dbToRepair = r => ({id:r.id,wfId:r.wf_id,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,workerId:r.worker_id,scheduledDate:r.scheduled_date,desc:r.desc,contactName:r.contact_name,contactPhone:r.contact_phone,site:r.site,unit:r.unit,handlingUnit:r.handling_unit,note:r.note,warrantyIn:r.warranty_in,createdBy:r.created_by,createdAt:r.created_at,unread:r.unread,arrivalPushed:r.arrival_pushed,rating:r.rating,receiptNo:r.receipt_no,auditNote:r.audit_note,completedDate:r.completed_date,schedDate:r.sched_date,schedStart:r.sched_start,schedSpan:r.sched_span,charges:r.charges||[],chargeTotal:r.charge_total,paymentMethod:r.payment_method,paid:r.paid,txnId:r.txn_id,paidAt:r.paid_at,workNote:r.work_note,warrantyJudgment:r.warranty_judgment,excludeReason:r.exclude_reason,photos:r.photos||[],signature:r.signature,slaLevel:r.sla_level,tenantType:r.tenant_type,landlordConfirmed:r.landlord_confirmed,sourceChannel:r.source_channel,communityNote:r.community_note,zip:r.zip,category2:r.category2,timeRange:r.time_range,qty:r.qty,workHours:r.work_hours,flagBomber:r.flag_bomber,etaAt:r.eta_at,etaText:r.eta_text,acceptedAt:r.accepted_at,arrivedAt:r.arrived_at,estDistanceKm:r.est_distance_km,etaSource:r.eta_source,history:r.history||[],faultModel:r.fault_model,faultReasonMajor:r.fault_reason_major,faultReasonDetail:r.fault_reason_detail,handlingResult:r.handling_result});
+const custToDb = c => ({wf_id:c.wfId,cust_key:custKey(c.name,c.address),name:c.name,phone:c.phone,email:c.email,address:c.address,district:c.district,area:c.area,channel:c.channel,product_id:c.productId,serial_no:c.serialNo,install_date:c.installDate,warranty_months:c.warrantyMonths,warranty_end:c.warrantyEnd,tags:c.tags||[],reg_type:c.regType,reg_date:c.regDate,line_uid:c.lineUid,fb_id:c.fbId,ig_id:c.igId,repair_ids:c.repairIds||[],complaint_ids:c.complaintIds||[],site:c.site,unit:c.unit,order_no:c.orderNo,group_id:c.groupId,project_id:c.projectId,zip:c.zip,customer_type:c.customerType||'consumer',dealer_code:c.dealerCode,disabled:!!c.disabled,disabled_reason:c.disabledReason,disabled_at:c.disabledAt});
+const dbToCust = r => ({wfId:r.wf_id,name:r.name,phone:r.phone,email:r.email,address:r.address,district:r.district,area:r.area,channel:r.channel,productId:r.product_id,serialNo:r.serial_no,installDate:r.install_date,warrantyMonths:r.warranty_months,warrantyEnd:r.warranty_end,tags:r.tags||[],regType:r.reg_type,regDate:r.reg_date,lineUid:r.line_uid,fbId:r.fb_id,igId:r.ig_id,repairIds:r.repair_ids||[],complaintIds:r.complaint_ids||[],site:r.site,unit:r.unit,orderNo:r.order_no,groupId:r.group_id,projectId:r.project_id,zip:r.zip,customerType:r.customer_type||'consumer',dealerCode:r.dealer_code,disabled:!!r.disabled,disabledReason:r.disabled_reason,disabledAt:r.disabled_at});
+const repairToDb = r => ({id:r.id,wf_id:r.wfId,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,worker_id:r.workerId,scheduled_date:r.scheduledDate,desc:r.desc,contact_name:r.contactName,contact_phone:r.contactPhone,site:r.site,unit:r.unit,handling_unit:r.handlingUnit,note:r.note,warranty_in:r.warrantyIn,created_by:r.createdBy,created_at:r.createdAt,unread:r.unread,arrival_pushed:r.arrivalPushed,rating:r.rating,receipt_no:r.receiptNo,audit_note:r.auditNote,completed_date:r.completedDate,sched_date:r.schedDate,sched_start:r.schedStart,sched_span:r.schedSpan,charges:r.charges||[],charge_total:r.chargeTotal,payment_method:r.paymentMethod,paid:r.paid,txn_id:r.txnId,paid_at:r.paidAt,work_note:r.workNote,warranty_judgment:r.warrantyJudgment,exclude_reason:r.excludeReason,photos:r.photos||[],signature:r.signature,sla_level:r.slaLevel,tenant_type:r.tenantType,landlord_confirmed:r.landlordConfirmed,source_channel:r.sourceChannel,community_note:r.communityNote,zip:r.zip,category2:r.category2,time_range:r.timeRange,qty:r.qty,work_hours:r.workHours,flag_bomber:r.flagBomber,eta_at:r.etaAt,eta_text:r.etaText,accepted_at:r.acceptedAt,arrived_at:r.arrivedAt,est_distance_km:r.estDistanceKm,eta_source:r.etaSource,history:r.history||[],fault_model:r.faultModel,fault_reason_major:r.faultReasonMajor,fault_reason_detail:r.faultReasonDetail,handling_result:r.handlingResult,invoice_type:r.invoiceType,tax_id:r.taxId,invoice_title:r.invoiceTitle});
+const dbToRepair = r => ({id:r.id,wfId:r.wf_id,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,workerId:r.worker_id,scheduledDate:r.scheduled_date,desc:r.desc,contactName:r.contact_name,contactPhone:r.contact_phone,site:r.site,unit:r.unit,handlingUnit:r.handling_unit,note:r.note,warrantyIn:r.warranty_in,createdBy:r.created_by,createdAt:r.created_at,unread:r.unread,arrivalPushed:r.arrival_pushed,rating:r.rating,receiptNo:r.receipt_no,auditNote:r.audit_note,completedDate:r.completed_date,schedDate:r.sched_date,schedStart:r.sched_start,schedSpan:r.sched_span,charges:r.charges||[],chargeTotal:r.charge_total,paymentMethod:r.payment_method,paid:r.paid,txnId:r.txn_id,paidAt:r.paid_at,workNote:r.work_note,warrantyJudgment:r.warranty_judgment,excludeReason:r.exclude_reason,photos:r.photos||[],signature:r.signature,slaLevel:r.sla_level,tenantType:r.tenant_type,landlordConfirmed:r.landlord_confirmed,sourceChannel:r.source_channel,communityNote:r.community_note,zip:r.zip,category2:r.category2,timeRange:r.time_range,qty:r.qty,workHours:r.work_hours,flagBomber:r.flag_bomber,etaAt:r.eta_at,etaText:r.eta_text,acceptedAt:r.accepted_at,arrivedAt:r.arrived_at,estDistanceKm:r.est_distance_km,etaSource:r.eta_source,history:r.history||[],faultModel:r.fault_model,faultReasonMajor:r.fault_reason_major,faultReasonDetail:r.fault_reason_detail,handlingResult:r.handling_result,invoiceType:r.invoice_type,taxId:r.tax_id,invoiceTitle:r.invoice_title});
 const ctToDb = c => ({id:c.id,wf_id:c.wfId,name:c.name,phone:c.phone,date:c.date,created_at:c.createdAt,created_by:c.createdBy,call_channel:c.callChannel,department:c.department,cat1:c.cat1,cat2:c.cat2,cat3:c.cat3,process:c.process,status:c.status,closed_date:c.closedDate,timeline:c.timeline||[]});
 const dbToCt = r => ({id:r.id,wfId:r.wf_id,name:r.name,phone:r.phone,date:r.date,createdAt:r.created_at,createdBy:r.created_by,callChannel:r.call_channel,department:r.department,cat1:r.cat1,cat2:r.cat2,cat3:r.cat3,process:r.process,status:r.status,closedDate:r.closed_date,timeline:r.timeline||[]});
-const installToDb = o => ({id:o.id,name:o.name,phone:o.phone,address:o.address,channel:o.channel,note:o.note,product_id:o.productId,serial_no:o.serialNo,locksmith_id:o.locksmithId,status:o.status,created_date:o.createdDate,created_ts:o.createdTs,arrival_pushed:o.arrivalPushed,photos:o.photos||[],signature:o.signature,verify:o.verify||{},taught:o.taught||{},work_note:o.workNote,completed_date:o.completedDate,wf_id:o.wfId,warranty_end:o.warrantyEnd,worker_id:o.workerId,sched_date:o.schedDate,sched_start:o.schedStart,sched_span:o.schedSpan,charges:o.charges||[],charge_total:o.chargeTotal,payment_method:o.paymentMethod,paid:o.paid,txn_id:o.txnId,paid_at:o.paidAt,tenant_type:o.tenantType,landlord_confirmed:o.landlordConfirmed,source_channel:o.sourceChannel,community_note:o.communityNote,zip:o.zip,category2:o.category2,time_range:o.timeRange,qty:o.qty,work_hours:o.workHours,flag_bomber:o.flagBomber,history:o.history||[]});
-const dbToInstall = r => ({id:r.id,name:r.name,phone:r.phone,address:r.address,channel:r.channel,note:r.note,productId:r.product_id,serialNo:r.serial_no,locksmithId:r.locksmith_id,status:r.status,createdDate:r.created_date,createdTs:r.created_ts?parseInt(r.created_ts):null,arrivalPushed:r.arrival_pushed,photos:r.photos||[],signature:r.signature,verify:r.verify||{},taught:r.taught||{},workNote:r.work_note,completedDate:r.completed_date,wfId:r.wf_id,warrantyEnd:r.warranty_end,workerId:r.worker_id,schedDate:r.sched_date,schedStart:r.sched_start,schedSpan:r.sched_span,charges:r.charges||[],chargeTotal:r.charge_total,paymentMethod:r.payment_method,paid:r.paid,txnId:r.txn_id,paidAt:r.paid_at,tenantType:r.tenant_type,landlordConfirmed:r.landlord_confirmed,sourceChannel:r.source_channel,communityNote:r.community_note,zip:r.zip,category2:r.category2,timeRange:r.time_range,qty:r.qty,workHours:r.work_hours,flagBomber:r.flag_bomber,history:r.history||[]});
-const convToDb = c => ({id:c.id,wf_id:c.wfId,name:c.name,platform:c.platform,av:c.av,unread:c.unread||0,last_msg:c.lastMsg,last_time:c.lastTime,msgs:c.msgs||[],agent_takeover:c.agentTakeover||false,need_case:c.needCase||false,biz_inquiry:c.bizInquiry||false});
-const dbToConv = r => ({id:r.id,wfId:r.wf_id,name:r.name,platform:r.platform,av:r.av,unread:r.unread||0,lastMsg:r.last_msg,lastTime:r.last_time,msgs:r.msgs||[],agentTakeover:r.agent_takeover||false,needCase:r.need_case||false,bizInquiry:r.biz_inquiry||false});
+const installToDb = o => ({id:o.id,name:o.name,phone:o.phone,address:o.address,channel:o.channel,note:o.note,product_id:o.productId,serial_no:o.serialNo,locksmith_id:o.locksmithId,status:o.status,created_date:o.createdDate,created_ts:o.createdTs,arrival_pushed:o.arrivalPushed,photos:o.photos||[],signature:o.signature,verify:o.verify||{},taught:o.taught||{},work_note:o.workNote,completed_date:o.completedDate,wf_id:o.wfId,warranty_end:o.warrantyEnd,worker_id:o.workerId,sched_date:o.schedDate,sched_start:o.schedStart,sched_span:o.schedSpan,charges:o.charges||[],charge_total:o.chargeTotal,payment_method:o.paymentMethod,paid:o.paid,txn_id:o.txnId,paid_at:o.paidAt,tenant_type:o.tenantType,landlord_confirmed:o.landlordConfirmed,source_channel:o.sourceChannel,community_note:o.communityNote,zip:o.zip,category2:o.category2,time_range:o.timeRange,qty:o.qty,work_hours:o.workHours,flag_bomber:o.flagBomber,shipment_no:o.shipmentNo,shipped_date:o.shippedDate,accepted_at:o.acceptedAt,billing_status:o.billingStatus,invoice_type:o.invoiceType,tax_id:o.taxId,invoice_title:o.invoiceTitle,void_type:o.voidType,void_reason:o.voidReason,voided_at:o.voidedAt,voided_by:o.voidedBy,history:o.history||[]});
+const dbToInstall = r => ({id:r.id,name:r.name,phone:r.phone,address:r.address,channel:r.channel,note:r.note,productId:r.product_id,serialNo:r.serial_no,locksmithId:r.locksmith_id,status:r.status,createdDate:r.created_date,createdTs:r.created_ts?parseInt(r.created_ts):null,arrivalPushed:r.arrival_pushed,photos:r.photos||[],signature:r.signature,verify:r.verify||{},taught:r.taught||{},workNote:r.work_note,completedDate:r.completed_date,wfId:r.wf_id,warrantyEnd:r.warranty_end,workerId:r.worker_id,schedDate:r.sched_date,schedStart:r.sched_start,schedSpan:r.sched_span,charges:r.charges||[],chargeTotal:r.charge_total,paymentMethod:r.payment_method,paid:r.paid,txnId:r.txn_id,paidAt:r.paid_at,tenantType:r.tenant_type,landlordConfirmed:r.landlord_confirmed,sourceChannel:r.source_channel,communityNote:r.community_note,zip:r.zip,category2:r.category2,timeRange:r.time_range,qty:r.qty,workHours:r.work_hours,flagBomber:r.flag_bomber,shipmentNo:r.shipment_no,shippedDate:r.shipped_date,acceptedAt:r.accepted_at,billingStatus:r.billing_status,invoiceType:r.invoice_type,taxId:r.tax_id,invoiceTitle:r.invoice_title,voidType:r.void_type,voidReason:r.void_reason,voidedAt:r.voided_at,voidedBy:r.voided_by,history:r.history||[]});
+const convToDb = c => ({id:c.id,wf_id:c.wfId,name:c.name,platform:c.platform,av:c.av,unread:c.unread||0,last_msg:c.lastMsg,last_time:c.lastTime,msgs:c.msgs||[],agent_takeover:c.agentTakeover||false,need_case:c.needCase||false,biz_inquiry:c.bizInquiry||false,handle_status:c.handleStatus||'pending'});
+const dbToConv = r => ({id:r.id,wfId:r.wf_id,name:r.name,platform:r.platform,av:r.av,unread:r.unread||0,lastMsg:r.last_msg,lastTime:r.last_time,msgs:r.msgs||[],agentTakeover:r.agent_takeover||false,needCase:r.need_case||false,bizInquiry:r.biz_inquiry||false,handleStatus:r.handle_status||'pending'});
 
 const dbToWorker = w => ({id:w.id,name:w.name,type:w.type,region:w.region,district:w.district,rating:w.rating,jobs:w.jobs,active:w.active});
 const dbToBooking = b => ({id:b.id,workerId:b.worker_id,date:b.date,hour:b.hour,refType:b.ref_type,refId:b.ref_id});
 // ── MD 5：集團 → 建案 階層（唯讀參考資料，只在 UI 歸屬時引用，不在前端編輯）──
 const dbToGroup = g => ({id:g.id,name:g.name,note:g.note});
 const dbToProject = p => ({id:p.id,groupId:p.group_id,name:p.name,code:p.code,type:p.type,address:p.address,totalQty:p.total_qty,installedQty:p.installed_qty,pendingQty:p.pending_qty,packagePrice:p.package_price,slaLevel:p.sla_level});
+// ── 貨運託運單（由 shipment-worker 解析 PDF 寫入；CRM 端只做人工配對與發送）──
+// 解析欄位（tracking_no/recipient_* 等）由 worker 產生，前端不編輯，只改配對與推播狀態。
+const dbToShipment = s => ({id:s.id,carrier:s.carrier,trackingNo:s.tracking_no,shipDate:s.ship_date,shipperAccount:s.shipper_account,shipperName:s.shipper_name,station:s.station,orderNo:s.order_no,recipientCode:s.recipient_code,recipientName:s.recipient_name,recipientPhone:s.recipient_phone,recipientAddress:s.recipient_address,addressNorm:s.address_norm,remark:s.remark,pieces:s.pieces,wfId:s.wf_id,installId:s.install_id,matchScore:s.match_score,matchStatus:s.match_status,matchedBy:s.matched_by,notifyStatus:s.notify_status,notifiedAt:s.notified_at,sourceFile:s.source_file,createdAt:s.created_at});
+const shipmentToDb = s => ({id:s.id,wf_id:s.wfId,install_id:s.installId,match_score:s.matchScore,match_status:s.matchStatus,matched_by:s.matchedBy,notify_status:s.notifyStatus,notified_at:s.notifiedAt});
 
 // ── 案件異動紀錄：附加一筆 {ts,by,action} 到物件的 history 陣列 ──
 const pushHist = (obj,by,action) => ({...obj, history:[...(obj.history||[]), {ts:Date.now(), by:by||'未知', action}]});
 
 // ── 客編唯一識別：正規化地址 + 姓名（電話非唯一，同號可能多住所）──
+// ⚠ 這兩支的定義**同時存在三個地方**，改一處就要改三處：
+//     此處、supabase/functions/case-intake、supabase/functions/voicebot-tools
+//   Edge Function 各自獨立部署、沒有 import，只能複製。
+//   算出來的值會存進 customers.cust_key（見 supabase/sql/20260812_customers_cust_key.sql），
+//   所以三邊的規則一旦不一致，同一個客戶就會配不起來——而且不會報錯。
+// 註：custToDb（上方）會呼叫 custKey，定義順序在它之後；
+//   因為是箭頭函式、呼叫時才求值，唯一的呼叫點在同步流程（遠在本行之後），所以安全。
 const normAddr = s => String(s||'')
   .replace(/[！-～]/g, ch => String.fromCharCode(ch.charCodeAt(0)-0xFEE0)) // 全形→半形
   .replace(/臺/g,'台').replace(/\s+/g,'').toLowerCase();
@@ -300,65 +324,114 @@ function Watermark({text}){
 
 const EMPTY_DB = {customers:[],repairs:{},complaints:{},installs:{},conversations:[],workers:[],bookings:[],groups:[],projects:[],wfCounter:0,version:0};
 
-async function loadFromSupabase(){
-  try{
-    const [custsRes,repairsRes,ctRes,installRes,convRes,cfgRes,wkRes,bkRes,grpRes,prjRes] = await Promise.all([
-      sb.from('customers').select('*'),
-      sb.from('repairs').select('*'),
-      sb.from('complaints').select('*'),
-      sb.from('installs').select('*'),
-      sb.from('conversations').select('*'),
-      sb.from('config').select('*'),
-      sb.from('workers').select('*'),
-      sb.from('bookings').select('*'),
-      sb.from('groups').select('*'),
-      sb.from('projects').select('*'),
-    ]);
-    const customers = (custsRes.data||[]).map(dbToCust);
-    const repairs = Object.fromEntries((repairsRes.data||[]).map(r=>[r.id,dbToRepair(r)]));
-    const complaints = Object.fromEntries((ctRes.data||[]).map(r=>[r.id,dbToCt(r)]));
-    const installs = Object.fromEntries((installRes.data||[]).map(r=>[r.id,dbToInstall(r)]));
-    const conversations = (convRes.data||[]).map(dbToConv);
-    const workers = (wkRes.data||[]).filter(w=>w.active!==false).map(dbToWorker);
-    const bookings = (bkRes.data||[]).map(dbToBooking);
-    const groups = (grpRes.data||[]).map(dbToGroup);
-    const projects = (prjRes.data||[]).map(dbToProject);
-    const wfCounter = parseInt((cfgRes.data||[]).find(c=>c.key==='wf_counter')?.value||'0');
-    return {customers,repairs,complaints,installs,conversations,workers,bookings,groups,projects,wfCounter,version:0};
-  }catch(e){ console.error('loadFromSupabase error:',e); return EMPTY_DB; }
+// Supabase 表格逐頁抓取（PostgREST 預設每次最多回 1000 筆，全量表超過門檻就要分頁抓完，
+// 否則資料在使用者眼中會「無聲消失」——查不到客戶、看不到舊工單）
+const SB_PAGE_SIZE = 1000;
+async function selectAllRows(table){
+  let all=[], from=0;
+  while(true){
+    const {data,error} = await sb.from(table).select('*').range(from, from+SB_PAGE_SIZE-1);
+    if(error) throw new Error(`載入 ${table} 失敗：${error.message}`);
+    all = all.concat(data||[]);
+    if(!data || data.length < SB_PAGE_SIZE) break;
+    from += SB_PAGE_SIZE;
+  }
+  return all;
 }
 
+// 新資料表專用：表還沒建時回空陣列，其餘錯誤照樣往外丟。
+// 為什麼要這個：shipments 是後加的表，若 HTML 先上線而 sql/supabase_shipments.sql 還沒執行，
+// 用 selectAllRows 會讓整個 CRM 卡在載入失敗畫面——為了一個新功能弄垮既有客服作業不划算。
+// 只放行「表不存在」，RLS 擋下、網路錯誤等仍會顯性失敗。
+async function selectOptionalRows(table){
+  try{
+    return await selectAllRows(table);
+  }catch(e){
+    if(/Could not find the table|does not exist|schema cache/i.test(e.message||'')){
+      console.warn(`[${table}] 資料表尚未建立，此功能暫時停用。請在 Supabase SQL Editor 執行 sql/supabase_shipments.sql`);
+      return [];
+    }
+    throw e;
+  }
+}
+
+async function loadFromSupabase(){
+  const [custsData,repairsData,ctData,installData,convData,cfgData,wkData,bkData,grpData,prjData,shipData] = await Promise.all([
+    selectAllRows('customers'),
+    selectAllRows('repairs'),
+    selectAllRows('complaints'),
+    selectAllRows('installs'),
+    selectAllRows('conversations'),
+    selectAllRows('config'),
+    selectAllRows('workers'),
+    selectAllRows('bookings'),
+    selectAllRows('groups'),
+    selectAllRows('projects'),
+    selectOptionalRows('shipments'),
+  ]);
+  const customers = custsData.map(dbToCust);
+  const repairs = Object.fromEntries(repairsData.map(r=>[r.id,dbToRepair(r)]));
+  const complaints = Object.fromEntries(ctData.map(r=>[r.id,dbToCt(r)]));
+  const installs = Object.fromEntries(installData.map(r=>[r.id,dbToInstall(r)]));
+  const conversations = convData.map(dbToConv);
+  const workers = wkData.filter(w=>w.active!==false).map(dbToWorker);
+  const bookings = bkData.map(dbToBooking);
+  const groups = grpData.map(dbToGroup);
+  const projects = prjData.map(dbToProject);
+  const shipments = shipData.map(dbToShipment);
+  const wfCounter = parseInt(cfgData.find(c=>c.key==='wf_counter')?.value||'0');
+  return {customers,repairs,complaints,installs,conversations,workers,bookings,groups,projects,shipments,wfCounter,version:0};
+}
+
+// 回傳 {ok, errors}：Supabase client 預設「失敗不丟例外」，只在回傳值帶 .error，
+// 舊版只包 try/catch 幾乎抓不到真正的寫入失敗（RLS 擋下、型別錯誤等）——逐筆檢查 .error 才會顯性失敗
 async function syncToSupabase(prev,next){
+  const errors=[];
+  const run=async(label,promise)=>{
+    const {error}=await promise;
+    if(error){ console.error(`syncToSupabase ${label} error:`,error); errors.push(`${label}：${error.message}`); }
+  };
   try{
     const changedCusts=(next.customers||[]).filter(c=>{
       const old=(prev.customers||[]).find(p=>p.wfId===c.wfId);
       return !old||JSON.stringify(old)!==JSON.stringify(c);
     });
-    if(changedCusts.length>0) await sb.from('customers').upsert(changedCusts.map(custToDb));
+    if(changedCusts.length>0) await run('customers', sb.from('customers').upsert(changedCusts.map(custToDb)));
     const changedRepairs=Object.values(next.repairs||{}).filter(r=>{
       const old=(prev.repairs||{})[r.id];
       return !old||JSON.stringify(old)!==JSON.stringify(r);
     });
-    if(changedRepairs.length>0) await sb.from('repairs').upsert(changedRepairs.map(repairToDb));
+    if(changedRepairs.length>0) await run('repairs', sb.from('repairs').upsert(changedRepairs.map(repairToDb)));
     const changedCts=Object.values(next.complaints||{}).filter(ct=>{
       const old=(prev.complaints||{})[ct.id];
       return !old||JSON.stringify(old)!==JSON.stringify(ct);
     });
-    if(changedCts.length>0) await sb.from('complaints').upsert(changedCts.map(ctToDb));
+    if(changedCts.length>0) await run('complaints', sb.from('complaints').upsert(changedCts.map(ctToDb)));
     const changedInstalls=Object.values(next.installs||{}).filter(o=>{
       const old=(prev.installs||{})[o.id];
       return !old||JSON.stringify(old)!==JSON.stringify(o);
     });
-    if(changedInstalls.length>0) await sb.from('installs').upsert(changedInstalls.map(installToDb));
+    if(changedInstalls.length>0) await run('installs', sb.from('installs').upsert(changedInstalls.map(installToDb)));
     const changedConvs=(next.conversations||[]).filter(c=>{
       const old=(prev.conversations||[]).find(p=>p.id===c.id);
       return !old||JSON.stringify(old)!==JSON.stringify(c);
     });
-    if(changedConvs.length>0) await sb.from('conversations').upsert(changedConvs.map(convToDb));
-    if(next.wfCounter!==prev.wfCounter){
-      await sb.from('config').upsert({key:'wf_counter',value:String(next.wfCounter)});
+    if(changedConvs.length>0) await run('conversations', sb.from('conversations').upsert(changedConvs.map(convToDb)));
+    // 託運單刻意用 update 而非 upsert：列一律由 shipment-worker 解析後建立，
+    // CRM 只改配對與推播狀態。若用 upsert，遇上 worker 尚未寫入的競態會插出一列
+    // 只有 id 與配對欄位、其餘全空的殘缺資料。
+    const changedShips=(next.shipments||[]).filter(s=>{
+      const old=(prev.shipments||[]).find(p=>p.id===s.id);
+      return old&&JSON.stringify(old)!==JSON.stringify(s);
+    });
+    for(const s of changedShips){
+      await run('shipments', sb.from('shipments').update(shipmentToDb(s)).eq('id',s.id));
     }
-  }catch(e){ console.error('syncToSupabase error:',e); }
+    if(next.wfCounter!==prev.wfCounter){
+      await run('config', sb.from('config').upsert({key:'wf_counter',value:String(next.wfCounter)}));
+    }
+  }catch(e){ console.error('syncToSupabase exception:',e); errors.push(String(e.message||e)); }
+  return {ok:errors.length===0, errors};
 }
 
 // 照片上傳 Supabase Storage（取代 base64 入庫）：回傳 public URL 陣列
@@ -374,6 +447,13 @@ async function uploadPhotos(files, folder){
   return urls;
 }
 
+// 當單理由：前兩者是終局（單作廢＋客編停用），臨時改約只是把單退回待排程
+const VOID_TYPES = {
+  cannot_install : {label:'🔧 無法安裝', desc:'確定客戶家中有問題無法安裝', terminal:true},
+  customer_refuse: {label:'🙅 客戶不裝', desc:'客戶自己有原因不想安裝',   terminal:true},
+  reschedule     : {label:'📅 臨時改約', desc:'客戶時間無法配合，要改約其他時間', terminal:false},
+};
+
 const CHANNELS = {
   momo:{label:'momo購物',type:'online',icon:'🛒'},
   pchome:{label:'PChome',type:'online',icon:'🛒'},
@@ -382,8 +462,18 @@ const CHANNELS = {
   store_tc:{label:'台中漢神直營',type:'offline',icon:'🏪'},
   store_tp:{label:'台北信義門市',type:'offline',icon:'🏪'},
   lock_shop:{label:'合作鎖店',type:'offline',icon:'🔑'},
+  dealer:{label:'經銷商',type:'offline',icon:'🤝'},
   builder:{label:'建案配置',type:'builder',icon:'🏗️'},
 };
+// 貨運商。查詢頁刻意只給入口網址、不帶單號：兩家的查貨都是 POST 表單，
+// 用網址帶不進單號，做成「直接查詢」的按鈕會點開一片空白，反而更難用。
+// 因此一律「複製單號 ＋ 前往查詢頁」兩步。
+const CARRIERS = {
+  hct:{label:'新竹物流',url:'https://www.hct.com.tw/Search/SearchGoods_Y.aspx'},
+  kerry:{label:'嘉里大榮',url:'https://www.kerrytj.com/zh/search/trace.aspx'},
+};
+const carrierLabel = c => CARRIERS[c]?.label || c || '貨運';
+
 const PRODUCTS = {
   L376:{name:'L376 智能電子鎖',warranty:36},
   L396:{name:'L396 進階電子鎖',warranty:36},
@@ -504,7 +594,7 @@ const TW_ZIP3 = {
 
 
 
-const today = ()=>new Date().toLocaleDateString('zh-TW');
+const today = todayISO;
 const now = ()=>new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'});
 const pctW = (install,months)=>{
   if(!install) return 0;
@@ -571,37 +661,50 @@ function PhotoUpload({photos,setPhotos,folder}){
 }
 
 function WorkOrderModal({mode,record,warrantyIn,onClose,onSubmit}){
+  // 師傅在現場已拍照／已請客戶簽名，資料存在工單上。這裡是「客服審核」不是「重新蒐證」——
+  // 現場證據以唯讀呈現（避免誤刪），photos state 只放客服另外補充的照片，送出時兩者合併。
+  const fieldPhotos = record?.photos||[];
+  const fieldSig = record?.signature||null;
   const [photos,setPhotos]=useState([]);
   const [sig,setSig]=useState(null);
-  const [note,setNote]=useState('');
+  // 施工摘要與收費品項同樣可能已由師傅現場回報，帶入既有值；空白送出會把師傅記的金額洗成 0
+  const [note,setNote]=useState(record?.workNote||'');
   const [auditNote,setAuditNote]=useState('');
-  const [chargeRows,setChargeRows]=useState([]);
+  const [chargeRows,setChargeRows]=useState(()=>(record?.charges||[]).map(c=>({category:c.category||'',item:c.item||'',qty:c.qty??1,price:c.price??0,gift:!!c.gift})));
   const [wj,setWj]=useState(warrantyIn?'in':'out'); // in / out / in_excluded
   const [excl,setExcl]=useState('');
   const [v,setV]=useState({s1:false,s2:false,s3:false});
   const [taught,setTaught]=useState(false);
   const [receiptNo,setReceiptNo]=useState(null);
-  const [pay,setPay]=useState(warrantyIn?'free':'cash');
+  const [pay,setPay]=useState(record?.paymentMethod||(warrantyIn?'free':'cash'));
+  // 師傅現場已收款就沿用原交易，不再重新產生交易編號（避免同一筆款出現兩個編號）
+  const alreadyPaid = !!(record?.paid && record?.txnId);
+  // 開票資訊（發票實際由 TipTop 開立，這裡蒐集開票需要的三欄，隨工單存檔供請款用）
+  const [invType,setInvType]=useState('electronic'); // electronic 電子 / duplicate 二聯 / triplicate 三聯
+  const [taxId,setTaxId]=useState('');
+  const [invTitle,setInvTitle]=useState('');
   const chargeable = wj!=='in';
   const total=chargesTotal(chargeRows);
-  const genReceiptNo=()=>{
-    const d=new Date();
-    const ds=`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
-    const rnd=Math.floor(1000+Math.random()*9000);
-    return `SR-${ds}-${rnd}`;
-  };
-  const submit=()=>{
-    if(!sig){alert('請完成客戶簽名');return;}
-    if(photos.length===0){alert('請至少上傳一張現場照片');return;}
+  const submit=async()=>{
+    // 師傅已回傳的現場證據可直接採認，不要求客服重拍重簽（客戶早已離場）
+    const allPhotos=[...fieldPhotos,...photos];
+    const finalSig=fieldSig||sig;
+    if(!finalSig){alert('尚無客戶簽名：師傅未回傳簽名，請於下方補簽或請師傅重新回報');return;}
+    if(allPhotos.length===0){alert('尚無現場照片：師傅未回傳照片，請於下方補上傳');return;}
     if(mode==='repair'&&wj==='in_excluded'&&!excl.trim()){alert('「保內但不保固」需填寫原因');return;}
     if(mode==='repair'&&chargeable&&normCharges(chargeRows).length===0){alert('需收費案件請填寫收費品項');return;}
     if(mode==='install'&&!(v.s1&&v.s2&&v.s3)){alert('請完成三項驗收確認');return;}
     if(mode==='install'&&!taught){alert('請確認已完成現場操作教學');return;}
-    const rno=genReceiptNo();
+    if(invType==='triplicate'&&(!/^\d{8}$/.test(taxId.trim())||!invTitle.trim())){alert('三聯式發票需填 8 碼統編與抬頭');return;}
+    let rno=null;
+    try{ const {data}=await sb.rpc('next_case_no',{p_prefix:'SR'}); rno=data; }catch(e){ rno='SR'+Date.now(); }
     setReceiptNo(rno);
     const payMethod=(mode==='repair'&&wj==='in')?'free':pay;
-    const txn=mockPayment(payMethod, total);
-    onSubmit({photos,signature:sig,note,auditNote,charges:normCharges(chargeRows),total,verify:v,taught,receiptNo:rno,warrantyJudgment:wj,excludeReason:excl.trim(),paymentMethod:txn.method,paid:txn.paid,txnId:txn.txnId,paidAt:txn.paidAt});
+    const txn=alreadyPaid
+      ? {method:record.paymentMethod||payMethod, paid:true, txnId:record.txnId, paidAt:record.paidAt}
+      : mockPayment(payMethod, total);
+    onSubmit({photos:allPhotos,signature:finalSig,note,auditNote,charges:normCharges(chargeRows),total,verify:v,taught,receiptNo:rno,warrantyJudgment:wj,excludeReason:excl.trim(),paymentMethod:txn.method,paid:txn.paid,txnId:txn.txnId,paidAt:txn.paidAt,
+      invoiceType:invType,taxId:invType==='triplicate'?taxId.trim():'',invoiceTitle:invType==='triplicate'?invTitle.trim():''});
   };
   return(
     <div className="mo" onClick={e=>e.target===e.currentTarget&&onClose()}>
@@ -653,13 +756,60 @@ function WorkOrderModal({mode,record,warrantyIn,onClose,onSubmit}){
                     style={{padding:'6px 14px',borderRadius:6,border:`1px solid ${pay===k?'var(--brand)':'var(--g200)'}`,background:pay===k?'var(--brand)':'#fff',color:pay===k?'#fff':'var(--g600)',fontSize:12,fontWeight:700,cursor:'pointer'}}>{l}</button>
                 ))}
               </div>
-              <div style={{fontSize:11.5,color:'var(--g400)',marginTop:6}}>💳 金額 ${total}；送出後將模擬完成收款並產生交易編號（之後串接金流 API）。</div>
+              {alreadyPaid
+                ? <div style={{fontSize:11.5,color:'var(--ok)',fontWeight:700,marginTop:6}}>✅ 師傅現場已收款 ${total}　交易編號 {record.txnId}（沿用原交易，不再重複產生）</div>
+                : <div style={{fontSize:11.5,color:'var(--g400)',marginTop:6}}>💳 金額 ${total}；送出後將模擬完成收款並產生交易編號（之後串接金流 API）。</div>}
             </>}
         </div>
-        <div className="wo-sec"><label>現場照片</label><PhotoUpload photos={photos} setPhotos={setPhotos} folder={`${mode==='install'?'installs':'repairs'}/${record?.id||'misc'}`}/></div>
+        <div className="wo-sec"><label>🧾 開票資訊（發票由 ERP 開立，此處先記錄）</label>
+          <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:6}}>
+            {[['electronic','電子發票'],['duplicate','二聯式'],['triplicate','三聯式（統編）']].map(([k,l])=>(
+              <button key={k} type="button" onClick={()=>setInvType(k)}
+                style={{padding:'6px 14px',borderRadius:6,border:`1px solid ${invType===k?'var(--brand)':'var(--g200)'}`,background:invType===k?'var(--brand)':'#fff',color:invType===k?'#fff':'var(--g600)',fontSize:12,fontWeight:700,cursor:'pointer'}}>{l}</button>
+            ))}
+          </div>
+          {invType==='triplicate'&&(
+            <div style={{display:'grid',gridTemplateColumns:'1fr 2fr',gap:6}}>
+              <input value={taxId} onChange={e=>setTaxId(e.target.value)} placeholder="統一編號（8 碼）*" maxLength={8}
+                style={{border:'1px solid var(--g200)',borderRadius:5,padding:'7px 10px',fontSize:12.5,outline:'none'}}/>
+              <input value={invTitle} onChange={e=>setInvTitle(e.target.value)} placeholder="發票抬頭 *"
+                style={{border:'1px solid var(--g200)',borderRadius:5,padding:'7px 10px',fontSize:12.5,outline:'none'}}/>
+            </div>
+          )}
+        </div>
+        <div className="wo-sec">
+          <label>現場照片</label>
+          {fieldPhotos.length>0&&(
+            <div style={{marginBottom:8}}>
+              <div style={{fontSize:11.5,color:'var(--ok)',fontWeight:700,marginBottom:5}}>📸 師傅現場回傳（{fieldPhotos.length} 張）— 點圖放大檢視</div>
+              <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                {fieldPhotos.map((src,i)=>(
+                  <a key={i} href={src} target="_blank" rel="noopener noreferrer" title="點開看原圖"
+                    style={{display:'block',width:74,height:74,borderRadius:6,border:'1px solid var(--g200)',
+                      backgroundImage:`url(${src})`,backgroundSize:'cover',backgroundPosition:'center'}}/>
+                ))}
+              </div>
+            </div>
+          )}
+          <div style={{fontSize:11,color:'var(--g500)',marginBottom:4}}>{fieldPhotos.length>0?'如需補充照片：':'師傅未回傳照片，請補上傳：'}</div>
+          <PhotoUpload photos={photos} setPhotos={setPhotos} folder={`${mode==='install'?'installs':'repairs'}/${record?.id||'misc'}`}/>
+        </div>
         <div className="wo-sec"><label>處理說明</label><textarea value={note} onChange={e=>setNote(e.target.value)} rows={2} style={{width:'100%',border:'1px solid var(--g200)',borderRadius:5,padding:'7px 10px',fontSize:12.5,outline:'none',resize:'vertical',fontFamily:'inherit'}} placeholder="維修 / 安裝內容摘要"/></div>
         <div className="wo-sec"><label>🔎 稽核備註（內部用，不對客戶顯示）</label><textarea value={auditNote} onChange={e=>setAuditNote(e.target.value)} rows={2} style={{width:'100%',border:'1px dashed var(--g300)',borderRadius:5,padding:'7px 10px',fontSize:12,outline:'none',resize:'vertical',fontFamily:'inherit',background:'var(--g50)'}} placeholder="內部稽核說明、異常記錄..."/></div>
-        <div className="wo-sec"><label>客戶簽名驗收</label><SignaturePad onChange={setSig}/></div>
+        <div className="wo-sec"><label>客戶簽名驗收</label>
+          {fieldSig
+            ? <div>
+                <div style={{fontSize:11.5,color:'var(--ok)',fontWeight:700,marginBottom:5}}>✍️ 客戶已於現場簽名（師傅回傳）</div>
+                <a href={fieldSig} target="_blank" rel="noopener noreferrer" title="點開看原圖">
+                  <img src={fieldSig} alt="客戶簽名"
+                    style={{width:'100%',maxHeight:120,objectFit:'contain',border:'1px solid var(--g200)',borderRadius:6,background:'#F8FAFC',display:'block'}}/>
+                </a>
+              </div>
+            : <div>
+                <div style={{fontSize:11.5,color:'var(--warn)',fontWeight:700,marginBottom:5}}>⚠️ 師傅未回傳簽名，如為客服代結案請於此補簽</div>
+                <SignaturePad onChange={setSig}/>
+              </div>}
+        </div>
         {receiptNo&&<div style={{marginTop:8,padding:'6px 10px',background:'#EFF6FF',borderRadius:6,fontSize:11.5,color:'var(--accent)',fontWeight:700}}>📋 簽收單號：{receiptNo}</div>}
 
         <div className="mact"><button className="cancel" onClick={onClose}>取消</button><button className="confirm" onClick={submit}>{mode==='install'?'確認驗收 + 保固登錄':'簽收結案'}</button></div>
@@ -761,6 +911,11 @@ const mockPayment = (method, amount) => {
   return {method, paid:true, txnId:pre+'-'+Date.now()+'-'+Math.random().toString(36).slice(2,6).toUpperCase(), paidAt:new Date().toISOString()};
 };
 const PAY_LABEL = {cash:'現金',transfer:'轉帳',card:'刷卡',free:'免費'};
+// 請款狀態（單向推進：待請款→已請款→已開票；發票由 TipTop 開，CRM 只追蹤進度）
+const BILLING_FLOW = {unbilled:'billed', billed:'invoiced'};
+const BILLING_LABEL = {unbilled:'⏳ 待請款', billed:'📤 已請款', invoiced:'🧾 已開票'};
+const BILLING_STYLE = {unbilled:{bg:'#FEF3C7',fg:'#92400E'}, billed:{bg:'#DBEAFE',fg:'#1D4ED8'}, invoiced:{bg:'#D1FAE5',fg:'#065F46'}};
+const INVOICE_LABEL = {electronic:'電子發票', duplicate:'二聯式', triplicate:'三聯式'};
 
 // ─── 地址選取畫面（中華郵政風格：縣市→鄉鎮自動帶 3 碼，其餘自行輸入）───
 function AddressPicker({initial, onConfirm, onClose}){
@@ -880,26 +1035,39 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
   };
 
   const submitInstall=async(common)=>{
-    const id='IW'+Date.now();
+    // 單號一律走 next_case_no，與報修 R／客訴 C 同一套格式（IW+YYYYMMDD+4碼流水）。
+    // 舊資料是 'IW'+Date.now() 的 13 位時間戳，那種號沒辦法唸、沒辦法排序，
+    // 而且同毫秒會撞號。舊號不動，只有新開的走這裡。
+    const id=(await sb.rpc('next_case_no',{p_prefix:'IW'})).data || ('IW-'+Date.now());
     const bk=await tryBook('install',id); if(!bk.ok) return;
     const key=custKey(f.name,f.address);
     const exist=(db.customers||[]).find(c=>custKey(c.name,c.address)===key);
-    const wfId=exist?exist.wfId:'WF'+String(Date.now()).slice(-8);
+    const wfId=exist?exist.wfId:(await sb.rpc('next_wf_id')).data;
     const isNew=!exist;
+    const reactivated=!!exist?.disabled; // 撈到的是已作廢客編 → 這次下單把它救回來
     updateDB(prev=>{
       let customers=prev.customers||[];
       if(isNew) customers=[...customers,{wfId,name:f.name.trim(),phone:f.phone.trim(),address:f.address,zip:f.zip,channel:f.channel,
         groupId:f.groupId||null,projectId:f.projectId||null,
         productId:f.productId,serialNo:f.serialNo,regType:'auto',regDate:today(),
         installDate:null,warrantyMonths:null,warrantyEnd:null,tags:['待安裝'],repairIds:[],complaintIds:[]}];
-      else if(f.groupId) customers=customers.map(c=>c.wfId===wfId?{...c,groupId:f.groupId,projectId:f.projectId||c.projectId}:c);
+      else {
+        // 同姓名同地址（custKey 相同）＝同一個人同一個住所 → 沿用原客編。
+        // 若該客編先前被當單作廢，這次再下單就重新啟用它；disabledReason/disabledAt 刻意不清，
+        // 留作「曾被作廢」的痕跡（爭議時要查得到）。custKey 只要有一項不同就撈不到，自然發新號。
+        customers=customers.map(c=>c.wfId!==wfId?c:{...c,
+          ...(f.groupId?{groupId:f.groupId,projectId:f.projectId||c.projectId}:{}),
+          ...(c.disabled?{disabled:false,tags:(c.tags||[]).filter(t=>t!=='已作廢')}:{})});
+      }
       const order=pushHist({id,name:f.name.trim(),phone:f.phone.trim(),address:f.address,channel:f.channel,
-        productId:f.productId,serialNo:f.serialNo,locksmithId:f.locksmithId,wfId,scheduledDate:f.scheduledDate,
+        productId:f.productId,serialNo:f.serialNo,locksmithId:null,wfId,scheduledDate:f.scheduledDate,
         status:'pending',createdDate:today(),createdTs:Date.now(),arrivalPushed:false,...common,...bk.fields},
-        currentUser?.name,'建立安裝工單'+(bk.fields.workerId?'＋排程':''));
+        currentUser?.name,'建立安裝工單'+(bk.fields.workerId?'＋排程':'')
+          +(reactivated?`｜🔄 客編重新啟用（原作廢於 ${exist.disabledAt||'—'}）`:''));
       return {...prev,customers,installs:{...prev.installs,[id]:order}};
     });
-    toast('📋 安裝工單已建立',isNew?`${f.name}｜已建立客編 ${wfId}`:`${f.name}｜歸入既有客編 ${wfId}`,'ok');
+    toast('📋 安裝工單已建立',isNew?`${f.name}｜已建立客編 ${wfId}`
+      :reactivated?`${f.name}｜🔄 重新啟用已作廢客編 ${wfId}`:`${f.name}｜歸入既有客編 ${wfId}`,'ok');
     onClose(id);
   };
 
@@ -909,7 +1077,7 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
     const bk=await tryBook('repair',rid); if(!bk.ok) return;
     const key=custKey(f.name,f.address);
     const exist=lc || (db.customers||[]).find(c=>custKey(c.name,c.address)===key);
-    const wfId=exist?exist.wfId:'WF'+String(Date.now()).slice(-8);
+    const wfId=exist?exist.wfId:(await sb.rpc('next_wf_id')).data;
     const isNew=!exist;
     const wIn2=exist?isInWar(exist):false;
     const newRepair=pushHist({id:rid,wfId,name:f.name,phone:f.phone,
@@ -925,13 +1093,14 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
       let customers=prev.customers||[];
       if(isNew) customers=[...customers,{wfId,name:f.name.trim(),phone:f.phone.trim(),address:f.address,zip:f.zip,
         regType:'manual',regDate:today(),tags:['待整理'],repairIds:[rid],complaintIds:[]}];
-      else customers=customers.map(x=>x.wfId===wfId?{...x,repairIds:[...(x.repairIds||[]),rid]}:x);
-      const convs=(prev.conversations||[]).map(cv=>(uid&&cv.id===uid)
-        ?{...cv,msgs:[...(cv.msgs||[]),{id:'p'+Date.now(),from:'bot',text:pushTxt,time:now()}],lastMsg:'已建立報修單',lastTime:now()}:cv);
-      return {...prev,repairs:{...prev.repairs,[rid]:newRepair},customers,conversations:convs};
+      else customers=customers.map(x=>x.wfId!==wfId?x:{...x,repairIds:[...(x.repairIds||[]),rid],
+        ...(x.disabled?{disabled:false,tags:(x.tags||[]).filter(t=>t!=='已作廢')}:{})}); // 已作廢客編再次來案 → 重新啟用
+      return {...prev,repairs:{...prev.repairs,[rid]:newRepair},customers};
     });
+    // 對話訊息改走原子 RPC，不再靠本地快照整包 upsert；畫面會由 Realtime 訂閱自動補上最新對話
+    appendConvMsg(uid,pushTxt);
     pushLineTo(uid,pushTxt);
-    toast('📋 已立案',`${f.name} 報修單 ${rid} 已建立${isNew?'（新客編 '+wfId+'）':''}`,'ok');
+    toast('📋 已立案',`${f.name} 報修單 ${rid} 已建立${isNew?'（新客編 '+wfId+'）':exist?.disabled?'（🔄 重新啟用客編 '+wfId+'）':''}`,'ok');
     onClose(rid);
   };
 
@@ -1001,9 +1170,9 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
             ⚠️ 租客屬高風險，已取得房東確認（必勾）
           </label>
         )}
-        <div className="mf"><label>社區特殊需求</label>
+        {cat==='repair'&&<div className="mf"><label>社區特殊需求</label>
           <input value={f.communityNote} onChange={e=>set('communityNote',e.target.value)} placeholder="例：需門禁卡、施工時段限制、社區報備..."/>
-        </div>
+        </div>}
 
         {/* 安裝專屬 */}
         {cat==='install'&&<>
@@ -1024,10 +1193,7 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
               </div>
             </div>
           )}
-          <div className="mf2">
-            <div className="mf"><label>產品序號</label><input value={f.serialNo} onChange={e=>set('serialNo',e.target.value)}/></div>
-            <div className="mf"><label>指派鎖店師傅</label><select value={f.locksmithId} onChange={e=>set('locksmithId',e.target.value)}>{LOCKSMITHS.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
-          </div>
+          <div className="mf"><label>產品序號</label><input value={f.serialNo} onChange={e=>set('serialNo',e.target.value)}/></div>
         </>}
 
         {/* 維修專屬 */}
@@ -1073,14 +1239,14 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
           </div>
         )}
 
-        {/* 風險旗標 */}
-        <div className="mf"><label>風險旗標</label>
+        {/* 風險旗標（維修情境的內部標記，新裝訂單不露出） */}
+        {cat==='repair'&&<div className="mf"><label>風險旗標</label>
           <div style={{display:'flex',gap:14,flexWrap:'wrap',fontSize:12}}>
             <label style={{display:'flex',alignItems:'center',gap:5,cursor:'pointer'}}><input type="checkbox" checked={f.hiRisk} onChange={e=>set('hiRisk',e.target.checked)}/>⚠️ 高風險維修</label>
             <label style={{display:'flex',alignItems:'center',gap:5,cursor:'pointer'}}><input type="checkbox" checked={f.hardJob} onChange={e=>set('hardJob',e.target.checked)}/>🔧 困難施工</label>
             <label style={{display:'flex',alignItems:'center',gap:5,cursor:'pointer'}}><input type="checkbox" checked={f.bomber} onChange={e=>set('bomber',e.target.checked)}/>💣 轟炸戶</label>
           </div>
-        </div>
+        </div>}
 
         <div className="mf"><label>備註</label>
           <textarea value={f.note} onChange={e=>set('note',e.target.value)} rows={2}
@@ -1119,6 +1285,8 @@ function CRMPage(){
   const [ctForm,setCtForm] = useState({callChannel:CALL_CHANNELS[0],department:COMPLAINT_DEPARTMENTS[0],cat1:'',cat2:'',cat3:'',process:'',status:'pending'});
   const [expandedCt,setExpandedCt] = useState(null); // 客訴展開
   const [showHist,setShowHist] = useState(null); // 展開中的異動紀錄案件 id（隱藏按鈕觸發）
+  const [viewingMedia,setViewingMedia] = useState(null); // 正在查看的照片/簽名 {photos,signature,caseId}（僅 admin 可開）
+  const isAdmin = currentUser?.role==='admin';
   const [followText,setFollowText] = useState('');
   const [followingCtId,setFollowingCtId] = useState(null);
   const [followModal,setFollowModal] = useState(null); // ctId when open
@@ -1147,6 +1315,15 @@ function CRMPage(){
   const [dispHiRisk,setDispHiRisk] = useState(false);
   const [dispHardJob,setDispHardJob] = useState(false);
   const [dispBomber,setDispBomber] = useState(false);
+  const [dispReason,setDispReason] = useState(''); // 轉單原因（已指派師傅時才用）
+  // ERP 出貨（新裝流程：未出貨前不能排安裝）
+  const [shipModal,setShipModal] = useState(null); // 要標記出貨的安裝單物件
+  const [shipNo,setShipNo] = useState('');
+  const [shipDate,setShipDate] = useState(todayISO());
+  // 當單（作廢安裝單）：客戶提前取消或現場確認無法安裝 → 這張單不做了
+  const [voidModal,setVoidModal] = useState(null); // 要當單的安裝單物件
+  const [voidType,setVoidType] = useState('cannot_install');
+  const [voidReason,setVoidReason] = useState('');
   const hlRef = useRef(null);
 
   const customers = db.customers||[];
@@ -1217,8 +1394,9 @@ function CRMPage(){
   // ── 維修派工 ──
   const openRepairDispatch=r=>{
     setDispatchRepair(r); setHighlightedOrderId(r.id);
-    setDispSw(''); setDispStart(null); setDispChargeRows([]);
-    setDispRegion('central'); setDispSd(todayISO());
+    setDispSw(''); setDispStart(null);
+    setDispChargeRows((r.charges||[]).map(c=>({item:c.item,qty:c.qty,price:c.price,gift:c.gift}))); // 轉單時保留既有預估品項
+    setDispRegion('central'); setDispSd(todayISO()); setDispReason('');
     setDispHiRisk(false); setDispHardJob(false); setDispBomber(!!r.flagBomber);
   };
   const doRepairDispatch=async()=>{
@@ -1228,33 +1406,50 @@ function CRMPage(){
     const workers=db.workers||[];
     const w=workers.find(x=>x.id===dispSw)||WORKERS.find(x=>x.id===dispSw);
     const span=Math.max(1,Math.ceil(Number(dispatchRepair.workHours)||1));
+    // 轉單改派時，先記住舊時段以便新時段衝突時原樣復原（否則舊時段被釋放後若新時段搶輸，
+    // 工單會卡在「顯示已派工、時刻表卻是空的」的中間態）
+    const oldSlot = dispatchRepair.workerId
+      ? {workerId:dispatchRepair.workerId, date:dispatchRepair.schedDate, start:dispatchRepair.schedStart, span:dispatchRepair.schedSpan||1}
+      : null;
+    await releaseSlots(dispatchRepair.id); // 先釋放舊時段（轉單改派時避免孤兒佔格）
     const ok=await bookSlots(dispSw,dispSd,dispStart,span,'repair',dispatchRepair.id);
-    if(!ok){ toast('時段衝突','該師傅此時段已被預約，請改其他時段','err'); return; }
+    if(!ok){
+      if(oldSlot?.workerId&&oldSlot.date&&oldSlot.start!=null) await bookSlots(oldSlot.workerId,oldSlot.date,oldSlot.start,oldSlot.span,'repair',dispatchRepair.id);
+      toast('時段衝突','該師傅此時段已被預約，請改其他時段（原時段已還原）','err'); return;
+    }
     const cu=(db.customers||[]).find(c=>c.wfId===dispatchRepair.wfId);
     const uid=cu?.lineUid;
     const charges=normCharges(dispChargeRows); const ctotal=chargesTotal(dispChargeRows);
     const slotTxt=`${dispSd} ${String(dispStart).padStart(2,'0')}:00-${String(dispStart+span).padStart(2,'0')}:00`;
-    const pushMsg={id:'p'+Date.now(),from:'bot',
-      text:`🚗 派工通知\n\n師傅：${w?.name}\n預約：${slotTxt}\n師傅出發前將再次通知 📱`,time:now()};
+    // 異動紀錄：依「首次派工／轉單改派／同師傅改期」給不同描述
+    const prevWk=dispatchRepair.workerId;
+    const oldName=(db.workers||[]).find(x=>x.id===prevWk)?.name||WORKERS.find(x=>x.id===prevWk)?.name||'原師傅';
+    const chargeSuffix=ctotal>0?`｜品項異動：${charges.map(c=>c.item).join('、')} 合計$${ctotal}`:'';
+    const reasonSuffix=dispReason.trim()?`｜原因：${dispReason.trim()}`:'';
+    const histAction=!prevWk
+      ? `派工：${w?.name}｜${slotTxt}${chargeSuffix}`
+      : (prevWk!==dispSw
+          ? `🔁 轉單：原 ${oldName} → ${w?.name}｜${slotTxt}${reasonSuffix}${chargeSuffix}`
+          : `🔁 改期：${w?.name}｜${slotTxt}${reasonSuffix}${chargeSuffix}`);
+    const pushText=`🚗 派工通知\n\n師傅：${w?.name}\n預約：${slotTxt}\n師傅出發前將再次通知 📱`;
     updateDB(prev=>{
       const cur=prev.repairs[dispatchRepair.id];
       const nr={...prev.repairs,[dispatchRepair.id]:pushHist({...cur,status:'dispatched',workerId:dispSw,scheduledDate:slotTxt,
         schedDate:dispSd,schedStart:dispStart,schedSpan:span,arrivalPushed:true,charges,chargeTotal:ctotal,
         slaLevel:dispHiRisk?'high':cur.slaLevel,flagBomber:dispBomber,
-        note:[cur.note,dispHiRisk?'⚠️高風險維修':'',dispHardJob?'困難施工':'',dispBomber?'💣轟炸戶':''].filter(Boolean).join(' / ')},currentUser?.name,`派工：${w?.name}｜${slotTxt}${ctotal>0?`｜品項異動：${charges.map(c=>c.item).join('、')} 合計$${ctotal}`:''}`)};
-      const nc=(prev.conversations||[]).map(c=>(uid&&c.id===uid)
-        ?{...c,msgs:[...(c.msgs||[]),pushMsg],lastMsg:'師傅通知已送出',lastTime:now()}:c);
-      return {...prev,repairs:nr,conversations:nc};
+        note:[cur.note,dispHiRisk?'⚠️高風險維修':'',dispHardJob?'困難施工':'',dispBomber?'💣轟炸戶':''].filter(Boolean).join(' / ')},currentUser?.name,histAction)};
+      return {...prev,repairs:nr};
     });
-    pushLineTo(uid, pushMsg.text);
+    // 對話訊息改走原子 RPC，不再靠本地快照整包 upsert
+    appendConvMsg(uid,pushText);
+    pushLineTo(uid, pushText);
     toast('🚗 派工完成',`${w?.name}｜${slotTxt}${uid?'，已推播住戶':'（客戶未綁定 LINE）'}`,'ok');
     setDispatchRepair(null);
   };
   const finishRepairClose=(r,d)=>{
     const chargeLine=(d.charges&&d.charges.length)?`\n費用：$${d.total}`:'\n本次維修免費（保固內）';
     const wkName=(db.workers||[]).find(w=>w.id===r.workerId)?.name||WORKERS.find(w=>w.id===r.workerId)?.name||'—';
-    const closeMsg={id:'p'+Date.now(),from:'bot',time:now(),
-      text:`✅ 維修完成結案\n\n案件：${r.id}\n問題：${r.type} — ${r.issue}${chargeLine}\n師傅：${wkName}\n簽收單號：${d.receiptNo}\n\n感謝您的使用 🙏 期待再為您服務\n⭐ 歡迎為本次服務評分`};
+    const closeText=`✅ 維修完成結案\n\n案件：${r.id}\n問題：${r.type} — ${r.issue}${chargeLine}\n師傅：${wkName}\n簽收單號：${d.receiptNo}\n\n感謝您的使用 🙏 期待再為您服務\n⭐ 歡迎為本次服務評分`;
     const ccu=(db.customers||[]).find(c=>c.wfId===r.wfId);
     const cuid=ccu?.lineUid;
     updateDB(prev=>({...prev,
@@ -1264,19 +1459,132 @@ function CRMPage(){
         paymentMethod:d.paymentMethod,paid:d.paid,txnId:d.txnId,paidAt:d.paidAt,
         warrantyJudgment:d.warrantyJudgment,excludeReason:d.excludeReason,
         auditNote:d.auditNote||'',receiptNo:d.receiptNo,
+        invoiceType:d.invoiceType,taxId:d.taxId,invoiceTitle:d.invoiceTitle,
         completedDate:today()},currentUser?.name,`完工結案｜簽收單號 ${d.receiptNo}`)},
-      conversations:(prev.conversations||[]).map(c=>(cuid&&c.id===cuid)
-        ?{...c,msgs:[...(c.msgs||[]),closeMsg],lastMsg:'維修完成結案',lastTime:now()}:c)
     }));
-    pushLineTo(cuid, closeMsg.text);
+    // 對話訊息改走原子 RPC，不再靠本地快照整包 upsert
+    appendConvMsg(cuid,closeText);
+    pushLineTo(cuid, closeText);
     toast('✅ 已結案',`電子工單已簽收，簽收單號 ${d.receiptNo}`,'ok');
     setTimeout(()=>toast('📨 CSAT 已推播','滿意度問卷已發送住戶','ok'),1500);
     setClosingRepair(null);
   };
 
+  // ── 請款狀態推進（安裝單：待請款→已請款→已開票，單向，每步寫異動紀錄）──
+  const advanceBilling=(o)=>{
+    const cur=o.billingStatus||'unbilled';
+    const next=BILLING_FLOW[cur];
+    if(!next) return;
+    updateDB(prev=>{
+      const rec=prev.installs[o.id];
+      if(!rec) return prev;
+      return {...prev,installs:{...prev.installs,[o.id]:pushHist({...rec,billingStatus:next},
+        currentUser?.name,`請款進度：${BILLING_LABEL[cur]} → ${BILLING_LABEL[next]}`)}};
+    });
+    toast('💰 請款進度更新',BILLING_LABEL[next],'ok');
+  };
+
+  // ── ERP 出貨（新裝流程：CRM 記出貨狀態＋TipTop 出貨單號，未出貨前不能排安裝）──
+  const openShipModal=o=>{ setShipModal(o); setShipNo(o.shipmentNo||''); setShipDate(o.shippedDate||todayISO()); };
+  const confirmShip=()=>{
+    if(!shipNo.trim()){ toast('請填出貨單號','TipTop 出貨單號不可空白','warn'); return; }
+    const id=shipModal.id;
+    updateDB(prev=>{
+      const cur=prev.installs[id];
+      if(!cur) return prev;
+      return {...prev,installs:{...prev.installs,[id]:pushHist({...cur,shipmentNo:shipNo.trim(),shippedDate:shipDate},
+        currentUser?.name,`ERP 出貨｜單號 ${shipNo.trim()}｜${shipDate}`)}};
+    });
+    toast('🚚 已標記出貨',`單號 ${shipNo.trim()}`,'ok');
+    setShipModal(null); setShipNo(''); setShipDate(todayISO());
+  };
+
+  // ── 當單 ──
+  // 三種理由走兩條路：
+  //   無法安裝／客戶不裝 → 終局：單作廢（status=voided）＋客編停用
+  //   臨時改約           → 單留著，退回「待排程」，釋放時段後可重新約，客編不動
+  // 客編**不回收**（號碼永久留缺號，next_wf_id 繼續往下編）：
+  // customers.wf_id 是主鍵、案件又靠 wf_id 指回客戶，回收號碼會讓舊案件掛到新客戶身上。
+  const doVoidInstall=async()=>{
+    const note=voidReason.trim();
+    const vt=VOID_TYPES[voidType];
+    if(!vt){ toast('請選當單理由','','warn'); return; }
+    if(!note){ toast('請補充說明','當單一定要留下說明，供日後查核','warn'); return; }
+    const o=voidModal, ts=today()+' '+now();
+    const fullReason=`${vt.label}｜${note}`;
+    await releaseSlots(o.id); // 兩條路都要釋放師傅時段，否則當掉/改約的單還佔著時刻表
+
+    // ── 臨時改約：單不作廢，退回待排程 ──
+    if(!vt.terminal){
+      updateDB(prev=>{
+        const cur=prev.installs[o.id];
+        if(!cur) return prev;
+        return {...prev,installs:{...prev.installs,[o.id]:pushHist({...cur,status:'pending',
+          workerId:null,schedDate:null,schedStart:null,schedSpan:null,arrivalPushed:false,acceptedAt:null},
+          currentUser?.name,`📅 臨時改約｜${note}`)}};
+      });
+      toast('📅 已改約','單已退回「待排程」，請重新安排師傅與時段','warn');
+      setVoidModal(null); setVoidReason(''); setVoidType('cannot_install');
+      return;
+    }
+
+    // ── 終局：作廢單，並視情況停用客編 ──
+    // 先算「要不要連客編一起停用」——用當下的 db 判斷，updateDB 的 reducer 不保證同步執行。
+    // 保護：客戶名下若還有其他有效案件就不停用，避免兩張單當掉一張就把整個人廢掉。
+    const otherInstalls=Object.values(db.installs||{}).filter(x=>x.wfId===o.wfId&&x.id!==o.id&&x.status!=='voided');
+    const anyRepair=Object.values(db.repairs||{}).filter(x=>x.wfId===o.wfId);       // 有維修紀錄＝確實是客戶
+    const openCt=Object.values(db.complaints||{}).filter(x=>x.wfId===o.wfId&&x.status!=='closed');
+    const willDisable=!!o.wfId&&otherInstalls.length===0&&anyRepair.length===0&&openCt.length===0;
+    updateDB(prev=>{
+      const cur=prev.installs[o.id];
+      if(!cur) return prev;
+      const installs={...prev.installs,[o.id]:pushHist({...cur,status:'voided',voidType,voidReason:fullReason,
+        voidedAt:ts,voidedBy:currentUser?.name,workerId:null,schedDate:null,schedStart:null,schedSpan:null},
+        currentUser?.name,`🚫 當單｜${fullReason}`)};
+      const customers=willDisable
+        ? (prev.customers||[]).map(c=>c.wfId!==o.wfId?c:{...c,disabled:true,disabledReason:fullReason,disabledAt:ts,
+            tags:[...new Set([...(c.tags||[]),'已作廢'])]})
+        : (prev.customers||[]);
+      return {...prev,installs,customers};
+    });
+    toast('🚫 已當單',willDisable?`客編 ${o.wfId} 一併停用（號碼不回收，不再重複使用）`
+      :'單已作廢；該客戶尚有其他案件，客編保留','err');
+    setVoidModal(null); setVoidReason(''); setVoidType('cannot_install');
+  };
+
+  // ── 追蹤號碼發送給客戶（LINE）──
+  // 上線初期刻意由客服點擊觸發，不自動推播：貨運清單上沒有我方單號時只能靠地址比對，
+  // 推錯人等於把別人的收件地址寄出去。等回測誤配率為 0 再開自動。
+  const sendTracking=(sp)=>{
+    const cust=(db.customers||[]).find(c=>c.wfId===sp.wfId);
+    if(!cust){ toast('尚未配對客戶','請先在「託運單配對」頁指定客戶','warn'); return; }
+    if(cust.customerType==='internal'){ toast('內部調撥不發送','此筆為自家調撥，不推播客戶','warn'); return; }
+    const uid=cust.lineUid||lineUidByPhone(cust.phone);
+    if(!uid){ toast('客戶未綁定 LINE','無法主動推播，請用「複製單號」手動傳給客戶','warn'); return; }
+    const cr=CARRIERS[sp.carrier];
+    pushLineTo(uid,`【WAFERLOCK 出貨通知】\n您的商品已於 ${sp.shipDate||''} 交運\n貨運公司：${carrierLabel(sp.carrier)}\n託運單號：${sp.trackingNo}\n\n查詢貨態：${cr?.url||''}`);
+    updateDB(prev=>({...prev,shipments:(prev.shipments||[]).map(s=>
+      s.id===sp.id?{...s,notifyStatus:'sent',notifiedAt:new Date().toISOString()}:s)}));
+    if(sp.installId){
+      updateDB(prev=>{
+        const cur=prev.installs[sp.installId];
+        if(!cur) return prev;
+        return {...prev,installs:{...prev.installs,[sp.installId]:pushHist(cur,currentUser?.name,
+          `發送追蹤號碼｜${carrierLabel(sp.carrier)} ${sp.trackingNo}`)}};
+      });
+    }
+    toast('📤 已發送',`${carrierLabel(sp.carrier)} ${sp.trackingNo}`,'ok');
+  };
+
+  const copyText=(txt,label)=>{
+    navigator.clipboard?.writeText(txt).then(
+      ()=>toast('已複製',label||txt,'ok'),
+      ()=>toast('複製失敗','請手動選取複製','warn'));
+  };
+
   // ── 安裝排程 ──
   const openInstallSchedule=o=>{
-    setSchedInstall(o); setHighlightedOrderId(o.id); setDispRegion('central'); setDispSw(''); setDispSd(todayISO()); setDispStart(null);
+    setSchedInstall(o); setHighlightedOrderId(o.id); setDispRegion('central'); setDispSw(''); setDispSd(todayISO()); setDispStart(null); setDispReason('');
   };
   const doInstallSchedule=async()=>{
     if(!dispSw){ toast('請選擇師傅','先選區域與師傅','warn'); return; }
@@ -1284,13 +1592,29 @@ function CRMPage(){
     const workers=db.workers||[];
     const w=workers.find(x=>x.id===dispSw)||WORKERS.find(x=>x.id===dispSw);
     const span=Math.max(1,Math.ceil(Number(schedInstall.workHours)||2));
+    // 同 doRepairDispatch：先記住舊時段，新時段衝突時原樣復原，避免「已派工但時刻表是空的」中間態
+    const oldSlot = schedInstall.workerId
+      ? {workerId:schedInstall.workerId, date:schedInstall.schedDate, start:schedInstall.schedStart, span:schedInstall.schedSpan||2}
+      : null;
     await releaseSlots(schedInstall.id);
     const ok=await bookSlots(dispSw,dispSd,dispStart,span,'install',schedInstall.id);
-    if(!ok){ toast('時段衝突',`該師傅此 ${span} 小時已被佔用，請改時段`,'err'); return; }
+    if(!ok){
+      if(oldSlot?.workerId&&oldSlot.date&&oldSlot.start!=null) await bookSlots(oldSlot.workerId,oldSlot.date,oldSlot.start,oldSlot.span,'install',schedInstall.id);
+      toast('時段衝突',`該師傅此 ${span} 小時已被佔用，請改時段（原時段已還原）`,'err'); return;
+    }
     const slotTxt=`${dispSd} ${String(dispStart).padStart(2,'0')}:00-${String(dispStart+span).padStart(2,'0')}:00`;
+    // 異動紀錄：首次排程／轉單改派／同師傅改期
+    const prevWk=schedInstall.workerId;
+    const oldName=(db.workers||[]).find(x=>x.id===prevWk)?.name||WORKERS.find(x=>x.id===prevWk)?.name||'原師傅';
+    const reasonSuffix=dispReason.trim()?`｜原因：${dispReason.trim()}`:'';
+    const histAction=!prevWk
+      ? `排程：${w?.name}｜${slotTxt}`
+      : (prevWk!==dispSw
+          ? `🔁 轉單：原 ${oldName} → ${w?.name}｜${slotTxt}${reasonSuffix}`
+          : `🔁 改期：${w?.name}｜${slotTxt}${reasonSuffix}`);
     updateDB(prev=>{
       let next={...prev.installs[schedInstall.id],workerId:dispSw,schedDate:dispSd,schedStart:dispStart,schedSpan:span};
-      next=pushHist(next,currentUser?.name,`排程：${w?.name}｜${slotTxt}`);
+      next=pushHist(next,currentUser?.name,histAction);
       return {...prev,installs:{...prev.installs,[schedInstall.id]:next}};
     });
     const uid=lineUidByPhone(schedInstall.phone);
@@ -1339,7 +1663,7 @@ function CRMPage(){
           tags:[...new Set([...(c.tags||[]).filter(t=>t!=='待安裝'),'保固中'])]});
       }
       return {...prev,
-        installs:{...prev.installs,[o.id]:pushHist({...prev.installs[o.id],status:'done',photos:d.photos,signature:d.signature,verify:d.verify,taught:d.taught,workNote:d.note,charges:d.charges,chargeTotal:d.total,paymentMethod:d.paymentMethod,paid:d.paid,txnId:d.txnId,paidAt:d.paidAt,receiptNo:d.receiptNo,completedDate:today(),wfId,warrantyEnd},currentUser?.name,`完工驗收｜保固至 ${warrantyEnd}`)},
+        installs:{...prev.installs,[o.id]:pushHist({...prev.installs[o.id],status:'done',photos:d.photos,signature:d.signature,verify:d.verify,taught:d.taught,workNote:d.note,charges:d.charges,chargeTotal:d.total,paymentMethod:d.paymentMethod,paid:d.paid,txnId:d.txnId,paidAt:d.paidAt,receiptNo:d.receiptNo,invoiceType:d.invoiceType,taxId:d.taxId,invoiceTitle:d.invoiceTitle,billingStatus:'unbilled',completedDate:today(),wfId,warrantyEnd},currentUser?.name,`完工驗收｜保固至 ${warrantyEnd}`)},
         customers};
     });
     const uid=lineUidByPhone(o.phone);
@@ -1506,9 +1830,16 @@ function CRMPage(){
   const p = pctW(cur.installDate, cur.warrantyMonths||36);
   const ch = CHANNELS[cur.channel];
   const repairs = getRepairs(cur);
-  const STEPLABEL={pending:'待到場',arrived:'已到場',installed:'待驗收',done:'已完成',failed:'無法安裝'};
+  const STEPLABEL={pending:'待到場',arrived:'已到場',installed:'待驗收',done:'已完成',failed:'無法安裝',voided:'🚫 已當單'};
   const curInstalls=Object.values(db.installs||{}).filter(o=>o.wfId===cur.wfId).sort((a,b)=>(b.createdTs||0)-(a.createdTs||0));
   const curComplaints=(cur.complaintIds||[]).map(id=>(db.complaints||{})[id]).filter(Boolean).reverse();
+  // 0800 來電通話紀錄：ACW 完成時已寫進 conversations（platform=phone，帶 wfId），此處撈出每一則 acw 顯示在客戶歷史，落實「凡走過必留下痕跡」
+  const curCalls=(db.conversations||[]).filter(cv=>cv.platform==='phone'&&cv.wfId===cur.wfId)
+    .flatMap(cv=>(cv.msgs||[]).filter(m=>m.type==='acw'||m.type==='recording').map(m=>({
+      _type:'call', id:m.id, date:(m.ts||'').slice(0,10)||cv.lastTime||'',
+      title:m.text||'來電通話', agent:m.acw?.agent||m.by||'—',
+      _ts:m.ts?(new Date(String(m.ts).replace(' ','T')).getTime()||0):0,
+    })));
 
   // 開啟該案件的獨立分頁（單張案件視圖）
   const openCaseTab=(wfId,caseId)=>window.open(location.origin+location.pathname+'#crm/'+wfId+'/'+caseId,'_blank');
@@ -1568,6 +1899,24 @@ function CRMPage(){
       )}
     </div>
   );
+  // 收費品項明細（維修/安裝卡片共用）：逐筆品名×數量@單價=金額，贈品標示，結尾合計
+  const renderChargesDetail=charges=>{
+    const list=(charges||[]).filter(c=>c&&c.item);
+    if(!list.length) return null;
+    const total=list.reduce((s,c)=>s+(c.gift?0:(c.amount||0)),0);
+    return(
+      <div style={{marginTop:6,background:'#F8FAFC',border:'1px solid var(--g200)',borderRadius:6,padding:'8px 10px'}}>
+        <div style={{fontSize:10,color:'var(--g500)',fontWeight:700,marginBottom:4,letterSpacing:.5}}>🛒 收費品項</div>
+        {list.map((c,i)=>(
+          <div key={i} style={{display:'flex',justifyContent:'space-between',fontSize:11.5,padding:'3px 0',color:'var(--g700)'}}>
+            <span>{c.item} {c.gift?<b style={{color:'#10B981'}}>[贈]</b>:`×${c.qty}@$${c.price}`}</span>
+            <span style={{fontWeight:700}}>{c.gift?'贈品':`$${c.amount||0}`}</span>
+          </div>
+        ))}
+        <div style={{display:'flex',justifyContent:'flex-end',fontSize:12,fontWeight:800,color:'var(--brand)',marginTop:4,paddingTop:4,borderTop:'1px dashed var(--g200)'}}>合計 ${total}</div>
+      </div>
+    );
+  };
   const renderRepairCard=r=>(
     <div key={r.id} className={`rcard ${r.urgency==='urgent'?'urgent':r.status}`}>
       <div className="rch">
@@ -1596,6 +1945,7 @@ function CRMPage(){
         {r.note&&<div style={{gridColumn:'1/-1'}}><span>📝 備註</span><br/><strong style={{color:'var(--g700)'}}>{r.note}</strong></div>}
       </div>
       {r.paymentMethod&&<div style={{marginTop:6,fontSize:10.5,padding:'5px 9px',background:'#F0FDF4',borderRadius:5,color:'#065F46',fontWeight:700}}>💳 {PAY_LABEL[r.paymentMethod]||r.paymentMethod}{r.chargeTotal>0?` $${r.chargeTotal}`:''}{r.paymentMethod!=='free'?`　${r.paid?'✅ 已收款':'未收款'}`:''}{r.txnId?` · ${r.txnId}`:''}</div>}
+      {renderChargesDetail(r.charges)}
       {r.receiptNo&&<div style={{marginTop:6,fontSize:10.5,padding:'5px 9px',background:'#EFF6FF',borderRadius:5,color:'var(--accent)',fontWeight:700}}>📋 簽收單號：{r.receiptNo}</div>}
       {r.arrivalPushed&&<div style={{marginTop:6,fontSize:10.5,color:'var(--accent)',padding:'4px 8px',background:'#EFF6FF',borderRadius:4}}>✅ 師傅抵達通知已推播</div>}
       {r.rating!=null&&<div style={{marginTop:5,display:'flex',alignItems:'center',gap:4}}><div className="stars">{stars(r.rating)}</div><span style={{fontSize:10.5,color:'var(--g400)'}}>客戶評分 {r.rating}</span></div>}
@@ -1607,8 +1957,24 @@ function CRMPage(){
           <div>處理過程：{r.handlingResult||'—'}</div>
         </div>
       )}
+      {r.status==='done'&&(r.warrantyJudgment||r.workNote||r.auditNote||r.completedDate)&&(
+        <div style={{marginTop:6,background:'#F8FAFC',border:'1px solid var(--g200)',borderRadius:6,padding:'8px 10px',fontSize:11.5,color:'var(--g700)',lineHeight:1.7}}>
+          <div style={{fontSize:10,color:'var(--g500)',fontWeight:700,marginBottom:3,letterSpacing:.5}}>🧾 結案紀錄</div>
+          {r.warrantyJudgment&&<div>保固判定：{{in:'保固內免費',out:'保固外收費',in_excluded:'保內不保固'}[r.warrantyJudgment]||r.warrantyJudgment}{r.warrantyJudgment==='in_excluded'&&r.excludeReason?`（${r.excludeReason}）`:''}</div>}
+          {r.workNote&&<div>工務備註：{r.workNote}</div>}
+          {r.auditNote&&<div>稽核備註：{r.auditNote}</div>}
+          {r.completedDate&&<div>結案日期：{r.completedDate}</div>}
+        </div>
+      )}
+      {isAdmin&&(r.photos?.length>0||r.signature)&&(
+        <button onClick={()=>setViewingMedia({photos:r.photos||[],signature:r.signature,caseId:r.id})}
+          style={{marginTop:6,background:'transparent',border:'1px dashed var(--g300)',borderRadius:4,cursor:'pointer',fontSize:10.5,color:'var(--g500)',padding:'4px 8px'}}>
+          📷 照片與簽名（{(r.photos||[]).length}）
+        </button>
+      )}
       {r.status!=='done'&&<div style={{marginTop:8,display:'flex',gap:6,flexWrap:'wrap'}}>
         {r.status==='pending'&&<button onClick={()=>openRepairDispatch(r)} style={{padding:'5px 12px',background:'#EDE9FE',color:'#5B21B6',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>📅 排程派工</button>}
+        {r.status==='dispatched'&&<button onClick={()=>openRepairDispatch(r)} style={{padding:'5px 12px',background:'#FEF3C7',color:'#92400E',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>🔁 轉單改派</button>}
         {r.status==='dispatched'&&<button onClick={()=>setClosingRepair(r)} style={{padding:'5px 12px',background:'var(--ok)',color:'#fff',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>✅ 完工結案</button>}
       </div>}
       {(r.history||[]).length>0&&(
@@ -1630,29 +1996,113 @@ function CRMPage(){
     </div>
   );
   const renderInstallCard=o=>(
-    <div key={o.id} className={`rcard ${o.status==='done'?'done':o.status==='failed'?'urgent':'dispatched'}`}>
+    <div key={o.id} className={`rcard ${o.status==='done'?'done':(o.status==='failed'||o.status==='voided')?'urgent':'dispatched'}`}>
       <div className="rch">
         <div>
           <div style={{fontSize:12,fontWeight:700}}>安裝 — {PRODUCTS[o.productId]?.name||o.productId||'—'}</div>
           <div className="rid">{o.id}</div>
         </div>
-        <span className={`sb ${o.status==='done'?'done':o.status==='failed'?'urgent':o.status==='pending'?'pending':'dispatched'}`}>{STEPLABEL[o.status]}</span>
+        <span className={`sb ${o.status==='done'?'done':(o.status==='failed'||o.status==='voided')?'urgent':o.status==='pending'?'pending':'dispatched'}`}>{STEPLABEL[o.status]}</span>
       </div>
       <div className="rb">
-        <div><span>🔑 負責師傅</span><br/><strong>{LOCKSMITHS.find(s=>s.id===o.locksmithId)?.name||'未指派'}</strong></div>
         <div><span>👷 派工師傅</span><br/><strong>{(db.workers||[]).find(w=>w.id===o.workerId)?.name||WORKERS.find(w=>w.id===o.workerId)?.name||'未排程'}</strong></div>
         {o.schedDate&&<div><span>⏰ 預約</span><br/><strong>{o.schedDate} {String(o.schedStart||0).padStart(2,'0')}:00</strong></div>}
         {o.serialNo&&<div><span>📋 序號</span><br/><strong style={{fontFamily:'JetBrains Mono',fontSize:10}}>{o.serialNo}</strong></div>}
       </div>
+      {/* 師傅接單狀態：已指派但師傅還沒按接單時要看得出來——
+          這是新流程唯一會卡住的地方，師傅忘了按，客戶的進度頁就停在「委派師傅中」。*/}
+      {o.workerId&&o.status!=='done'&&o.status!=='failed'&&(
+        o.acceptedAt
+          ? <div style={{marginTop:6,fontSize:10.5,padding:'5px 9px',background:'#ECFDF5',borderRadius:5,color:'#065F46',fontWeight:700}}>✅ 師傅已接單　{new Date(o.acceptedAt).toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}</div>
+          : <div style={{marginTop:6,fontSize:10.5,padding:'5px 9px',background:'#FEF3C7',borderRadius:5,color:'#92400E',fontWeight:700}}>⏳ 等待師傅接單 — 客戶進度頁尚未顯示預約時間</div>
+      )}
+      {o.paymentMethod&&<div style={{marginTop:6,fontSize:10.5,padding:'5px 9px',background:'#F0FDF4',borderRadius:5,color:'#065F46',fontWeight:700}}>💳 {PAY_LABEL[o.paymentMethod]||o.paymentMethod}{o.chargeTotal>0?` $${o.chargeTotal}`:''}{o.paymentMethod!=='free'?`　${o.paid?'✅ 已收款':'未收款'}`:''}{o.txnId?` · ${o.txnId}`:''}</div>}
+      {renderChargesDetail(o.charges)}
       {o.status==='done'&&<div style={{fontSize:11,color:'var(--ok)',fontWeight:700,marginTop:4}}>✅ 完工 {o.completedDate}　·　保固至 {o.warrantyEnd}</div>}
+      {/* 請款進度（完工後）：待請款→已請款→已開票，單向推進，每步寫異動紀錄 */}
+      {o.status==='done'&&(()=>{
+        const bs=o.billingStatus||'unbilled';
+        const st=BILLING_STYLE[bs]||BILLING_STYLE.unbilled;
+        const nxt=BILLING_FLOW[bs];
+        return(
+          <div style={{marginTop:6,display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+            <span style={{fontSize:10.5,padding:'3px 9px',background:st.bg,color:st.fg,borderRadius:9,fontWeight:700}}>{BILLING_LABEL[bs]}</span>
+            {o.invoiceType&&<span style={{fontSize:10.5,color:'var(--g500)'}}>{INVOICE_LABEL[o.invoiceType]||o.invoiceType}{o.taxId?`｜統編 ${o.taxId}`:''}{o.invoiceTitle?`｜${o.invoiceTitle}`:''}</span>}
+            {nxt&&<button onClick={()=>advanceBilling(o)} style={{padding:'3px 10px',background:'var(--brand)',color:'#fff',border:'none',borderRadius:4,fontSize:10.5,fontWeight:700,cursor:'pointer'}}>→ 標記{BILLING_LABEL[nxt].slice(2)}</button>}
+          </div>
+        );
+      })()}
       {o.status==='failed'&&<div style={{fontSize:11,color:'var(--err)',fontWeight:700,marginTop:4}}>❌ 已回報客服處理</div>}
-      {o.status!=='done'&&o.status!=='failed'&&(
+      {o.status==='voided'&&(
+        <div style={{marginTop:6,fontSize:11,padding:'6px 9px',background:'#FEE2E2',borderRadius:5,color:'#991B1B',fontWeight:700,lineHeight:1.6}}>
+          🚫 已當單　{o.voidedAt}　·　{o.voidedBy||'—'}
+          <div style={{fontWeight:400,marginTop:2}}>{o.voidReason||VOID_TYPES[o.voidType]?.label||'—'}</div>
+        </div>
+      )}
+      {o.status==='done'&&(o.verify||o.taught!=null||o.workNote)&&(
+        <div style={{marginTop:6,background:'#F8FAFC',border:'1px solid var(--g200)',borderRadius:6,padding:'8px 10px',fontSize:11.5,color:'var(--g700)',lineHeight:1.7}}>
+          <div style={{fontSize:10,color:'var(--g500)',fontWeight:700,marginBottom:3,letterSpacing:.5}}>🔬 驗收與教學紀錄</div>
+          {o.verify&&[['s1','鎖舌對位正常'],['s2','自動上鎖正常'],['s3','各解鎖方式測試（指紋/卡/密碼/鑰匙/App）']].map(([k,l])=>(
+            <div key={k}>{o.verify[k]?'✅':'❌'} {l}</div>
+          ))}
+          {o.taught!=null&&<div>{o.taught?'✅':'❌'} 已完成現場操作教學</div>}
+          {o.workNote&&<div>工務備註：{o.workNote}</div>}
+        </div>
+      )}
+      {isAdmin&&(o.photos?.length>0||o.signature)&&(
+        <button onClick={()=>setViewingMedia({photos:o.photos||[],signature:o.signature,caseId:o.id})}
+          style={{marginTop:6,background:'transparent',border:'1px dashed var(--g300)',borderRadius:4,cursor:'pointer',fontSize:10.5,color:'var(--g500)',padding:'4px 8px'}}>
+          📷 照片與簽名（{(o.photos||[]).length}）
+        </button>
+      )}
+      {/* ERP 出貨資訊／閘門：已出貨顯示單號；未出貨且未排程的新單，排程被鎖住直到標記出貨 */}
+      {o.shipmentNo
+        ? <div style={{marginTop:6,fontSize:10.5,padding:'5px 9px',background:'#ECFDF5',borderRadius:5,color:'#065F46',fontWeight:700}}>🚚 已出貨　單號 {o.shipmentNo}{o.shippedDate?`　·　${o.shippedDate}`:''}</div>
+        : (o.status==='pending'&&!o.workerId&&<div style={{marginTop:6,fontSize:10.5,padding:'5px 9px',background:'#FEF3C7',borderRadius:5,color:'#92400E',fontWeight:700}}>🚚 待出貨 — 完成 ERP 出貨後才能排安裝</div>)}
+      {/* 貨運託運單號（由 shipment-worker 解析貨運單 PDF 後自動掛上）*/}
+      {(()=>{
+        const sp=(db.shipments||[]).find(s=>s.installId===o.id);
+        if(!sp) return null;
+        return (
+          <div style={{marginTop:6,fontSize:10.5,padding:'6px 9px',background:'#EFF6FF',borderRadius:5,color:'#1E40AF',display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+            <span style={{fontWeight:700}}>📦 {carrierLabel(sp.carrier)}　{sp.trackingNo}</span>
+            {sp.notifyStatus==='sent'&&<span style={{fontSize:9.5,color:'#047857',fontWeight:700}}>✓ 已通知客戶</span>}
+            <span style={{flex:1}}/>
+            <button onClick={()=>copyText(sp.trackingNo,'託運單號')} style={{padding:'3px 8px',background:'#DBEAFE',color:'#1E40AF',border:'none',borderRadius:4,fontSize:10,fontWeight:700,cursor:'pointer'}}>複製單號</button>
+            <a href={CARRIERS[sp.carrier]?.url} target="_blank" rel="noreferrer" style={{padding:'3px 8px',background:'#DBEAFE',color:'#1E40AF',borderRadius:4,fontSize:10,fontWeight:700,textDecoration:'none'}}>前往查詢</a>
+            <button onClick={()=>sendTracking(sp)} style={{padding:'3px 8px',background:'var(--brand)',color:'#fff',border:'none',borderRadius:4,fontSize:10,fontWeight:700,cursor:'pointer'}}>{sp.notifyStatus==='sent'?'重新發送':'發送給客戶'}</button>
+          </div>
+        );
+      })()}
+      {o.status!=='done'&&o.status!=='failed'&&o.status!=='voided'&&(
         <div style={{marginTop:8,display:'flex',gap:6,flexWrap:'wrap'}}>
-          {(o.status==='pending'||o.status==='arrived')&&<button onClick={()=>openInstallSchedule(o)} style={{padding:'5px 12px',background:'#EDE9FE',color:'#5B21B6',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>📅 {o.schedDate?'改排程':'排程派工'}</button>}
+          {(o.status==='pending'||o.status==='arrived')&&!o.shipmentNo&&<button onClick={()=>openShipModal(o)} style={{padding:'5px 12px',background:'#D1FAE5',color:'#065F46',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>🚚 標記出貨</button>}
+          {(o.status==='pending'||o.status==='arrived')&&(()=>{
+            const shipLocked=!o.shipmentNo&&!o.workerId; // 已排程舊單不回溯鎖
+            return <button onClick={()=>{if(shipLocked){toast('尚未出貨','請先完成 ERP 出貨（標記出貨）再排安裝','warn');return;}openInstallSchedule(o);}}
+              title={shipLocked?'先完成 ERP 出貨':''}
+              style={{padding:'5px 12px',background:o.workerId?'#FEF3C7':'#EDE9FE',color:o.workerId?'#92400E':'#5B21B6',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:shipLocked?'not-allowed':'pointer',opacity:shipLocked?.45:1}}>{o.workerId?'🔁 轉單／改排程':'📅 排程派工'}</button>;
+          })()}
           {o.status==='pending'&&<button onClick={()=>arriveInstall(o)} style={{padding:'5px 12px',background:'var(--accent)',color:'var(--brand)',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>📍 標記到場</button>}
           {o.status==='arrived'&&<button onClick={()=>installedDone(o)} style={{padding:'5px 12px',background:'var(--ok)',color:'#fff',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>🔧 施工完成</button>}
           {o.status==='installed'&&<button onClick={()=>setVerifyInstall(o)} style={{padding:'5px 12px',background:'var(--ok)',color:'#fff',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>🔬 完工驗收 + 保固登錄</button>}
-          {(o.status==='pending'||o.status==='arrived')&&<button onClick={()=>failInstall(o)} style={{padding:'5px 12px',background:'#FEE2E2',color:'var(--err)',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>無法安裝</button>}
+          {(o.status==='pending'||o.status==='arrived')&&<button onClick={()=>{setVoidModal(o);setVoidReason('');}} style={{padding:'5px 12px',background:'#7F1D1D',color:'#fff',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>🚫 當單／改約</button>}
+        </div>
+      )}
+      {(o.history||[]).length>0&&(
+        <div style={{marginTop:8}}>
+          <button onClick={()=>setShowHist(v=>v===o.id?null:o.id)} title="異動紀錄" style={{background:'transparent',border:'none',cursor:'pointer',fontSize:11,color:'var(--g400)',padding:'2px 0'}}>🕓 異動紀錄（{(o.history||[]).length}）</button>
+          {showHist===o.id&&(
+            <div style={{marginTop:4,background:'#F8FAFC',borderRadius:6,padding:'8px 10px'}}>
+              {(o.history||[]).slice().reverse().map((h,i)=>(
+                <div key={i} style={{display:'flex',gap:8,fontSize:11,padding:'4px 0',borderBottom:i<o.history.length-1?'1px dashed var(--g200)':'none'}}>
+                  <span style={{color:'var(--g400)',whiteSpace:'nowrap'}}>{h.ts?new Date(Number(h.ts)).toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):'—'}</span>
+                  <span style={{flex:1,color:'var(--g700)'}}>{h.action||'—'}</span>
+                  <span style={{color:'var(--brand)',fontWeight:600,whiteSpace:'nowrap'}}>{h.by||'—'}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1664,7 +2114,7 @@ function CRMPage(){
     (curInstalls.find(x=>x.id===highlightedOrderId)&&{...curInstalls.find(x=>x.id===highlightedOrderId),_type:'install'}) ||
     null
   );
-  const historyCount=curComplaints.length+repairs.length+curInstalls.length;
+  const historyCount=curComplaints.length+repairs.length+curInstalls.length+curCalls.length;
 
   return(
     <div className="crm-layer2" style={{position:'relative',zIndex:1}}>
@@ -1672,13 +2122,24 @@ function CRMPage(){
       <button className="crm-back" onClick={()=>{setSel(null);setPage('home');}}>← 返回首頁</button>
       
       <div className="card">
+                {!cur.disabled&&cur.disabledAt&&(
+                  <div style={{background:'var(--g50)',border:'1px solid var(--g100)',borderRadius:7,padding:'7px 11px',marginBottom:10,fontSize:11.5,color:'var(--g500)',lineHeight:1.6}}>
+                    🔄 此客編曾於 {cur.disabledAt} 作廢（{cur.disabledReason||'—'}），因同姓名同地址再次下單而重新啟用。
+                  </div>
+                )}
+                {cur.disabled&&(
+                  <div style={{background:'#7F1D1D',color:'#fff',borderRadius:7,padding:'9px 12px',marginBottom:10,fontSize:12,fontWeight:700,lineHeight:1.7}}>
+                    🚫 此客編已作廢停用（{cur.disabledAt||'—'}）
+                    <div style={{fontWeight:400,marginTop:2}}>理由：{cur.disabledReason||'—'}　·　號碼不回收，不會再分配給其他客戶</div>
+                  </div>
+                )}
                 <div className="c-ph">
                   <div className="c-av">{(cur.name||'?')[0]}</div>
                   <div style={{flex:1}}>
                     <div className="c-name">{cur.name}</div>
                     <div className="c-wfid">{cur.wfId}</div>
                     <div style={{display:'flex',gap:3,marginTop:4,flexWrap:'wrap'}}>
-                      {(cur.tags||[]).map(t=><span key={t} className={`ctag ${t==='保固中'?'ok':t==='保固已到期'?'exp':t==='新客'?'new':t==='建案客戶'?'builder':'vip'}`}>{t}</span>)}
+                      {(cur.tags||[]).map(t=><span key={t} className={`ctag ${t==='保固中'?'ok':(t==='保固已到期'||t==='已作廢')?'exp':t==='新客'?'new':t==='建案客戶'?'builder':'vip'}`}>{t}</span>)}
                     </div>
                   </div>
                   <div style={{display:'flex',gap:5,flexShrink:0,flexWrap:'wrap'}}>
@@ -1747,8 +2208,9 @@ function CRMPage(){
                 ...curComplaints.map(ct=>({_type:'complaint',id:ct.id,date:ct.date,title:`${ct.cat1||'客訴'}${ct.cat2?' › '+ct.cat2:''}`,_ts:new Date(ct.date||0).getTime()||0})),
                 ...repairs.map(r=>({_type:'repair',id:r.id,date:r.date,title:`${r.type||'維修'} — ${r.issue||''}`,_ts:new Date(r.date||0).getTime()||0})),
                 ...curInstalls.map(o=>({_type:'install',id:o.id,date:o.createdDate,title:`安裝 ${PRODUCTS[o.productId]?.name||o.productId||''}`,_ts:o.createdTs||0})),
+                ...curCalls,
               ].sort((a,b)=>b._ts-a._ts).map(item=>{
-                const lab={complaint:['客訴','#FEF3C7','#B45309'],repair:['維修','#E0F2FE','#0369A1'],install:['安裝','#EDE9FE','#5B21B6']}[item._type];
+                const lab={complaint:['客訴','#FEF3C7','#B45309'],repair:['維修','#E0F2FE','#0369A1'],install:['安裝','#EDE9FE','#5B21B6'],call:['通話','#DCFCE7','#15803D']}[item._type];
                 return(
                   <div key={item.id} style={{display:'flex',alignItems:'center',gap:10,padding:'9px 12px',background:'#fff',border:'1px solid var(--g200)',borderRadius:8}}>
                     <span style={{background:lab[1],color:lab[2],fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:9,flexShrink:0}}>{lab[0]}</span>
@@ -1756,7 +2218,9 @@ function CRMPage(){
                       <div style={{fontSize:12,fontWeight:600,color:'#1E293B',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.title}</div>
                       <div style={{fontSize:10.5,color:'var(--g400)',fontFamily:'monospace'}}>{item.id} · {item.date||'—'}</div>
                     </div>
-                    <button onClick={()=>openCaseTab(cur.wfId,item.id)} style={{padding:'5px 11px',background:'var(--brand)',color:'#fff',border:'none',borderRadius:5,fontSize:11,fontWeight:700,cursor:'pointer',flexShrink:0,whiteSpace:'nowrap'}}>🔗 開啟此案</button>
+                    {item._type==='call'
+                      ? <span style={{fontSize:10.5,color:'var(--g400)',flexShrink:0,whiteSpace:'nowrap'}}>👤 {item.agent}</span>
+                      : <button onClick={()=>openCaseTab(cur.wfId,item.id)} style={{padding:'5px 11px',background:'var(--brand)',color:'#fff',border:'none',borderRadius:5,fontSize:11,fontWeight:700,cursor:'pointer',flexShrink:0,whiteSpace:'nowrap'}}>🔗 開啟此案</button>}
                   </div>
                 );
               })}
@@ -2007,6 +2471,12 @@ function CRMPage(){
             <SlotPicker workers={db.workers||[]} bookings={db.bookings} region={dispRegion} setRegion={setDispRegion}
               workerId={dispSw} setWorkerId={setDispSw} date={dispSd} setDate={setDispSd} start={dispStart} setStart={setDispStart}
               span={Math.max(1,Math.ceil(Number(dispatchRepair.workHours)||1))}/>
+            {dispatchRepair.workerId&&(
+              <div className="fs-card"><h4>🔁 轉單原因</h4>
+                <div style={{fontSize:12,color:'var(--g500)',marginBottom:6}}>目前指派：<b>{(db.workers||[]).find(w=>w.id===dispatchRepair.workerId)?.name||WORKERS.find(w=>w.id===dispatchRepair.workerId)?.name||'—'}</b>　→ 選新師傅完成轉單</div>
+                <input value={dispReason} onChange={e=>setDispReason(e.target.value)} placeholder="例：原師傅臨時無法前往，改派他人" style={{width:'100%',padding:'8px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:13}}/>
+              </div>
+            )}
             <div className="fs-card"><h4>施工註記</h4>
               <div className="chk-row">
                 <label><input type="checkbox" checked={dispHiRisk} onChange={e=>setDispHiRisk(e.target.checked)}/>⚠️ 高風險維修</label>
@@ -2046,6 +2516,12 @@ function CRMPage(){
             <SlotPicker workers={db.workers||[]} bookings={db.bookings} region={dispRegion} setRegion={setDispRegion}
               workerId={dispSw} setWorkerId={setDispSw} date={dispSd} setDate={setDispSd} start={dispStart} setStart={setDispStart}
               span={Math.max(1,Math.ceil(Number(schedInstall.workHours)||2))}/>
+            {schedInstall.workerId&&(
+              <div className="fs-card"><h4>🔁 轉單原因</h4>
+                <div style={{fontSize:12,color:'var(--g500)',marginBottom:6}}>目前指派：<b>{(db.workers||[]).find(w=>w.id===schedInstall.workerId)?.name||WORKERS.find(w=>w.id===schedInstall.workerId)?.name||'—'}</b>　→ 選新師傅完成轉單</div>
+                <input value={dispReason} onChange={e=>setDispReason(e.target.value)} placeholder="例：原師傅臨時無法前往，改派他人" style={{width:'100%',padding:'8px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:13}}/>
+              </div>
+            )}
             <div style={{display:'flex',gap:8,justifyContent:'flex-end',padding:'16px 0 8px'}}>
               <button className="cancel" style={{padding:'8px 18px',borderRadius:6,border:'none',cursor:'pointer',background:'var(--g100)',color:'var(--g600)',fontWeight:600}} onClick={()=>setSchedInstall(null)}>取消</button>
               <button className="confirm" style={{padding:'8px 20px',borderRadius:6,border:'none',cursor:'pointer',background:'var(--accent)',color:'var(--brand)',fontWeight:700}} onClick={doInstallSchedule}>確認排程</button>
@@ -2063,11 +2539,131 @@ function CRMPage(){
           onSubmit={d=>finishRepairClose(closingRepair,d)}/>;
       })()}
 
+      {/* ── ERP 出貨標記 ── */}
+      {shipModal&&(
+        <div className="mo" onClick={e=>e.target===e.currentTarget&&setShipModal(null)}>
+          <div className="mob" style={{maxWidth:420}}>
+            <h3>🚚 標記 ERP 出貨</h3>
+            <div style={{background:'var(--g50)',borderRadius:7,padding:10,marginBottom:12,fontSize:12}}>
+              <div style={{fontWeight:700}}>{shipModal.name}　<span style={{fontFamily:'JetBrains Mono',fontSize:10,color:'var(--g400)'}}>{shipModal.id}</span></div>
+              <div style={{color:'var(--g500)'}}>{PRODUCTS[shipModal.productId]?.name||shipModal.productId||'—'}　×{shipModal.qty||1}</div>
+            </div>
+            <div className="mf"><label>TipTop 出貨單號 <span style={{color:'var(--err)'}}>*</span></label>
+              <input value={shipNo} onChange={e=>setShipNo(e.target.value)} placeholder="例：SO-20260707-001"/>
+            </div>
+            <div className="mf"><label>出貨日期</label>
+              <input type="date" value={shipDate} onChange={e=>setShipDate(e.target.value)}/>
+            </div>
+            <div className="mact">
+              <button className="cancel" onClick={()=>setShipModal(null)}>取消</button>
+              <button className="confirm" onClick={confirmShip}>確認出貨</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 當單／改約 ── */}
+      {voidModal&&(()=>{
+        const vt=VOID_TYPES[voidType];
+        // 預告會不會連客編一起停用，讓操作者按下去之前就知道後果
+        const others=Object.values(db.installs||{}).filter(x=>x.wfId===voidModal.wfId&&x.id!==voidModal.id&&x.status!=='voided');
+        const reps=Object.values(db.repairs||{}).filter(x=>x.wfId===voidModal.wfId);
+        const octs=Object.values(db.complaints||{}).filter(x=>x.wfId===voidModal.wfId&&x.status!=='closed');
+        const willDisable=vt?.terminal&&!!voidModal.wfId&&others.length===0&&reps.length===0&&octs.length===0;
+        return (
+        <div className="mo" onClick={e=>e.target===e.currentTarget&&setVoidModal(null)}>
+          <div className="mob" style={{maxWidth:480}}>
+            <h3>🚫 當單／改約</h3>
+            <div style={{background:'var(--g50)',borderRadius:7,padding:10,marginBottom:12,fontSize:12}}>
+              <div style={{fontWeight:700}}>{voidModal.name}　<span style={{fontFamily:'JetBrains Mono',fontSize:10,color:'var(--g400)'}}>{voidModal.id}</span></div>
+              <div style={{color:'var(--g500)'}}>{PRODUCTS[voidModal.productId]?.name||voidModal.productId||'—'}　×{voidModal.qty||1}</div>
+              {voidModal.wfId&&<div style={{color:'var(--g500)',fontFamily:'JetBrains Mono',fontSize:11}}>客編 {voidModal.wfId}</div>}
+            </div>
+
+            <div className="mf"><label>當單理由 <span style={{color:'var(--err)'}}>*</span></label></div>
+            <div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:12}}>
+              {Object.entries(VOID_TYPES).map(([k,v])=>(
+                <div key={k} onClick={()=>setVoidType(k)} style={{cursor:'pointer',border:`2px solid ${voidType===k?(v.terminal?'#DC2626':'#D97706'):'var(--g100)'}`,
+                  background:voidType===k?(v.terminal?'#FEE2E2':'#FEF3C7'):'#fff',borderRadius:7,padding:'8px 11px'}}>
+                  <div style={{fontSize:12.5,fontWeight:700,color:voidType===k?(v.terminal?'#991B1B':'#92400E'):'var(--g600)'}}>{v.label}</div>
+                  <div style={{fontSize:11,color:'var(--g500)',marginTop:1}}>{v.desc}</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{background:vt?.terminal?(willDisable?'#FEE2E2':'#FEF3C7'):'#EFF6FF',
+              border:`1px solid ${vt?.terminal?(willDisable?'#FCA5A5':'#FDE68A'):'#BFDBFE'}`,
+              borderRadius:7,padding:10,marginBottom:12,fontSize:11.5,lineHeight:1.7,
+              color:vt?.terminal?(willDisable?'#991B1B':'#92400E'):'#1E40AF'}}>
+              {!vt?.terminal
+                ? <>📅 這張單<strong>不會作廢</strong>，會退回「待排程」，客編不受影響。<br/>請於改約後重新安排師傅與時段。</>
+                : willDisable
+                  ? <>⚠️ 此客戶名下沒有其他有效案件，當單後 <strong>客編 {voidModal.wfId} 會一併停用</strong>。<br/>停用的客編<strong>號碼不回收</strong>，之後的客戶會繼續往下編號。</>
+                  : <>此客戶名下仍有其他案件（安裝 {others.length}／維修 {reps.length}／未結客訴 {octs.length}），<strong>只作廢這張單，客編保留</strong>。</>}
+              <div style={{marginTop:4}}>已排定的師傅時段會一併釋放。</div>
+            </div>
+
+            <div className="mf"><label>補充說明 <span style={{color:'var(--err)'}}>*</span></label>
+              <input value={voidReason} onChange={e=>setVoidReason(e.target.value)}
+                placeholder={voidType==='cannot_install'?'例：門框厚度不足，需加遮孔板才能裝'
+                  :voidType==='customer_refuse'?'例：客戶改買他牌，不裝了'
+                  :'例：客戶臨時出差，改約下週三'}/>
+            </div>
+            <div className="mact">
+              <button className="cancel" onClick={()=>setVoidModal(null)}>取消</button>
+              <button className="confirm" style={{background:vt?.terminal?'#7F1D1D':'#D97706'}} onClick={doVoidInstall}>
+                {vt?.terminal?'確認當單':'確認改約'}</button>
+            </div>
+          </div>
+        </div>
+        );
+      })()}
+
       {/* ── 安裝完工驗收 ── */}
       {verifyInstall&&<WorkOrderModal mode="install" record={verifyInstall} warrantyIn={true}
         onClose={()=>setVerifyInstall(null)}
         onSubmit={d=>finishInstallVerify(verifyInstall,d)}/>}
 
+      {/* ── 照片與簽名查看（僅 admin，由卡片上的隱藏按鈕觸發） ── */}
+      {viewingMedia&&<PhotoSignatureModal data={viewingMedia} onClose={()=>setViewingMedia(null)}/>}
+
+    </div>
+  );
+}
+
+// ─── 照片與簽名查看 modal（admin 專用，縮圖可點擊放大）───
+function PhotoSignatureModal({data,onClose}){
+  const [zoomed,setZoomed] = useState(null);
+  const {photos,signature,caseId} = data;
+  return(
+    <div className="mo" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="mob" style={{maxWidth:520}}>
+        <h3>📷 照片與簽名 — {caseId}</h3>
+        {photos.length>0?(
+          <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8,marginTop:10}}>
+            {photos.map((url,i)=>(
+              <img key={i} src={url} onClick={()=>setZoomed(url)}
+                style={{width:'100%',aspectRatio:'1',objectFit:'cover',borderRadius:6,cursor:'pointer',border:'1px solid var(--g200)'}}/>
+            ))}
+          </div>
+        ):<div style={{color:'var(--g400)',fontSize:12,marginTop:10}}>無現場照片</div>}
+        {signature&&(
+          <div style={{marginTop:16}}>
+            <div style={{fontSize:10,color:'var(--g500)',fontWeight:700,marginBottom:6,letterSpacing:.5}}>客戶簽名</div>
+            <img src={signature} onClick={()=>setZoomed(signature)}
+              style={{width:'100%',border:'1px solid var(--g200)',borderRadius:6,cursor:'pointer',background:'#F8FAFC'}}/>
+          </div>
+        )}
+        <div style={{textAlign:'right',marginTop:16}}>
+          <button onClick={onClose} style={{padding:'7px 16px',background:'var(--g100)',color:'var(--g600)',border:'none',borderRadius:6,fontSize:12,fontWeight:700,cursor:'pointer'}}>關閉</button>
+        </div>
+      </div>
+      {zoomed&&(
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.85)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',cursor:'zoom-out'}}
+          onClick={e=>{e.stopPropagation();setZoomed(null);}}>
+          <img src={zoomed} style={{maxWidth:'92vw',maxHeight:'92vh',objectFit:'contain'}}/>
+        </div>
+      )}
     </div>
   );
 }
@@ -2138,6 +2734,35 @@ const maskPhone=phone=>{
   if(phone.length<7)return phone;
   return phone.slice(0,4)+'***'+phone.slice(-3);
 };
+const maskAddress=addr=>{
+  if(!addr)return'—';
+  if(addr.length<=6)return addr;
+  return addr.slice(0,6)+'****';
+};
+// 計畫書2 §3.4 資料匯出——CSV 帶 UTF-8 BOM（Excel 開繁中不亂碼），彙總/明細報表共用
+const exportCsv=(filename,headers,rows)=>{
+  const esc=v=>{
+    const s=v==null?'':String(v);
+    return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+  };
+  const lines=[headers.map(esc).join(','), ...rows.map(r=>r.map(esc).join(','))];
+  const csv='﻿'+lines.join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+function ExportButtons({onSummary,onDetail}){
+  const btnStyle={padding:'7px 14px',fontSize:12,fontWeight:700,border:'1px solid var(--g200)',borderRadius:7,background:'#fff',cursor:'pointer',color:'var(--brand)'};
+  return(
+    <div style={{display:'flex',gap:8}}>
+      <button style={btnStyle} onClick={onSummary}>⬇️ 匯出彙總CSV</button>
+      <button style={btnStyle} onClick={onDetail}>⬇️ 匯出明細CSV</button>
+    </div>
+  );
+}
 
 function CaseDetailPanel({c,onClose,onOpenFull}){
   const {db}=useContext(Ctx);
@@ -2292,7 +2917,7 @@ function CreateCustomerModal({onClose}){
       toast('客戶已存在',`${exist.name}（${exist.wfId}）已在系統中，將為您開啟詳情`,'warn');
       setCrmTarget(exist.wfId); setPage('crm'); onClose(); return;
     }
-    const wfId='WF'+String(Date.now()).slice(-8);
+    const wfId=(await sb.rpc('next_wf_id')).data;
     const newCust={wfId,name:name.trim(),phone:phone.trim(),address,zip,channel,
       groupId:groupId||null,projectId:projectId||null,
       regType:'manual',regDate:today(),
@@ -2356,12 +2981,16 @@ function HomePage(){
   const [search,setSearch]=useState('');
   const [typeFilter,setTypeFilter]=useState('all');
   const [dept,setDept]=useState('all');
+  const [dateFrom,setDateFrom]=useState('');
+  const [dateTo,setDateTo]=useState('');
+  const [sortDir,setSortDir]=useState('desc');
+  const [pageNo,setPageNo]=useState(1);
   const [results,setResults]=useState(null); // null=案件池模式, array=客戶搜尋結果
   const [custModal,setCustModal]=useState(false);
   const installs=Object.values(db.installs||{});
   const repairs=Object.values(db.repairs||{});
   const complaints=Object.values(db.complaints||{});
-  const DONE_STATUS=['done','closed','failed'];
+  const DONE_STATUS=['done','closed','failed','voided'];
   const isOpen=c=>!DONE_STATUS.includes(c.status);
   const allCases=[
     ...installs.filter(isOpen).map(o=>({...o,_type:'install',_date:o.createdTs||0})),
@@ -2371,16 +3000,40 @@ function HomePage(){
   const followingComplaints=complaints.filter(ct=>ct.status==='following')
     .map(ct=>({...ct,_type:'complaint',_date:new Date(ct.date||0).getTime()||0}))
     .sort((a,b)=>b._date-a._date);
-  const filtered=(typeFilter==='following_complaint'
+  const inDateRange=c=>{
+    const d=c._date||new Date(c.date||c.createdDate||0).getTime()||0;
+    if(dateFrom&&d<new Date(dateFrom+'T00:00:00').getTime())return false;
+    if(dateTo&&d>new Date(dateTo+'T23:59:59').getTime())return false;
+    return true;
+  };
+  const filteredBase=(typeFilter==='following_complaint'
     ? followingComplaints.filter(c=>dept==='all'||c.department===dept)
     : allCases.filter(c=>{
         if(typeFilter!=='all'&&c._type!==typeFilter)return false;
         if(dept!=='all'&&c._type==='complaint'&&c.department!==dept)return false;
         return true;
       })
-  );
+  ).filter(inDateRange);
+  const filtered=[...filteredBase].sort((a,b)=>sortDir==='asc'?(a._date-b._date):(b._date-a._date));
+  // 比照客訴分頁的「未處理／待追蹤」分區：維修、安裝（與全部案件）也拆「未處理／處理中」，
+  // AI 自動建的單落在未處理區、置頂全列不分頁，一眼可見不漏接；「追蹤中客訴」專屬檢視維持平鋪
+  const splitView = typeFilter!=='following_complaint';
+  const pendingPool = splitView ? filtered.filter(c=>c.status==='pending') : [];
+  const activePool  = splitView ? filtered.filter(c=>c.status!=='pending') : filtered;
+  const pageSize=30;
+  const totalPages=Math.max(1,Math.ceil(activePool.length/pageSize));
+  const pageCases=activePool.slice((Math.min(pageNo,totalPages)-1)*pageSize,Math.min(pageNo,totalPages)*pageSize);
+  useEffect(()=>{ setPageNo(1); },[typeFilter,dept,dateFrom,dateTo,sortDir,results]);
   const openCustomer=wfId=>{ setCrmTarget(wfId); setPage('crm'); };
-  const openCaseTab=(wfId,caseId)=>{ if(!wfId){ toast('此案件尚未歸戶','請先整理客編再開啟','warn'); return; } window.open(location.origin+location.pathname+'#crm/'+wfId+'/'+caseId,'_blank'); };
+  const caseUrl=(wfId,caseId)=>location.origin+location.pathname+'#crm/'+wfId+'/'+caseId;
+  const openCaseTab=(wfId,caseId)=>{ if(!wfId){ toast('此案件尚未歸戶','請先整理客編再開啟','warn'); return; } window.open(caseUrl(wfId,caseId),'_blank'); };
+  const copyCaseLink=async(e,wfId,caseId)=>{
+    e.stopPropagation();
+    if(!wfId){ toast('此案件尚未歸戶','請先整理客編再複製連結','warn'); return; }
+    const url=caseUrl(wfId,caseId);
+    try{ await navigator.clipboard.writeText(url); toast('🔗 已複製案件連結',caseId,'ok'); }
+    catch(err){ window.prompt('複製案件連結',url); }
+  };
   const doSearch=()=>{
     const term=search.trim();
     if(!term){ setResults(null); return; }
@@ -2392,23 +3045,33 @@ function HomePage(){
       ...complaints.filter(t=>(c.wfId&&t.wfId===c.wfId)||(c.phone&&t.phone===c.phone)),
     ].length;
     // 1. 已登錄客戶（模糊比對 姓名/電話/編號/序號/地址）
-    const matched=customers.filter(c=>
+    const custByWf={}; customers.forEach(c=>{custByWf[c.wfId]=c;});
+    const matchedMap={};
+    customers.filter(c=>
       (c.name||'').toLowerCase().includes(lo)||(c.phone||'').includes(term)||
       (c.wfId||'').toLowerCase().includes(lo)||(c.serialNo||'').toLowerCase().includes(lo)||
       (c.address||'').includes(term)
-    ).map(c=>({...c,_registered:true,_caseCount:cntCases(c)}));
-    // 2. 未登錄但有案件的電話（去重，建立候選）
-    const known=new Set(matched.map(c=>c.phone));
+    ).forEach(c=>{matchedMap[c.wfId]={...c,_registered:true,_caseCount:cntCases(c)};});
     const allRaw=[
       ...installs.map(o=>({...o,_type:'install'})),
       ...repairs.map(r=>({...r,_type:'repair'})),
       ...complaints.map(t=>({...t,_type:'complaint'})),
     ];
+    // 2. 案號比對到已登錄客戶（原本案號只會落到未登錄分支，客服拿單號查客戶開不到主檔）
+    allRaw.forEach(c=>{
+      if(!(c.id||'').toLowerCase().includes(lo))return;
+      const cust=c.wfId&&custByWf[c.wfId];
+      if(cust&&!matchedMap[cust.wfId]) matchedMap[cust.wfId]={...cust,_registered:true,_caseCount:cntCases(cust)};
+    });
+    const matched=Object.values(matchedMap);
+    // 3. 未登錄但有案件的電話（去重，建立候選）
+    const known=new Set(matched.map(c=>c.phone));
     const extra={};
     allRaw.forEach(c=>{
       const hit=(c.phone||'').includes(term)||(c.name||'').includes(term)||
         (c.id||'').toLowerCase().includes(lo)||(c.address||'').includes(term)||(c.building||'').includes(term);
       if(!hit)return;
+      if(c.wfId&&custByWf[c.wfId])return; // 已在已登錄分支處理
       const key=c.phone||c.id;
       if(known.has(c.phone))return;
       if(!extra[key]) extra[key]={wfId:null,name:c.name,phone:c.phone,address:c.address||c.building||c.district,_registered:false,_caseCount:0,_anchor:c};
@@ -2436,33 +3099,34 @@ function HomePage(){
   };
   const orphanCnt=installs.filter(needFix).length+repairs.filter(needFix).length+complaints.filter(needFix).length;
   // 依「地址+姓名」重新歸戶（冪等）：歸到既有同 key 客編，無則新建；最後清掉無案件引用的待整理孤兒客編
-  const runBackfill=()=>{
+  const runBackfill=async()=>{
     let customers=[...custList];
     const keyMap={}; customers.forEach(c=>{const k=custKey(c.name,c.address); if(k&&!keyMap[k])keyMap[k]=c.wfId;});
-    let seq=0,created=0,fixed=0;
-    const resolve=(name,address,phone)=>{
+    let created=0,fixed=0;
+    const resolve=async(name,address,phone)=>{
       const k=custKey(name,address);
       if(k&&keyMap[k])return keyMap[k];
-      const wfId='WF'+String(Date.now()).slice(-6)+String(seq++).padStart(2,'0');
+      const wfId=(await sb.rpc('next_wf_id')).data;
       customers.push({wfId,name:name||'(未具名)',phone:phone||'',address:address||'',regType:'backfill',regDate:today(),
         installDate:null,warrantyMonths:null,warrantyEnd:null,tags:['待整理'],repairIds:[],complaintIds:[]});
       if(k)keyMap[k]=wfId; created++; return wfId;
     };
-    const fix=coll=>{const out={...coll};Object.values(out).forEach(x=>{
+    const fix=async coll=>{const out={...coll}; for(const x of Object.values(out)){
       if(needFix(x)){
-        const wf=resolve(x.name||x.contactName,caseAddr(x),x.phone||x.contactPhone);
+        const wf=await resolve(x.name||x.contactName,caseAddr(x),x.phone||x.contactPhone);
         if(wf!==x.wfId)fixed++;
         out[x.id]={...x,wfId:wf};
-      }});return out;};
-    const repairsN=fix(db.repairs||{});
-    const installsN=fix(db.installs||{});
-    const complaintsN=fix(db.complaints||{});
+      }} return out;};
+    const repairsN=await fix(db.repairs||{});
+    const installsN=await fix(db.installs||{});
+    const complaintsN=await fix(db.complaints||{});
     if(created===0&&fixed===0){toast('✅ 已全部歸戶','沒有需要整理的案件','ok');return;}
     // 清理無任何案件引用的待整理孤兒客編（正式客戶即使無案件也保留）
     const used=new Set();
     [repairsN,installsN,complaintsN].forEach(coll=>Object.values(coll).forEach(x=>x.wfId&&used.add(x.wfId)));
-    const orphanWf=customers.filter(c=>!used.has(c.wfId)&&isTempCust(c)).map(c=>c.wfId);
-    customers=customers.filter(c=>used.has(c.wfId)||!isTempCust(c));
+    // 已作廢客戶一律保留：沒裝成的客戶日後若有爭議，紀錄要查得到，不能被當孤兒清掉
+    const orphanWf=customers.filter(c=>!used.has(c.wfId)&&isTempCust(c)&&!c.disabled).map(c=>c.wfId);
+    customers=customers.filter(c=>used.has(c.wfId)||!isTempCust(c)||c.disabled);
     updateDB({...db,customers,repairs:repairsN,installs:installsN,complaints:complaintsN});
     if(orphanWf.length) sb.from('customers').delete().in('wf_id',orphanWf).then(()=>{}).catch(e=>console.error('清除孤兒客編失敗:',e));
     toast('🔗 依地址重新歸戶完成',`新建 ${created} 個客編、調整 ${fixed} 筆案件`,'ok');
@@ -2579,6 +3243,20 @@ function HomePage(){
         <div style={{padding:'13px 20px',background:'#fff',borderBottom:'1px solid #E2E8F0',display:'flex',alignItems:'center',gap:12,flexShrink:0}}>
           <h2 style={{fontSize:16,fontWeight:700,color:'#0F2744',margin:0}}>📋 客訴單列表</h2>
           <span style={{fontSize:11.5,color:'#64748B',background:'#F1F5F9',padding:'2px 10px',borderRadius:9}}>{filtered.length} 筆</span>
+          <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+            <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}
+              style={{fontSize:11,padding:'5px 7px',border:'1px solid #CBD5E1',borderRadius:6}}/>
+            <span style={{fontSize:11,color:'#94A3B8'}}>至</span>
+            <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}
+              style={{fontSize:11,padding:'5px 7px',border:'1px solid #CBD5E1',borderRadius:6}}/>
+            <select value={sortDir} onChange={e=>setSortDir(e.target.value)}
+              style={{fontSize:11,padding:'5px 7px',border:'1px solid #CBD5E1',borderRadius:6}}>
+              <option value="desc">最新在前</option>
+              <option value="asc">最舊在前</option>
+            </select>
+            {(dateFrom||dateTo)&&<button onClick={()=>{setDateFrom('');setDateTo('');}}
+              style={{fontSize:11,padding:'5px 8px',border:'1px solid #CBD5E1',borderRadius:6,background:'#fff',cursor:'pointer'}}>清除日期</button>}
+          </div>
         </div>
         <div style={{padding:'12px 20px',flex:1}}>
           {typeFilter!=='complaint'&&filtered.length===0&&(
@@ -2590,7 +3268,7 @@ function HomePage(){
           {typeFilter==='complaint'&&(()=>{
             const pc=complaints.filter(ct=>ct.status==='pending'&&(dept==='all'||ct.department===dept))
               .map(ct=>({...ct,_type:'complaint'})).sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
-            const fc=followingComplaints.filter(c=>dept==='all'||c.department===dept);
+            const fc=followingComplaints.filter(c=>dept==='all'||c.department===dept).filter(inDateRange);
             const renderCard=c=>{
               const addr=c.address||c.building||c.district||'—';
               const s=ST[c.status]||{label:c.status||'—',bg:'#F1F5F9',fg:'#64748B'};
@@ -2615,6 +3293,8 @@ function HomePage(){
                   <div style={{fontSize:10.5,color:'#94A3B8',textAlign:'right',flexShrink:0}}>
                     <div style={{fontFamily:'monospace',fontSize:10,marginBottom:2}}>{c.id}</div>
                     <div>{c.date||'—'}</div>
+                    <button onClick={e=>copyCaseLink(e,c.wfId,c.id)}
+                      style={{marginTop:4,fontSize:10,border:'1px solid #CBD5E1',borderRadius:6,background:'#fff',color:'#475569',padding:'2px 6px',cursor:'pointer'}}>複製連結</button>
                   </div>
                   <span style={{background:s.bg,color:s.fg,fontSize:10,fontWeight:700,padding:'3px 9px',borderRadius:9,whiteSpace:'nowrap',flexShrink:0,minWidth:52,textAlign:'center'}}>{s.label}</span>
                 </div>
@@ -2633,7 +3313,9 @@ function HomePage(){
               {fc.map(renderCard)}
             </>);
           })()}
-          {typeFilter!=='complaint'&&filtered.map(c=>{
+          {typeFilter!=='complaint'&&(()=>{
+            if(filtered.length===0) return null; // 全空時由上方「無符合條件的案件」空狀態呈現，不重複列 0 件標題
+            const renderPoolCard=c=>{
             const addr=c.address||c.building||c.district||'—';
             const s=ST[c.status]||{label:c.status||'—',bg:'#F1F5F9',fg:'#64748B'};
             return(
@@ -2659,6 +3341,8 @@ function HomePage(){
                 <div style={{fontSize:10.5,color:'#94A3B8',textAlign:'right',flexShrink:0}}>
                   <div style={{fontFamily:'monospace',fontSize:10,marginBottom:2}}>{c.id}</div>
                   <div>{c.date||c.createdDate||'—'}</div>
+                  <button onClick={e=>copyCaseLink(e,c.wfId,c.id)}
+                    style={{marginTop:4,fontSize:10,border:'1px solid #CBD5E1',borderRadius:6,background:'#fff',color:'#475569',padding:'2px 6px',cursor:'pointer'}}>複製連結</button>
                   {c.urgency==='urgent'&&<div style={{color:'#EF4444',fontWeight:700}}>🚨</div>}
                 </div>
                 <span style={{background:s.bg,color:s.fg,fontSize:10,fontWeight:700,padding:'3px 9px',borderRadius:9,whiteSpace:'nowrap',flexShrink:0,textAlign:'center',minWidth:52}}>
@@ -2666,7 +3350,29 @@ function HomePage(){
                 </span>
               </div>
             );
-          })}
+            };
+            return(<>
+              {splitView&&<div style={{fontWeight:700,fontSize:11.5,color:'#475569',padding:'6px 0',borderBottom:'1px solid #E2E8F0',marginBottom:8}}>
+                ⏳ 未處理列表 <span style={{color:'#EF4444',fontWeight:900}}>{pendingPool.length}</span> 件
+              </div>}
+              {splitView&&pendingPool.length===0&&<div style={{fontSize:12,color:'#94A3B8',padding:'8px 0 12px'}}>目前無未處理案件</div>}
+              {splitView&&pendingPool.map(renderPoolCard)}
+              {splitView&&<div style={{fontWeight:700,fontSize:11.5,color:'#475569',padding:'6px 0',borderBottom:'1px solid #E2E8F0',marginBottom:8,marginTop:12}}>
+                🔧 處理中列表 <span style={{color:'#2563EB',fontWeight:900}}>{activePool.length}</span> 件
+              </div>}
+              {splitView&&activePool.length===0&&<div style={{fontSize:12,color:'#94A3B8',padding:'8px 0 12px'}}>目前無處理中案件</div>}
+              {pageCases.map(renderPoolCard)}
+            </>);
+          })()}
+          {typeFilter!=='complaint'&&activePool.length>pageSize&&(
+            <div style={{display:'flex',justifyContent:'center',alignItems:'center',gap:10,padding:'12px 0 4px'}}>
+              <button onClick={()=>setPageNo(p=>Math.max(1,p-1))} disabled={pageNo<=1}
+                style={{fontSize:12,padding:'6px 12px',border:'1px solid #CBD5E1',borderRadius:7,background:pageNo<=1?'#F1F5F9':'#fff',cursor:pageNo<=1?'not-allowed':'pointer'}}>上一頁</button>
+              <span style={{fontSize:12,color:'#64748B'}}>第 {Math.min(pageNo,totalPages)} / {totalPages} 頁</span>
+              <button onClick={()=>setPageNo(p=>Math.min(totalPages,p+1))} disabled={pageNo>=totalPages}
+                style={{fontSize:12,padding:'6px 12px',border:'1px solid #CBD5E1',borderRadius:7,background:pageNo>=totalPages?'#F1F5F9':'#fff',cursor:pageNo>=totalPages?'not-allowed':'pointer'}}>下一頁</button>
+            </div>
+          )}
         </div>
           </>
         )}
@@ -2716,7 +3422,8 @@ function LoginScreen({onLogin}){
 // ─── MD 5：集團 → 建案 階層瀏覽（瀏覽階層、依建案檢視客戶與案件）───
 // ─── 師傅報表（管理端）：可切換師傅＋月份，查案件數/應收/處理時效/型號故障排行/待對帳 ───
 function WorkerReportPage(){
-  const {db}=useContext(Ctx);
+  const {db,currentUser}=useContext(Ctx);
+  const isAdmin=currentUser?.role==='admin';
   const workers=(db.workers&&db.workers.length)?db.workers:WORKERS;
   const [selWorker,setSelWorker]=useState(workers[0]?.id||'');
   const [ym,setYm]=useState(new Date().toISOString().slice(0,7));
@@ -2744,15 +3451,25 @@ function WorkerReportPage(){
   rows.forEach(r=>{ const m=r.faultModel||'未分類'; modelCount[m]=(modelCount[m]||0)+1; });
   const modelRank=Object.entries(modelCount).sort((a,b)=>b[1]-a[1]);
   const unpaid=rows.filter(r=>!r.paid&&(r.chargeTotal||0)>0);
+  const workerName=workers.find(w=>w.id===selWorker)?.name||selWorker;
+  const exportSummary=()=>exportCsv(`師傅報表_${workerName}_${ym}.csv`,
+    ['指標','數值'],
+    [['本月案件數',cnt],['應收合計',totalAmt],['已收',paidAmt],['待收',unpaidAmt],['平均處理時效',avgDur],['待對帳件數',unpaid.length],
+     ...modelRank.map(([m,n])=>[`型號故障率：${m}`,n])]);
+  const exportDetail=()=>exportCsv(`師傅報表_${workerName}_${ym}_明細.csv`,
+    ['案號','客戶姓名','電話','案件日期','結案日期','型號','故障原因','處理過程','金額','收款狀態'],
+    rows.map(r=>[r.id,isAdmin?r.name:maskName(r.name),isAdmin?r.phone:maskPhone(r.phone),r.date,r.completedDate,
+      r.faultModel||'',[r.faultReasonMajor,r.faultReasonDetail].filter(Boolean).join('/'),r.handlingResult||'',r.chargeTotal||0,r.paid?'已收':'未收']));
   const cardStyle={background:'#fff',borderRadius:10,padding:'14px 10px',textAlign:'center',boxShadow:'0 1px 3px rgba(0,0,0,.06)'};
   return(
     <div style={{padding:'20px 28px',maxWidth:900,margin:'0 auto'}}>
       <h2 style={{fontSize:18,fontWeight:800,color:'var(--brand)',marginBottom:16}}>👷 師傅報表</h2>
-      <div style={{display:'flex',gap:10,marginBottom:16}}>
+      <div style={{display:'flex',gap:10,marginBottom:16,alignItems:'center',flexWrap:'wrap'}}>
         <select value={selWorker} onChange={e=>setSelWorker(e.target.value)} style={{border:'1px solid var(--g200)',borderRadius:7,padding:'8px 12px',fontSize:13}}>
           {workers.map(w=><option key={w.id} value={w.id}>{w.name}</option>)}
         </select>
         <input type="month" value={ym} onChange={e=>setYm(e.target.value)} style={{border:'1px solid var(--g200)',borderRadius:7,padding:'8px 12px',fontSize:13}}/>
+        <ExportButtons onSummary={exportSummary} onDetail={exportDetail}/>
       </div>
       <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:10,marginBottom:20}}>
         <div style={cardStyle}><div style={{fontSize:20,fontWeight:800,color:'var(--brand)'}}>{cnt}</div><div style={{fontSize:10.5,color:'var(--g400)',marginTop:2}}>本月案件數</div></div>
@@ -2789,6 +3506,328 @@ function WorkerReportPage(){
             <div style={{color:'var(--g500)',fontSize:11}}>品項：{(r.charges||[]).map(c=>c.item).join('、')||'—'}　金額：${r.chargeTotal||0}　{r.paid?'✅已收':'⏳未收'}</div>
           </div>
         )):<div style={{color:'var(--g400)',fontSize:12}}>本月無已結案案件</div>}
+      </div>
+    </div>
+  );
+}
+
+// 計畫書2 §3.2「QC 品質報表」＋「派工使用率」——資料已在收（QC三階段分類、bookings），只差呈現，不依賴金流/報表基礎建設
+function QcReportPage(){
+  const {db}=useContext(Ctx);
+  const workers=(db.workers&&db.workers.length)?db.workers:WORKERS;
+  const [ym,setYm]=useState(new Date().toISOString().slice(0,7));
+  const repairs=Object.values(db.repairs||{});
+  // completedDate 可能仍殘留舊格式資料，沿用師傅報表已驗證過的 Date 物件解析比對月份（不用字串範圍比較）
+  const inMonth=(dateStr,ymStr)=>{
+    if(!dateStr) return false;
+    const d=new Date(dateStr); if(isNaN(d)) return false;
+    const [y,m]=ymStr.split('-').map(Number);
+    return d.getFullYear()===y && (d.getMonth()+1)===m;
+  };
+  const doneRows=repairs.filter(r=>r.status==='done'&&inMonth(r.completedDate,ym));
+
+  // 型號 × 故障原因大類 交叉統計
+  const matrix={}; const majorSet=new Set();
+  doneRows.forEach(r=>{
+    const model=r.faultModel||'未分類型號', major=r.faultReasonMajor||'未分類原因';
+    majorSet.add(major);
+    matrix[model]=matrix[model]||{};
+    matrix[model][major]=(matrix[model][major]||0)+1;
+  });
+  const majorList=[...majorSet];
+  const modelList=Object.keys(matrix).sort((a,b)=>
+    Object.values(matrix[b]).reduce((s,n)=>s+n,0)-Object.values(matrix[a]).reduce((s,n)=>s+n,0));
+
+  // 近 6 個月趨勢（含當月）
+  const monthList=[...Array(6)].map((_,i)=>{
+    const [y,m]=ym.split('-').map(Number);
+    const d=new Date(y,m-1-(5-i),1);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  });
+  const trend=monthList.map(m=>({m,count:repairs.filter(r=>r.status==='done'&&inMonth(r.completedDate,m)).length}));
+  const maxTrend=Math.max(1,...trend.map(t=>t.count));
+
+  // Top 故障原因排行（不分型號）
+  const majorCount={};
+  doneRows.forEach(r=>{ const m=r.faultReasonMajor||'未分類原因'; majorCount[m]=(majorCount[m]||0)+1; });
+  const majorRank=Object.entries(majorCount).sort((a,b)=>b[1]-a[1]);
+
+  // 派工使用率：本月各師傅已排 bookings 格數 / 可用總格數（13格 × 當月天數）
+  const bookings=(db.bookings||[]).filter(b=>b.date&&b.date.slice(0,7)===ym);
+  const [by,bm]=ym.split('-').map(Number);
+  const daysInMonth=new Date(by,bm,0).getDate();
+  const totalSlots=SLOT_HOURS.length*daysInMonth;
+  const workerUtil=workers.map(w=>{
+    const used=bookings.filter(b=>b.workerId===w.id).length;
+    return {...w,used,pct:totalSlots?Math.round(used/totalSlots*1000)/10:0};
+  }).sort((a,b)=>b.used-a.used);
+
+  // 區域負載
+  const regionLoad={};
+  bookings.forEach(b=>{
+    const w=workers.find(x=>x.id===b.workerId);
+    const region=w?.region||'未知';
+    regionLoad[region]=(regionLoad[region]||0)+1;
+  });
+  const regionRows=REGIONS.map(([key,label])=>({key,label,count:regionLoad[key]||0}));
+
+  const exportSummary=()=>exportCsv(`品質與派工報表_${ym}.csv`,
+    ['項目','數值'],
+    [['本月已結案（全師傅）',doneRows.length],['涉及型號數',modelList.length],['本月已排格數/總格數',`${bookings.length}/${totalSlots}`],
+     ...majorRank.map(([m,n])=>[`故障原因：${m}`,n]),
+     ...workerUtil.map(w=>[`師傅時段利用率：${w.name}`,`${w.used}/${totalSlots}（${w.pct}%）`]),
+     ...regionRows.map(r=>[`區域負載：${r.label}`,r.count])]);
+  const exportDetail=()=>exportCsv(`品質與派工報表_${ym}_明細.csv`,
+    ['案號','型號','故障原因大類','故障原因細項','處理過程','結案日期','師傅'],
+    doneRows.map(r=>[r.id,r.faultModel||'',r.faultReasonMajor||'',r.faultReasonDetail||'',r.handlingResult||'',r.completedDate,
+      workers.find(w=>w.id===r.workerId)?.name||r.workerId||'']));
+  const cardStyle={background:'#fff',borderRadius:10,padding:'14px 10px',textAlign:'center',boxShadow:'0 1px 3px rgba(0,0,0,.06)'};
+  const rowStyle={display:'flex',justifyContent:'space-between',background:'#fff',borderRadius:7,padding:'7px 12px',marginBottom:5,fontSize:12.5};
+  return(
+    <div style={{padding:'20px 28px',maxWidth:1000,margin:'0 auto'}}>
+      <h2 style={{fontSize:18,fontWeight:800,color:'var(--brand)',marginBottom:16}}>📊 品質與派工報表</h2>
+      <div style={{marginBottom:16,display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}>
+        <input type="month" value={ym} onChange={e=>setYm(e.target.value)} style={{border:'1px solid var(--g200)',borderRadius:7,padding:'8px 12px',fontSize:13}}/>
+        <ExportButtons onSummary={exportSummary} onDetail={exportDetail}/>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10,marginBottom:20}}>
+        <div style={cardStyle}><div style={{fontSize:20,fontWeight:800,color:'var(--brand)'}}>{doneRows.length}</div><div style={{fontSize:10.5,color:'var(--g400)',marginTop:2}}>本月已結案（全師傅）</div></div>
+        <div style={cardStyle}><div style={{fontSize:20,fontWeight:800,color:'var(--brand)'}}>{modelList.length}</div><div style={{fontSize:10.5,color:'var(--g400)',marginTop:2}}>涉及型號數</div></div>
+        <div style={cardStyle}><div style={{fontSize:20,fontWeight:800,color:'var(--brand)'}}>{bookings.length}/{totalSlots}</div><div style={{fontSize:10.5,color:'var(--g400)',marginTop:2}}>本月已排格數/總格數</div></div>
+      </div>
+
+      <div style={{fontSize:13,fontWeight:700,color:'var(--brand)',margin:'20px 0 8px'}}>🔍 型號 × 故障原因大類 交叉統計</div>
+      {modelList.length?(
+        <div style={{overflowX:'auto',background:'#fff',borderRadius:8,boxShadow:'0 1px 3px rgba(0,0,0,.06)'}}>
+          <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+            <thead><tr>
+              <th style={{textAlign:'left',padding:'8px 10px',borderBottom:'1px solid var(--g100)'}}>型號</th>
+              {majorList.map(m=><th key={m} style={{textAlign:'center',padding:'8px 10px',borderBottom:'1px solid var(--g100)'}}>{m}</th>)}
+              <th style={{textAlign:'center',padding:'8px 10px',borderBottom:'1px solid var(--g100)'}}>合計</th>
+            </tr></thead>
+            <tbody>{modelList.map(model=>{
+              const total=Object.values(matrix[model]).reduce((s,n)=>s+n,0);
+              return(<tr key={model}>
+                <td style={{padding:'7px 10px',borderBottom:'1px solid var(--g100)',fontWeight:700}}>{model}</td>
+                {majorList.map(m=><td key={m} style={{textAlign:'center',padding:'7px 10px',borderBottom:'1px solid var(--g100)'}}>{matrix[model][m]||'—'}</td>)}
+                <td style={{textAlign:'center',padding:'7px 10px',borderBottom:'1px solid var(--g100)',fontWeight:700}}>{total}</td>
+              </tr>);
+            })}</tbody>
+          </table>
+        </div>
+      ):<div style={{color:'var(--g400)',fontSize:12}}>本月無已結案資料</div>}
+
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20,marginTop:20}}>
+        <div>
+          <div style={{fontSize:13,fontWeight:700,color:'var(--brand)',marginBottom:8}}>📈 近 6 個月故障件數趨勢</div>
+          {trend.map(t=>(
+            <div key={t.m} style={{display:'flex',alignItems:'center',gap:8,marginBottom:5}}>
+              <span style={{fontSize:11,color:'var(--g500)',width:52,flexShrink:0}}>{t.m}</span>
+              <div style={{flex:1,background:'var(--g100)',borderRadius:4,height:14,position:'relative'}}>
+                <div style={{width:`${t.count/maxTrend*100}%`,background:'var(--accent)',height:'100%',borderRadius:4}}/>
+              </div>
+              <span style={{fontSize:11,fontWeight:700,width:24,textAlign:'right'}}>{t.count}</span>
+            </div>
+          ))}
+        </div>
+        <div>
+          <div style={{fontSize:13,fontWeight:700,color:'var(--brand)',marginBottom:8}}>🏆 Top 故障原因排行（不分型號）</div>
+          {majorRank.length?majorRank.map(([m,n])=>(
+            <div key={m} style={rowStyle}><span>{m}</span><span style={{fontWeight:700}}>{n} 件</span></div>
+          )):<div style={{color:'var(--g400)',fontSize:12}}>本月無資料</div>}
+        </div>
+      </div>
+
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20,marginTop:20}}>
+        <div>
+          <div style={{fontSize:13,fontWeight:700,color:'var(--brand)',marginBottom:8}}>👷 師傅時段利用率</div>
+          {workerUtil.map(w=>(
+            <div key={w.id} style={{marginBottom:8}}>
+              <div style={{display:'flex',justifyContent:'space-between',fontSize:12,marginBottom:3}}>
+                <span>{w.name}</span><span style={{color:'var(--g500)'}}>{w.used}/{totalSlots}格（{w.pct}%）</span>
+              </div>
+              <div style={{background:'var(--g100)',borderRadius:4,height:8}}>
+                <div style={{width:`${Math.min(100,w.pct)}%`,background:'var(--accent)',height:'100%',borderRadius:4}}/>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div>
+          <div style={{fontSize:13,fontWeight:700,color:'var(--brand)',marginBottom:8}}>🗺️ 區域負載（本月已排班次）</div>
+          {regionRows.map(r=>(
+            <div key={r.key} style={rowStyle}><span>{r.label}</span><span style={{fontWeight:700}}>{r.count} 格</span></div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 計畫書2 §3.3「客服績效報表」——先做資料已就緒的客訴類指標（建單量/結案率/追蹤逾期）；
+// 訊息回覆時效與0800座席統計待 conversations.msgs 回覆者欄位、0800 ACW 結構化補齊後再做（見計畫書2缺口1/2）
+function CsPerfReportPage(){
+  const {db,currentUser}=useContext(Ctx);
+  const isAdmin=currentUser?.role==='admin';
+  const [ym,setYm]=useState(new Date().toISOString().slice(0,7));
+  const inMonth=(dateStr,ymStr)=>{
+    if(!dateStr) return false;
+    const d=new Date(dateStr); if(isNaN(d)) return false;
+    const [y,m]=ymStr.split('-').map(Number);
+    return d.getFullYear()===y && (d.getMonth()+1)===m;
+  };
+  const repairs=Object.values(db.repairs||{});
+  const complaints=Object.values(db.complaints||{});
+
+  // 建單量：本月建立的維修單＋客訴單，依建立者分組
+  const buildCount={};
+  repairs.filter(r=>inMonth(r.date,ym)).forEach(r=>{
+    const who=r.createdBy||'未紀錄';
+    buildCount[who]=buildCount[who]||{repair:0,complaint:0};
+    buildCount[who].repair++;
+  });
+  complaints.filter(c=>inMonth(c.date,ym)).forEach(c=>{
+    const who=c.createdBy||'未紀錄';
+    buildCount[who]=buildCount[who]||{repair:0,complaint:0};
+    buildCount[who].complaint++;
+  });
+  const buildRows=Object.entries(buildCount).map(([who,v])=>({who,...v,total:v.repair+v.complaint})).sort((a,b)=>b.total-a.total);
+
+  // 客訴結案率＋平均結案天數
+  const ctInMonth=complaints.filter(c=>inMonth(c.date,ym));
+  const ctClosed=ctInMonth.filter(c=>c.status==='closed');
+  const closeRate=ctInMonth.length?Math.round(ctClosed.length/ctInMonth.length*1000)/10:0;
+  const closeDurs=ctClosed.map(c=>{
+    if(!c.date||!c.closedDate) return null;
+    const d1=new Date(c.date), d2=new Date(c.closedDate);
+    if(isNaN(d1)||isNaN(d2)) return null;
+    return (d2-d1)/86400000;
+  }).filter(x=>x!=null&&x>=0);
+  const avgCloseDays=closeDurs.length?(closeDurs.reduce((s,x)=>s+x,0)/closeDurs.length).toFixed(1):'—';
+
+  // 追蹤逾期：即時快照（不受月份篩選）——未結案且最新一筆 schedule 追蹤紀錄的 followUpDate 已過期
+  const overdue=complaints.filter(c=>{
+    if(c.status==='closed') return false;
+    const sched=[...(c.timeline||[])].reverse().find(t=>t.type==='schedule');
+    return sched?.followUpDate && sched.followUpDate.slice(0,10)<today();
+  });
+
+  // 訊息回覆時效：本月每則客服首次回覆（agent，有 ts）與其前一則客戶訊息（user，有 ts）的時間差
+  // 只有補上 ts/by 欄位之後（2026-07-03 起）新產生的訊息才有資料，舊訊息沒有 ts 會被略過
+  const conversations=db.conversations||[];
+  const replyGaps=[];
+  conversations.forEach(cv=>{
+    const msgs=cv.msgs||[];
+    for(let i=0;i<msgs.length;i++){
+      const m=msgs[i];
+      if(m.from!=='agent'||!m.ts||!inMonth(m.ts,ym)) continue;
+      let prevUser=null;
+      for(let j=i-1;j>=0;j--){
+        if(msgs[j].from==='user'){ prevUser=msgs[j]; break; }
+        if(msgs[j].from==='agent') break; // 前面已經有客服回過，不算「首次回覆」
+      }
+      if(prevUser?.ts){
+        const gapMin=(new Date(m.ts)-new Date(prevUser.ts))/60000;
+        if(gapMin>=0) replyGaps.push({by:m.by||'未紀錄',gapMin});
+      }
+    }
+  });
+  const avgReplyMin=replyGaps.length?(replyGaps.reduce((s,x)=>s+x.gapMin,0)/replyGaps.length).toFixed(1):null;
+  const replyByAgent={};
+  replyGaps.forEach(g=>{ replyByAgent[g.by]=replyByAgent[g.by]||{sum:0,n:0}; replyByAgent[g.by].sum+=g.gapMin; replyByAgent[g.by].n++; });
+  const replyRank=Object.entries(replyByAgent).map(([who,v])=>({who,avg:(v.sum/v.n).toFixed(1),n:v.n})).sort((a,b)=>a.avg-b.avg);
+
+  // 0800 座席統計：本月 ACW 結構化資料（同樣只涵蓋 2026-07-03 起新產生的通話）
+  const acwMsgs=[];
+  conversations.filter(cv=>cv.platform==='phone').forEach(cv=>{
+    (cv.msgs||[]).forEach(m=>{ if(m.type==='acw'&&m.acw&&m.ts&&inMonth(m.ts,ym)) acwMsgs.push(m); });
+  });
+  const acwByAgent={};
+  acwMsgs.forEach(m=>{
+    const who=m.acw.agent||'未紀錄';
+    acwByAgent[who]=acwByAgent[who]||{calls:0,totalSec:0};
+    acwByAgent[who].calls++;
+    acwByAgent[who].totalSec+=m.acw.durationSec||0;
+  });
+  const acwRank=Object.entries(acwByAgent).map(([who,v])=>({who,calls:v.calls,avgSec:Math.round(v.totalSec/v.calls)})).sort((a,b)=>b.calls-a.calls);
+  const acwCatCount={};
+  acwMsgs.forEach(m=>{ const c=m.acw.cat1||'未分類'; acwCatCount[c]=(acwCatCount[c]||0)+1; });
+  const acwCatRank=Object.entries(acwCatCount).sort((a,b)=>b[1]-a[1]);
+  const fmtSec=s=>`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+
+  const exportSummary=()=>exportCsv(`客服績效報表_${ym}.csv`,
+    ['指標','數值'],
+    [['本月客訴建單數',ctInMonth.length],['客訴結案率',`${closeRate}%`],['平均結案天數',avgCloseDays],['追蹤逾期件數（即時）',overdue.length],
+     ...buildRows.map(r=>[`建單量：${r.who}`,`${r.total}件（維修${r.repair}／客訴${r.complaint}）`]),
+     ['訊息回覆平均時效（分鐘）',avgReplyMin||'—'],
+     ...replyRank.map(r=>[`回覆時效：${r.who}`,`${r.avg}分鐘（${r.n}則）`]),
+     ...acwRank.map(r=>[`0800座席：${r.who}`,`${r.calls}通｜平均${fmtSec(r.avgSec)}`])]);
+  const exportDetail=()=>exportCsv(`客服績效報表_${ym}_明細.csv`,
+    ['客訴單號','客戶姓名','電話','建立者','建立日期','結案日期','狀態'],
+    ctInMonth.map(c=>[c.id,isAdmin?c.name:maskName(c.name),isAdmin?c.phone:maskPhone(c.phone),c.createdBy||'',c.date,c.closedDate||'',c.status]));
+
+  const cardStyle={background:'#fff',borderRadius:10,padding:'14px 10px',textAlign:'center',boxShadow:'0 1px 3px rgba(0,0,0,.06)'};
+  const rowStyle={display:'flex',justifyContent:'space-between',background:'#fff',borderRadius:7,padding:'7px 12px',marginBottom:5,fontSize:12.5};
+  return(
+    <div style={{padding:'20px 28px',maxWidth:900,margin:'0 auto'}}>
+      <h2 style={{fontSize:18,fontWeight:800,color:'var(--brand)',marginBottom:16}}>🎧 客服績效報表</h2>
+      <div style={{marginBottom:16,display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}>
+        <input type="month" value={ym} onChange={e=>setYm(e.target.value)} style={{border:'1px solid var(--g200)',borderRadius:7,padding:'8px 12px',fontSize:13}}/>
+        <ExportButtons onSummary={exportSummary} onDetail={exportDetail}/>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,marginBottom:20}}>
+        <div style={cardStyle}><div style={{fontSize:20,fontWeight:800,color:'var(--brand)'}}>{ctInMonth.length}</div><div style={{fontSize:10.5,color:'var(--g400)',marginTop:2}}>本月客訴建單數</div></div>
+        <div style={cardStyle}><div style={{fontSize:20,fontWeight:800,color:'#10B981'}}>{closeRate}%</div><div style={{fontSize:10.5,color:'var(--g400)',marginTop:2}}>客訴結案率</div></div>
+        <div style={cardStyle}><div style={{fontSize:20,fontWeight:800,color:'var(--brand)'}}>{avgCloseDays}{avgCloseDays!=='—'?' 天':''}</div><div style={{fontSize:10.5,color:'var(--g400)',marginTop:2}}>平均結案天數</div></div>
+        <div style={cardStyle}><div style={{fontSize:20,fontWeight:800,color:'#EF4444'}}>{overdue.length}</div><div style={{fontSize:10.5,color:'var(--g400)',marginTop:2}}>追蹤逾期件數（即時）</div></div>
+      </div>
+
+      <div style={{fontSize:13,fontWeight:700,color:'var(--brand)',marginBottom:8}}>📋 建單量排行（本月，維修＋客訴）</div>
+      {buildRows.length?buildRows.map(r=>(
+        <div key={r.who} style={rowStyle}>
+          <span>{r.who}</span>
+          <span style={{fontWeight:700}}>{r.total} 件　<span style={{color:'var(--g400)',fontWeight:400,fontSize:11}}>（維修{r.repair}／客訴{r.complaint}）</span></span>
+        </div>
+      )):<div style={{color:'var(--g400)',fontSize:12}}>本月無建單資料</div>}
+
+      <div style={{fontSize:13,fontWeight:700,color:'var(--brand)',margin:'20px 0 8px'}}>⏰ 追蹤逾期清單</div>
+      {overdue.length?overdue.map(c=>{
+        const sched=[...(c.timeline||[])].reverse().find(t=>t.type==='schedule');
+        return(
+          <div key={c.id} style={rowStyle}>
+            <span>{c.id}｜{c.name}</span>
+            <span style={{fontWeight:700,color:'#EF4444'}}>應追蹤：{sched?.followUpDate?.slice(0,10)}</span>
+          </div>
+        );
+      }):<div style={{color:'var(--g400)',fontSize:12}}>目前無逾期追蹤案件</div>}
+
+      <div style={{fontSize:13,fontWeight:700,color:'var(--brand)',margin:'20px 0 8px'}}>💬 訊息回覆時效（本月）</div>
+      {replyGaps.length?(<>
+        <div style={{...rowStyle,fontWeight:700}}><span>整體平均</span><span>{avgReplyMin} 分鐘（{replyGaps.length} 則回覆）</span></div>
+        {replyRank.map(r=>(
+          <div key={r.who} style={rowStyle}><span>{r.who}</span><span>{r.avg} 分鐘（{r.n} 則）</span></div>
+        ))}
+      </>):<div style={{color:'var(--g400)',fontSize:12}}>本月無可計算的回覆時效資料（僅涵蓋 2026-07-03 起有完整時間戳的新訊息）</div>}
+
+      <div style={{fontSize:13,fontWeight:700,color:'var(--brand)',margin:'20px 0 8px'}}>📞 0800 座席統計（本月）</div>
+      {acwMsgs.length?(
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20}}>
+          <div>
+            <div style={{fontSize:11.5,color:'var(--g500)',fontWeight:700,marginBottom:6}}>座席通話量／平均時長</div>
+            {acwRank.map(r=>(
+              <div key={r.who} style={rowStyle}><span>{r.who}</span><span>{r.calls} 通｜平均 {fmtSec(r.avgSec)}</span></div>
+            ))}
+          </div>
+          <div>
+            <div style={{fontSize:11.5,color:'var(--g500)',fontWeight:700,marginBottom:6}}>ACW 分類分佈</div>
+            {acwCatRank.map(([c,n])=>(
+              <div key={c} style={rowStyle}><span>{c}</span><span style={{fontWeight:700}}>{n} 通</span></div>
+            ))}
+          </div>
+        </div>
+      ):<div style={{color:'var(--g400)',fontSize:12}}>本月無 0800 通話資料（僅涵蓋 2026-07-03 起結構化落地的通話）</div>}
+
+      <div style={{marginTop:20,padding:'10px 14px',background:'#EFF6FF',borderRadius:8,fontSize:11.5,color:'#1E40AF'}}>
+        ℹ️ 訊息回覆時效與 0800 座席統計自 2026-07-03 起才有完整資料（<code>conversations.msgs</code> 補上 <code>ts</code>/<code>by</code> 欄位、0800 ACW 改結構化落地），舊資料不會回溯計入，數字會隨新資料累積而變準確。
       </div>
     </div>
   );
@@ -2909,6 +3948,208 @@ function GroupProjectPage(){
   );
 }
 
+// ── 託運單配對頁 ──────────────────────────────────────────────
+// 這一頁是整套貨運單自動化的安全閥兼建檔入口。
+// 貨運公司的託運清單上沒有我方出貨單號（2026/07/30 樣本：兩家都有欄位但空著），
+// 所以只能靠地址＋電話模糊比對，一定有配不到的。配不到不是「失敗」——
+// 收貨人多半是鎖店／經銷商，本來就還沒進 CRM 客戶主檔，這裡就是把他們建進來的地方。
+function ShipmentMatchPage(){
+  const {db,updateDB,toast,currentUser,setCrmTarget,setPage} = useContext(Ctx);
+  const [tab,setTab] = useState('pending');   // pending 待確認 / unmatched 對不到 / done 已處理
+  const [q,setQ] = useState('');
+  const [picker,setPicker] = useState(null);  // 正在指定客戶的託運單
+  const [pickQ,setPickQ] = useState('');
+  const [creating,setCreating] = useState(null); // 正在建檔的託運單
+  const [form,setForm] = useState({name:'',phone:'',address:'',customerType:'dealer',dealerCode:''});
+
+  const ships=db.shipments||[];
+  const custByWf=Object.fromEntries((db.customers||[]).map(c=>[c.wfId,c]));
+
+  const buckets={
+    pending:ships.filter(s=>s.matchStatus==='pending'),
+    unmatched:ships.filter(s=>s.matchStatus==='unmatched'),
+    done:ships.filter(s=>['matched','manual','new_customer','ignored'].includes(s.matchStatus)),
+  };
+  const kw=q.trim().toLowerCase();
+  const list=(buckets[tab]||[]).filter(s=>!kw||
+    [s.trackingNo,s.recipientName,s.recipientPhone,s.recipientAddress,s.remark,s.orderNo]
+      .some(v=>String(v||'').toLowerCase().includes(kw)))
+    .sort((a,b)=>String(b.shipDate||'').localeCompare(String(a.shipDate||'')));
+
+  const setStatus=(sp,patch,note)=>{
+    updateDB(prev=>({...prev,shipments:(prev.shipments||[]).map(s=>
+      s.id===sp.id?{...s,...patch,matchedBy:currentUser?.name||'CRM'}:s)}));
+    if(note) toast('✅ 已更新',note,'ok');
+  };
+
+  const assign=(sp,cust)=>{
+    // 順帶找出該客戶「已標記 ERP 出貨、還沒掛過託運單」的安裝單，一起掛上
+    const taken=new Set(ships.filter(s=>s.installId&&s.id!==sp.id).map(s=>s.installId));
+    const ins=Object.values(db.installs||{}).find(o=>o.wfId===cust.wfId&&o.shipmentNo&&!taken.has(o.id));
+    setStatus(sp,{wfId:cust.wfId,installId:ins?.id||null,matchStatus:'manual',matchScore:1},
+      `${sp.trackingNo} → ${cust.name}（${cust.wfId}）`);
+    setPicker(null); setPickQ('');
+  };
+
+  const openCreate=(sp)=>{
+    setCreating(sp);
+    setForm({name:sp.recipientName||'',phone:sp.recipientPhone||'',address:sp.recipientAddress||'',
+      customerType:'dealer',dealerCode:sp.recipientCode||''});
+  };
+
+  const doCreate=async()=>{
+    const name=form.name.trim(), address=form.address.trim();
+    if(!name||!address){ toast('缺少必填','姓名與地址為客編識別唯一鍵，兩者都要填','warn'); return; }
+    const key=custKey(name,address);
+    const exist=(db.customers||[]).find(c=>custKey(c.name,c.address)===key);
+    if(exist){
+      toast('客戶已存在',`${exist.name}（${exist.wfId}）已在系統中，改為直接指定`,'warn');
+      assign(creating,exist); setCreating(null); return;
+    }
+    const wfId=(await sb.rpc('next_wf_id')).data;
+    if(!wfId){ toast('發客編失敗','請稍後再試','err'); return; }
+    const newCust={wfId,name,phone:form.phone.trim(),address,
+      customerType:form.customerType,dealerCode:form.dealerCode.trim()||null,
+      regType:'shipment_intake',regDate:today(),tags:['待整理'],repairIds:[],complaintIds:[]};
+    updateDB(prev=>({...prev,
+      customers:[...(prev.customers||[]),newCust],
+      shipments:(prev.shipments||[]).map(s=>s.id===creating.id
+        ?{...s,wfId,matchStatus:'new_customer',matchScore:1,matchedBy:currentUser?.name||'CRM'}:s),
+    }));
+    toast('✅ 已建立客戶',`${name}｜${wfId}`,'ok');
+    setCreating(null);
+  };
+
+  const pickCandidates=(()=>{
+    const k=pickQ.trim().toLowerCase();
+    if(!k) return [];
+    return (db.customers||[]).filter(c=>
+      [c.name,c.phone,c.address,c.wfId].some(v=>String(v||'').toLowerCase().includes(k))
+    ).slice(0,20);
+  })();
+
+  const TABS=[['pending','待確認',buckets.pending.length],['unmatched','對不到',buckets.unmatched.length],['done','已處理',buckets.done.length]];
+
+  return (
+    <div>
+      <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:14,flexWrap:'wrap'}}>
+        <h2 style={{margin:0,fontSize:18}}>📦 託運單配對</h2>
+        <div style={{display:'flex',gap:6}}>
+          {TABS.map(([k,label,n])=>(
+            <button key={k} onClick={()=>setTab(k)}
+              style={{padding:'5px 12px',borderRadius:6,border:'none',cursor:'pointer',fontSize:12,fontWeight:700,
+                background:tab===k?'var(--brand)':'var(--g100)',color:tab===k?'#fff':'var(--g700)'}}>
+              {label} {n}
+            </button>
+          ))}
+        </div>
+        <input value={q} onChange={e=>setQ(e.target.value)} placeholder="搜尋單號／收貨人／地址／備註"
+          style={{flex:1,minWidth:200,padding:'6px 10px',border:'1px solid var(--g300)',borderRadius:6,fontSize:12}}/>
+      </div>
+
+      {tab!=='done'&&<div style={{fontSize:11.5,color:'var(--g500)',marginBottom:10,lineHeight:1.7}}>
+        貨運公司的託運清單沒有我方出貨單號，只能靠地址與電話比對，因此會有對不到的。
+        對不到多半代表<strong>這位收貨人（鎖店／經銷商／工地）還沒建進客戶主檔</strong>，用「建立新客戶」補上即可。
+      </div>}
+
+      {list.length===0
+        ? <div style={{padding:'40px 0',textAlign:'center',color:'var(--g400)',fontSize:13}}>目前沒有資料</div>
+        : <div style={{display:'flex',flexDirection:'column',gap:8}}>
+            {list.map(sp=>{
+              const cust=sp.wfId?custByWf[sp.wfId]:null;
+              return (
+                <div key={sp.id} style={{border:'1px solid var(--g200)',borderRadius:8,padding:'10px 12px',background:'#fff'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',marginBottom:6}}>
+                    <span style={{fontSize:12,fontWeight:800,color:'var(--brand)'}}>{carrierLabel(sp.carrier)}</span>
+                    <span style={{fontSize:12,fontWeight:700}}>{sp.trackingNo}</span>
+                    <span style={{fontSize:11,color:'var(--g400)'}}>{sp.shipDate}</span>
+                    {sp.pieces&&<span style={{fontSize:11,color:'var(--g400)'}}>{sp.pieces} 件</span>}
+                    {sp.orderNo&&<span style={{fontSize:10.5,background:'#DCFCE7',color:'#166534',padding:'2px 6px',borderRadius:4,fontWeight:700}}>出貨單號 {sp.orderNo}</span>}
+                    {sp.matchScore>0&&<span style={{fontSize:10.5,color:'var(--g400)'}}>信心 {sp.matchScore}</span>}
+                    <span style={{flex:1}}/>
+                    {cust
+                      ? <button onClick={()=>{setCrmTarget(cust.wfId);setPage('crm');}} style={{fontSize:11,background:'none',border:'none',color:'var(--brand)',fontWeight:700,cursor:'pointer'}}>{cust.name}（{cust.wfId}）→</button>
+                      : <span style={{fontSize:11,color:'var(--g400)'}}>尚未配對</span>}
+                  </div>
+                  <div style={{fontSize:11.5,color:'var(--g700)',lineHeight:1.8}}>
+                    <div><strong>{sp.recipientName||'—'}</strong>{sp.recipientCode?`（代號 ${sp.recipientCode}）`:''}　{sp.recipientPhone||''}</div>
+                    <div style={{color:'var(--g500)'}}>{sp.recipientAddress||'—'}</div>
+                    {sp.remark&&<div style={{color:'var(--g400)'}}>備註：{sp.remark}</div>}
+                  </div>
+                  {tab!=='done'&&(
+                    <div style={{marginTop:8,display:'flex',gap:6,flexWrap:'wrap'}}>
+                      <button onClick={()=>{setPicker(sp);setPickQ(sp.recipientName||'');}} style={{padding:'5px 12px',background:'#EDE9FE',color:'#5B21B6',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>🔗 指定到現有客戶</button>
+                      <button onClick={()=>openCreate(sp)} style={{padding:'5px 12px',background:'#D1FAE5',color:'#065F46',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>➕ 建立新客戶</button>
+                      <button onClick={()=>setStatus(sp,{matchStatus:'ignored'},`已忽略 ${sp.trackingNo}`)} style={{padding:'5px 12px',background:'var(--g100)',color:'var(--g500)',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>🚫 忽略（自家調撥／測試）</button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>}
+
+      {/* 指定到現有客戶 */}
+      {picker&&(
+        <div className="modal-bg" onClick={()=>setPicker(null)}>
+          <div className="modal" onClick={e=>e.stopPropagation()}>
+            <h3>🔗 指定到現有客戶</h3>
+            <div style={{fontSize:11.5,color:'var(--g500)',marginBottom:8}}>{carrierLabel(picker.carrier)} {picker.trackingNo}｜{picker.recipientName}｜{picker.recipientAddress}</div>
+            <input autoFocus value={pickQ} onChange={e=>setPickQ(e.target.value)} placeholder="輸入姓名／電話／地址／客編搜尋"
+              style={{width:'100%',padding:'8px 10px',border:'1px solid var(--g300)',borderRadius:6,fontSize:13}}/>
+            <div style={{maxHeight:260,overflowY:'auto',marginTop:8}}>
+              {pickCandidates.length===0
+                ? <div style={{padding:'20px 0',textAlign:'center',color:'var(--g400)',fontSize:12}}>{pickQ?'查無符合的客戶':'請輸入關鍵字'}</div>
+                : pickCandidates.map(c=>(
+                    <div key={c.wfId} onClick={()=>assign(picker,c)}
+                      style={{padding:'8px 10px',borderBottom:'1px solid var(--g100)',cursor:'pointer',fontSize:12}}>
+                      <strong>{c.name}</strong>　<span style={{color:'var(--g400)'}}>{c.wfId}｜{c.phone}</span>
+                      <div style={{color:'var(--g500)',fontSize:11}}>{c.address}</div>
+                    </div>
+                  ))}
+            </div>
+            <div className="modal-actions"><button onClick={()=>setPicker(null)}>取消</button></div>
+          </div>
+        </div>
+      )}
+
+      {/* 建立新客戶 */}
+      {creating&&(
+        <div className="modal-bg" onClick={()=>setCreating(null)}>
+          <div className="modal" onClick={e=>e.stopPropagation()}>
+            <h3>➕ 由託運單建立客戶</h3>
+            <div style={{fontSize:11.5,color:'var(--g500)',marginBottom:10}}>資料已從託運單帶入，確認後建立客戶主檔並自動配對。</div>
+            <label style={{fontSize:11,fontWeight:700}}>客戶類型</label>
+            <select value={form.customerType} onChange={e=>setForm({...form,customerType:e.target.value})}
+              style={{width:'100%',padding:'7px 9px',border:'1px solid var(--g300)',borderRadius:6,fontSize:13,marginBottom:8}}>
+              <option value="dealer">經銷商 / 鎖店</option>
+              <option value="consumer">末端消費者</option>
+              <option value="project">建案 / 工地</option>
+              <option value="internal">內部調撥（不推播）</option>
+            </select>
+            <label style={{fontSize:11,fontWeight:700}}>名稱（必填）</label>
+            <input value={form.name} onChange={e=>setForm({...form,name:e.target.value})}
+              style={{width:'100%',padding:'7px 9px',border:'1px solid var(--g300)',borderRadius:6,fontSize:13,marginBottom:8}}/>
+            <label style={{fontSize:11,fontWeight:700}}>電話</label>
+            <input value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})}
+              style={{width:'100%',padding:'7px 9px',border:'1px solid var(--g300)',borderRadius:6,fontSize:13,marginBottom:8}}/>
+            <label style={{fontSize:11,fontWeight:700}}>地址（必填，客編識別唯一鍵）</label>
+            <input value={form.address} onChange={e=>setForm({...form,address:e.target.value})}
+              style={{width:'100%',padding:'7px 9px',border:'1px solid var(--g300)',borderRadius:6,fontSize:13,marginBottom:8}}/>
+            <label style={{fontSize:11,fontWeight:700}}>貨運收貨人代號（新竹，選填）</label>
+            <input value={form.dealerCode} onChange={e=>setForm({...form,dealerCode:e.target.value})}
+              placeholder="填了以後這家的託運單都能自動配對"
+              style={{width:'100%',padding:'7px 9px',border:'1px solid var(--g300)',borderRadius:6,fontSize:13}}/>
+            <div className="modal-actions">
+              <button onClick={()=>setCreating(null)}>取消</button>
+              <button className="confirm" onClick={doCreate}>建立並配對</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function App(){
   const [page,setPage] = useState('home');
   const [crmTarget,setCrmTarget] = useState(null); // 首頁搜尋→跳 CRM 指定客戶 wfId
@@ -2933,20 +4174,27 @@ function App(){
     setTimeout(()=>setToasts(p=>p.filter(t=>t.id!==id)),3500);
   },[]);
 
-  // 初始載入
-  useEffect(()=>{
+  const [loadError,setLoadError] = useState(null);
+  const doInitialLoad=useCallback(()=>{
+    setLoading(true); setLoadError(null);
     loadFromSupabase().then(data=>{
       setDB(data);
       prevDbRef.current = data;
       setLoading(false);
       setSynced(true);
+    }).catch(e=>{
+      console.error('初始載入失敗:',e);
+      setLoadError(e.message||String(e));
+      setLoading(false);
     });
   },[]);
+  // 初始載入
+  useEffect(()=>{ doInitialLoad(); },[doInitialLoad]);
 
-  // Hash deep link：登入後 + db 載入後解析一次，導向對應工單/客戶
-  useEffect(()=>{
-    if(!currentUser||!(db.customers&&db.customers.length)||hashApplied.current) return;
-    hashApplied.current=true;
+  // Hash deep link：登入後 + db 載入後解析一次，導向對應工單/客戶；並監聽 hashchange，
+  // 讓頁面開著時再點一個新的深連結（例如 0800 來電彈屏）也能導航，不用整頁重載。
+  const applyHash=useCallback(()=>{
+    if(!currentUser||!(db.customers&&db.customers.length)) return;
     const hash=window.location.hash.slice(1);
     if(!hash) return;
     const [type,a,b]=hash.split('/');
@@ -2960,17 +4208,34 @@ function App(){
       const o=Object.values(db.installs||{}).find(x=>x.id===a);
       if(o?.wfId){ setCrmTarget(o.wfId); setHighlightedOrderId(a); setPage('crm'); }
     }
-  },[currentUser,db.customers]);
+  },[currentUser,db.customers,db.repairs,db.installs]);
+  useEffect(()=>{
+    if(hashApplied.current) return;
+    if(!currentUser||!(db.customers&&db.customers.length)) return;
+    hashApplied.current=true;
+    applyHash();
+  },[currentUser,db.customers,applyHash]);
+  useEffect(()=>{
+    const onHashChange=()=>applyHash();
+    window.addEventListener('hashchange',onHashChange);
+    return ()=>window.removeEventListener('hashchange',onHashChange);
+  },[applyHash]);
 
   const updateDB = useCallback(updater=>{
     setDB(prev=>{
       const next = typeof updater==='function' ? updater(prev) : updater;
       const withVer = {...next, version:(next.version||0)+1};
-      syncToSupabase(prevDbRef.current, withVer).then(()=>setSynced(true));
+      const basePrev = prevDbRef.current;
+      syncToSupabase(basePrev, withVer).then(({ok,errors})=>{
+        if(ok){ setSynced(true); return; }
+        // 顯性失敗：不確定成功就不能靜默——燈號轉離線，並告訴使用者哪些資料沒存上
+        setSynced(false);
+        toast('⚠️ 資料同步失敗',errors.join('；')||'請檢查網路後重試','err');
+      });
       prevDbRef.current = withVer;
       return withVer;
     });
-  },[]);
+  },[toast]);
 
   // Supabase Realtime 跨分頁與跨裝置同步（增量更新，不再全量重載）
   useEffect(()=>{
@@ -3053,6 +4318,12 @@ function App(){
         } else if(eventType==='DELETE'){
           next={...prev,projects:(prev.projects||[]).filter(p=>p.id!==or.id)};
         }
+      } else if(table==='shipments'){
+        if(eventType==='INSERT'||eventType==='UPDATE'){
+          next={...prev,shipments:[...(prev.shipments||[]).filter(s=>s.id!==nr.id),dbToShipment(nr)]};
+        } else if(eventType==='DELETE'){
+          next={...prev,shipments:(prev.shipments||[]).filter(s=>s.id!==or.id)};
+        }
       } else if(table==='config'){
         if((eventType==='INSERT'||eventType==='UPDATE')&&nr.key==='wf_counter'){
           next={...prev,wfCounter:parseInt(nr.value||'0')};
@@ -3078,6 +4349,16 @@ function App(){
     </div>
   );
 
+  // 顯性失敗：載入失敗絕不能假裝空資料庫正常（會讓客服誤建重複客編），改顯示錯誤畫面 + 重試
+  if(loadError) return (
+    <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100vh',gap:16,color:'var(--err)'}}>
+      <div style={{fontSize:32}}>⚠️</div>
+      <div style={{fontSize:14,fontWeight:700}}>雲端資料庫連線失敗</div>
+      <div style={{fontSize:12,color:'var(--g500)',maxWidth:420,textAlign:'center'}}>{loadError}</div>
+      <button onClick={doInitialLoad} style={{padding:'8px 20px',background:'var(--brand)',color:'#fff',border:'none',borderRadius:6,fontSize:13,fontWeight:700,cursor:'pointer'}}>重新連線</button>
+    </div>
+  );
+
   if(!currentUser) return <LoginScreen onLogin={doLogin}/>;
 
 
@@ -3088,7 +4369,13 @@ function App(){
         <button className={`nbtn ${page==='home'||page==='crm'?'on':''}`} onClick={()=>{setPage('home');window.history.replaceState(null,'',location.pathname+location.search);}}>🏠 首頁 / 客戶查詢</button>
         <button className={`nbtn ${page==='schedule'?'on':''}`} onClick={()=>{setPage('schedule');window.history.replaceState(null,'',location.pathname+location.search);}}>📅 工務時刻表</button>
         <button className={`nbtn ${page==='groups'?'on':''}`} onClick={()=>{setPage('groups');window.history.replaceState(null,'',location.pathname+location.search);}}>🏢 集團/建案</button>
+        <button className={`nbtn ${page==='shipments'?'on':''}`} onClick={()=>{setPage('shipments');window.history.replaceState(null,'',location.pathname+location.search);}}>📦 託運單配對{(()=>{
+          const n=(db.shipments||[]).filter(s=>s.matchStatus==='pending'||s.matchStatus==='unmatched').length;
+          return n?<span style={{marginLeft:5,background:'var(--err)',color:'#fff',borderRadius:9,padding:'0 5px',fontSize:9.5,fontWeight:800}}>{n}</span>:null;
+        })()}</button>
         <button className={`nbtn ${page==='workerReport'?'on':''}`} onClick={()=>{setPage('workerReport');window.history.replaceState(null,'',location.pathname+location.search);}}>👷 師傅報表</button>
+        <button className={`nbtn ${page==='qcReport'?'on':''}`} onClick={()=>{setPage('qcReport');window.history.replaceState(null,'',location.pathname+location.search);}}>📊 品質與派工報表</button>
+        <button className={`nbtn ${page==='csPerfReport'?'on':''}`} onClick={()=>{setPage('csPerfReport');window.history.replaceState(null,'',location.pathname+location.search);}}>🎧 客服績效報表</button>
         <div className="sync-area">
           {isAdmin
             ? <select value={adminView} onChange={e=>setAdminView(e.target.value)} style={{fontSize:11,padding:'2px 4px',borderRadius:4,marginRight:10}}>
@@ -3102,8 +4389,8 @@ function App(){
           <span>{synced?'即時同步中':'離線模式'}</span>
           <span style={{fontSize:9,marginLeft:2}}>v{db.version||0}</span>
         </div>
-        <button onClick={async ()=>{
-          if(confirm('確定清除所有資料嗎？(此動作將清空 Supabase 雲端資料)')){
+        {isAdmin&&<button onClick={async ()=>{
+          if(prompt('此動作將永久清空 Supabase 雲端全部客戶資料，且無備份機制。\n確定要繼續請輸入「清空資料庫」：')==='清空資料庫'){
             setLoading(true);
             try {
               await Promise.all([
@@ -3120,14 +4407,17 @@ function App(){
         }}
           style={{padding:'3px 8px',background:'rgba(239,68,68,.15)',border:'1px solid rgba(239,68,68,.3)',borderRadius:4,color:'#FCA5A5',fontSize:10,cursor:'pointer',marginLeft:6}}>
           重置
-        </button>
+        </button>}
       </nav>
       <div className="page">
         {page==='home'&&<HomePage/>}
         {page==='crm'&&<CRMPage/>}
         {page==='schedule'&&<SchedulePage/>}
         {page==='groups'&&<GroupProjectPage/>}
+        {page==='shipments'&&<ShipmentMatchPage/>}
         {page==='workerReport'&&<WorkerReportPage/>}
+        {page==='qcReport'&&<QcReportPage/>}
+        {page==='csPerfReport'&&<CsPerfReportPage/>}
       </div>
       <Toasts items={toasts}/>
     </Ctx.Provider>

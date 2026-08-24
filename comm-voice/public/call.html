@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WAFERLOCK 真人客服語音通話</title>
+  <style>
+    :root { --purple:#48086B; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; display:grid; place-items:center; font-family:-apple-system,"PingFang TC","Noto Sans TC",sans-serif; background:linear-gradient(160deg,#2a0540,#48086B); color:#fff; }
+    .card { width:92%; max-width:420px; text-align:center; padding:34px 24px; }
+    .wl-wm { display:inline-block; height:22px; width:180px; max-width:78%; background:#fff; -webkit-mask:url(img/waferlock.svg) no-repeat center/contain; mask:url(img/waferlock.svg) no-repeat center/contain; }
+    h1 { font-size:17px; margin:14px 0 4px; }
+    .sub { color:#d9c7ea; font-size:12px; letter-spacing:1px; margin-bottom:26px; }
+    .orb { width:130px; height:130px; border-radius:50%; margin:0 auto 22px; background:radial-gradient(circle at 50% 40%,#b06bd8,#6a1597); box-shadow:0 0 0 0 rgba(176,107,216,.6); }
+    .orb.live { animation:pulse 1.5s infinite; }
+    @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(176,107,216,.5);} 70%{box-shadow:0 0 0 26px rgba(176,107,216,0);} 100%{box-shadow:0 0 0 0 rgba(176,107,216,0);} }
+    .state { font-size:16px; min-height:24px; margin-bottom:20px; }
+    button { font-family:inherit; cursor:pointer; border:none; border-radius:28px; padding:13px 26px; font-size:16px; font-weight:700; margin:4px; }
+    .accept { background:#2ecc71; color:#fff; }
+    .stop { background:#e5484d; color:#fff; }
+    .mute { background:rgba(255,255,255,.16); color:#fff; }
+    .hint { color:#c9b3df; font-size:11px; margin-top:18px; line-height:1.6; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <span class="wl-wm" role="img" aria-label="WAFERLOCK"></span>
+    <h1>真人客服語音通話</h1>
+    <div class="sub">SECURITY ✕ SIMPLICITY</div>
+    <div class="orb" id="orb"></div>
+    <div class="state" id="state">客服邀請您進行語音通話</div>
+    <div id="controls"></div>
+    <div class="hint" id="hint">📢 本通話將錄音以提升服務品質。接聽後請允許麥克風權限，建議戴耳機避免回音</div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/rtc-client.js"></script>
+  <script src="js/gemini-live-client.js"></script>
+  <script>
+  (function () {
+    // 信令與 TURN 憑證都掛在既有 Supabase（anon key 前端公開，與專案其餘頁面一致）
+    var SUPABASE_URL = 'https://nkyanyjgfrmovjoqevro.supabase.co';
+    var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5reWFueWpnZnJtb3Zqb3FldnJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2ODIxMTMsImV4cCI6MjA5NzI1ODExM30.LPnQyceYS7Z1-rlqUtXm3B8dGBOqnmnavTV-PAOSPZ8';
+    var FN = SUPABASE_URL + '/functions/v1/';
+    var room = (new URLSearchParams(location.search)).get('room') || '';
+    var stateEl = document.getElementById('state'), orb = document.getElementById('orb'), controls = document.getElementById('controls'), hint = document.getElementById('hint');
+    var call = null, bot = null, actx = null, muted = false;
+    function setState(s) { stateEl.textContent = s; }
+    if (!room) { setState('⚠️ 通話連結無效'); document.getElementById('hint').style.display = 'none'; return; }
+    var ho = (new URLSearchParams(location.search)).get('ho'); // 從 AI 語音轉真人而來
+    if (ho) { setState('正在為您接通真人客服，請點「接聽」稍候'); controls.innerHTML = '<button class="accept" id="accept">📞 接聽真人</button>'; }
+    else { controls.innerHTML = '<button class="accept" id="accept">📞 接聽</button>'; }
+    // D：等候逾時（約 50 秒無人接聽）→ 顯示留電話回電表單
+    var waitTimer = setTimeout(showCallbackForm, 50000);
+    function cancelWait() { if (waitTimer) { clearTimeout(waitTimer); waitTimer = null; } }
+
+    function inCallUI() {
+      controls.innerHTML = '<button class="mute" id="mute">🔇 靜音</button><button class="stop" id="stop">⏹ 掛斷</button>';
+      document.getElementById('mute').onclick = function () { muted = !muted; if (bot) bot.setMute(muted); if (call) call.setMute(muted); this.textContent = muted ? '🔊 取消靜音' : '🔇 靜音'; };
+      document.getElementById('stop').onclick = endCall;
+    }
+    function endCall() { cancelWait(); try { if (bot) bot.hangup(); } catch (e) {} try { if (call) call.hangup(); } catch (e) {} try { if (actx) actx.close(); } catch (e) {} orb.className = 'orb'; setState('通話已結束'); controls.innerHTML = ''; hint.style.display = 'none'; }
+    // D：無人接聽 → 請顧客留姓名電話，開「待回電」工單（語音轉錄電話容易錯，用表單最準）
+    function showCallbackForm() {
+      cancelWait();
+      if (document.getElementById('cb-form')) return;
+      orb.className = 'orb'; setState('真人目前忙線中 🙏'); hint.style.display = 'none';
+      controls.innerHTML = '<div id="cb-form" style="text-align:left;max-width:280px;margin:0 auto">'
+        + '<div style="font-size:13px;margin-bottom:8px;text-align:center;color:#e7d9f4">留下姓名與電話，我們會盡快回電給您 📞</div>'
+        + '<input id="cb-name" placeholder="您的稱呼" style="width:100%;padding:10px;border:none;border-radius:8px;margin-bottom:8px;font-size:15px"/>'
+        + '<input id="cb-phone" type="tel" placeholder="聯絡電話" style="width:100%;padding:10px;border:none;border-radius:8px;margin-bottom:10px;font-size:15px"/>'
+        + '<button class="accept" id="cb-send" style="width:100%">送出回電需求</button></div>';
+      document.getElementById('cb-send').onclick = function () {
+        var phone = (document.getElementById('cb-phone').value || '').trim();
+        var name = (document.getElementById('cb-name').value || '').trim();
+        if (!phone) { document.getElementById('cb-phone').focus(); return; }
+        this.disabled = true; this.textContent = '送出中…';
+        try { if (call) call.hangup(); } catch (e) {}
+        fetch(FN + 'rtc-callback-request', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY }, body: JSON.stringify({ room: room, name: name, phone: phone }) }) // 階段3 才部署此 Edge Function
+          .then(function (r) { return r.json(); })
+          .then(function () { controls.innerHTML = ''; setState('✅ 已為您登記，我們將盡快回電，謝謝您！'); })
+          .catch(function () { var b = document.getElementById('cb-send'); if (b) { b.disabled = false; b.textContent = '送出回電需求'; } setState('⚠️ 登記失敗，請稍後再試'); });
+      };
+    }
+    function onStatus(s, d) {
+      if (s === 'mic') setState('請允許麥克風權限…');
+      else if (s === 'connecting' || s === 'signaling') { setState('接通中…'); }
+      else if (s === 'connected') { cancelWait(); setState('🔴 通話中'); orb.className = 'orb live'; }
+      else if (s === 'ended') { orb.className = 'orb'; setState((d === 'failed' || d === 'ice-failed') ? '⚠️ 跨網路無法直連（需 TURN 中繼）' : '通話已結束'); controls.innerHTML = ''; hint.style.display = 'none'; }
+      else if (s === 'error') { setState('⚠️ ' + (d || '發生問題')); }
+    }
+    document.getElementById('accept').onclick = function () {
+      inCallUI(); setState('接通中…');
+      // 在使用者點擊手勢內同步建立 AudioContext，否則 iOS/Safari 會停在 suspended 導致全程無聲
+      actx = new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.resume) { try { actx.resume(); } catch (e) {} }
+      bot = startGeminiVoicebot({
+        actx: actx,
+        tokenUrl: FN + 'gemini-live-token',
+        headers: { 'Content-Type': 'application/json', apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY },
+        setState: setState,
+        // AI 接通即取消「50 秒無人接聽」計時器，避免對談中誤彈留言表單
+        onLive: function () { cancelWait(); orb.className = 'orb live'; },
+        onEnded: function (reason) { orb.className = 'orb'; if (reason === 'hangup') { setState('通話已結束'); controls.innerHTML = ''; hint.style.display = 'none'; } },
+      });
+    };
+  })();
+  </script>
+</body>
+</html>

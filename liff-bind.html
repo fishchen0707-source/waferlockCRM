@@ -96,7 +96,7 @@ const PAGE = new URLSearchParams(location.search).get('p') || 'bind';
 
 let profile = null, member = null;
 const $ = id => document.getElementById(id);
-const todayStr = () => new Date().toLocaleDateString('zh-TW');
+const todayStr = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 const show = (id,disp='block') => { $(id).style.display = disp; };
 
 function pctWarranty(install, months){
@@ -177,8 +177,7 @@ async function doBind(){
       const tags=Array.from(new Set([...(match.tags||[]),'會員']));
       await sb.from('customers').update({line_uid:profile.userId,tags}).eq('wf_id',wfId);
     }else{
-      const { count }=await sb.from('customers').select('*',{count:'exact',head:true});
-      wfId=`WF-${new Date().getFullYear()}-${String((count||0)+1).padStart(5,'0')}`; isNew=true;
+      wfId=(await sb.rpc('next_wf_id')).data; isNew=true;
       await sb.from('customers').insert({wf_id:wfId,name:profile.displayName||'LINE會員',phone,address:address||'待填寫',
         line_uid:profile.userId,reg_type:'line_bind',reg_date:todayStr(),tags:['會員','待安裝'],repair_ids:[],product_id:null});
     }
@@ -191,6 +190,11 @@ async function doBind(){
     const { data:c }=await sb.from('customers').select('*').eq('wf_id',wfId).maybeSingle();
     $('bindForm').style.display='none';
     showResult(c, isNew?'🎉 綁定成功（新會員）':'🎉 綁定成功（已連動既有客戶）');
+    // 從訂單進度查詢頁導過來綁定的，綁完直接送回去，不要讓人自己找路
+    if(new URLSearchParams(location.search).get('next')==='track'){
+      $('result').insertAdjacentHTML('beforeend',
+        '<a class="btn" style="display:block;text-align:center;text-decoration:none;margin-top:14px" href="./track.html">📦 查看我的訂單進度</a>');
+    }
   }catch(e){ const m=$('bindMsg'); m.className='msg fail show'; m.textContent='綁定失敗：'+e.message; $('submitBind').disabled=false; }
 }
 

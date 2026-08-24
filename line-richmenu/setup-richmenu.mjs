@@ -8,7 +8,8 @@
 //      尺寸 2500 x 1686、PNG/JPEG、< 1MB。分頁列「畫在圖上」，座標見下方 areas。
 //   3. 環境變數 LINE_CHANNEL_ACCESS_TOKEN（Messaging API 的 long-lived token）
 //
-// 執行：
+// 執行（需先 cd 進本資料夾 line-richmenu/，圖片讀取路徑相對於執行時的工作目錄）：
+//   cd line-richmenu
 //   set LINE_CHANNEL_ACCESS_TOKEN=xxxx   (Windows CMD)
 //   node setup-richmenu.mjs
 // ==============================================

@@ -1,0 +1,310 @@
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>內部流程驗收檢查表</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:"Noto Sans TC",-apple-system,"Microsoft JhengHei",sans-serif}
+body{background:#EEF2F7;color:#1E293B;padding:13px;max-width:900px;margin:0 auto;line-height:1.6}
+.hd{background:#0F2744;color:#fff;border-radius:12px;padding:15px 17px;margin-bottom:12px}
+.hd h1{font-size:18px;margin-bottom:5px}
+.hd p{font-size:12.5px;opacity:.92}
+.bar{position:sticky;top:0;z-index:9;background:#fff;border-radius:10px;padding:11px 14px;
+  margin-bottom:12px;box-shadow:0 2px 8px rgba(0,0,0,.1);font-size:13px}
+.bar b{color:#0F2744}
+.track{height:7px;background:#F1F5F9;border-radius:4px;margin-top:7px;overflow:hidden}
+.fill{height:100%;background:linear-gradient(90deg,#0F2744,#38BDF8);width:0;transition:width .2s}
+.card{background:#fff;border-radius:12px;padding:14px 16px;margin-bottom:11px;
+  box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.unit{font-size:16px;font-weight:800;color:#0F2744;display:flex;align-items:baseline;
+  gap:8px;flex-wrap:wrap}
+.meta{font-size:11.5px;color:#64748B;font-weight:400}
+.usub{font-size:12.5px;color:#64748B;margin:4px 0 10px;padding-bottom:9px;
+  border-bottom:1px solid #F1F5F9}
+.it{padding:10px 0;border-bottom:1px solid #F8FAFC}
+.it:last-child{border-bottom:none}
+.it.k{background:#FFFBEB;margin:0 -16px;padding:10px 16px;border-bottom:1px solid #FDE68A}
+.t{font-size:13.5px;font-weight:600}
+.t .no{color:#94A3B8;font-weight:400;margin-right:5px}
+.kk{display:inline-block;font-size:10px;background:#B91C1C;color:#fff;border-radius:3px;
+  padding:1px 5px;margin-left:5px;vertical-align:middle}
+.e{font-size:12.5px;color:#475569;background:#F8FAFC;border-left:3px solid #38BDF8;
+  padding:6px 9px;border-radius:0 5px 5px 0;margin:5px 0;white-space:pre-wrap}
+.it.k .e{background:#fff}
+.btns{display:flex;gap:5px;margin:6px 0 3px;flex-wrap:wrap}
+.b{font-size:12.5px;border:1.5px solid #E2E8F0;border-radius:6px;padding:5px 12px;
+  cursor:pointer;background:#fff;user-select:none}
+.b.on{color:#fff;border-color:transparent}
+.b.p.on{background:#10B981}.b.f.on{background:#B91C1C}.b.s.on{background:#94A3B8}
+input.n{width:100%;border:1px solid #E2E8F0;border-radius:6px;padding:6px 9px;
+  font-size:12.5px;font-family:inherit;margin-top:4px}
+input.n:focus{outline:none;border-color:#38BDF8}
+button.big{width:100%;min-height:46px;border:none;border-radius:9px;background:#0F2744;
+  color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:5px}
+button.g{background:#10B981}
+textarea{width:100%;min-height:200px;border:1px solid #E2E8F0;border-radius:7px;padding:9px;
+  font-family:ui-monospace,monospace;font-size:11.5px;margin-top:9px}
+.warn{background:#FEF3C7;color:#92400E;border-radius:8px;padding:9px 12px;font-size:12.5px;
+  margin-bottom:11px}
+</style>
+
+<div class="hd">
+  <h1>內部流程驗收檢查表</h1>
+  <p>按單位分。每項都標了<b>用哪個帳號、開哪一頁、預期看到什麼</b>。<br>
+  <span style="background:#B91C1C;padding:1px 5px;border-radius:3px">必過</span>
+  ＝沒過就不該讓那個單位開始用。</p>
+</div>
+
+<div class="warn">
+💾 進度會自動存在這台瀏覽器，關掉再開會回到原處，可以分幾天跑。<br>
+🔢 建議順序：先跑 A（系統設定），它是其他所有項的前提。
+</div>
+
+<div class="bar">
+  <div><b id="pg">0 / 0</b> 已判定　·　必過項 <b id="kg">0 / 0</b>　·
+    <span style="color:#B91C1C">失敗 <b id="fg">0</b></span></div>
+  <div class="track"><div class="fill" id="fl"></div></div>
+</div>
+
+<div id="root"></div>
+
+<div class="card">
+  <button class="big g" onclick="gen()">📋 產生驗收報告</button>
+  <textarea id="out" placeholder="按上面按鈕後，只會列出「失敗」與「有備註」的項目"></textarea>
+  <button class="big" onclick="cp()">📄 複製報告</button>
+  <button class="big" style="background:#94A3B8" onclick="rst()">🗑 清空進度</button>
+</div>
+
+<script>
+var DATA = [
+{u:'A. 系統設定與排程',who:'你自己（編輯器）',page:'Apps Script 編輯器',
+ sub:'其他所有項的前提。這一段沒過，後面驗了也不算。',items:[
+ {t:'跑 checkSetup()',e:'納入 17 個分頁、無 ⛔ 略過的分頁、待核筆數合理（不是 173 那種誤判）'},
+ {t:'跑 checkProtections()',e:'全部分頁都 ✅。先前有 6 個未保護：三課-Kevin／行銷／吳垂容／潘筱凡／陳俊行／其餘鎖店',k:1},
+ {t:'跑 checkNotifySetup()',e:'webhook 已設、Web App URL 已回填、備份資料夾可存取'},
+ {t:'跑 checkOrderSetup()',e:'列出「可以下單的業務」，你的 FC 要在裡面'},
+ {t:'跑 checkShipSetup()',e:'助理名單有人、出貨明細欄位齊全（新欄位會自動補在表尾）'},
+ {t:'跑 checkWarehouseSetup()',e:'DISPATCH_WAREHOUSE 有設、倉庫核單四個欄位齊全'},
+ {t:'確認 warmCache 觸發器存在',e:'時間驅動・分鐘計時器・每 10 分鐘。沒有它開頁會撞 25 秒冷啟動'},
+ {t:'建 notifyPendingApprovals 觸發器',e:'時間驅動・日計時器・上午 9~10 點',k:1},
+ {t:'建 dailySnapshot 觸發器',e:'時間驅動・日計時器・凌晨 1~2 點。這是取代「每週五截圖」的唯一機制',k:1},
+ {t:'設 DISPATCH_SNAPSHOT_KEEP',e:'建議 60。不設＝永久累積，一年 365 份整表副本'},
+ {t:'手動跑 notifyPendingApprovals()',e:'Chat 收到真實通知（不是測試字串）。分兩段：副主管待核 N 筆／主管待核 M 筆，筆數與 checkSetup 一致，連結可點',k:1},
+ {t:'手動跑 dailySnapshot()',e:'Drive 出現「發包單快照_日期_時間」，打開確認 18 個分頁資料完整',k:1},
+ {t:'測「待核 0 不發通知」',e:'把 DISPATCH_PENDING_SINCE 暫改 2027-01-01 → 跑 notifyPendingApprovals() → Chat 不該有訊息、記錄寫「本次無待核項目」→ ⚠ 改回 2026-08-01'},
+]},
+
+{u:'B. 業務（下單）',who:'fish.chen（FC）',page:'?page=order',
+ sub:'FC 是你自己加進路由對照表的測試代碼，產生的單記得清掉。',items:[
+ {t:'開頁看到「下單」頁籤',e:'頁籤列有「下單」。看不到＝你的 email 不在對照表的「業務 email」欄'},
+ {t:'四個欄位是下拉',e:'案名／購買通路、型號、承包商、工項。來源是你在試算表設的資料驗證'},
+ {t:'選「其他」會出現文字框',e:'選了之後旁邊冒出輸入框'},
+ {t:'選「其他」但不填就送出',e:'被擋下，提示「選了『其他』請填寫：XXX」'},
+ {t:'發包安裝：填滿五段送出',e:'成功，訊息含自動產生的單號（FC-年月日-流水）與「已送主管簽核」'},
+ {t:'檢查業務分頁新增的那一列',e:'數量寫在「報價單數量」欄，不是「本次請款數量」（寫錯會讓累計請款從第一天就算錯）',k:1},
+ {t:'檢查出貨明細新增的那一列',e:'出貨單號留空；出貨項目／貨指寄／客人資料／售價進價／工項／施工時段都有值',k:1},
+ {t:'料件出貨：送出',e:'訊息說「免簽核，已進助理出貨清單」；業務分頁的簽核欄寫「✅ 免簽核（料件出貨）」'},
+ {t:'料件出貨不進待核清單',e:'開簽核頁看不到它，但助理的待出貨清單看得到',k:1},
+]},
+
+{u:'C. 副主管（簽核）',who:'kelly.liao',page:'?page=approve',
+ sub:'需要用她的帳號登入。若不方便，可暫時把她的 email 換成你的測，測完換回。',items:[
+ {t:'只看到「副主管待核」區',e:'不該出現「主管待核」區（先前的 bug 是兩區都顯示，按了才被擋）',k:1},
+ {t:'有一行說明另一層還有幾筆',e:'「另有 N 筆待主管核准（不在您的權限範圍）」——不寫的話會以為全處理完了'},
+ {t:'核准一筆',e:'訊息「已核准（副主管層），已送主管 XXX」'},
+ {t:'該筆移到主管層',e:'重新整理後它不在副主管區；用主管帳號開會看到它'},
+ {t:'副主管再按一次（想核主管層）',e:'被擋：「您不在主管簽核名單中，未寫入任何資料」。這一項是兩層覆核的意義所在',k:1},
+ {t:'退回但不填原因',e:'被擋，要求填寫'},
+ {t:'退回並填原因',e:'該筆完全消失、不進主管清單；案件狀態寫「已退回（副主管）」'},
+]},
+
+{u:'D. 主管（簽核＋報表）',who:'fish.chen / adam.liao / allen.lien',page:'?page=approve、?page=report',
+ sub:'',items:[
+ {t:'只看到「主管待核」區',e:'不該出現副主管待核的卡片'},
+ {t:'卡片上有「副主管」那一列',e:'顯示是誰核過的（✅ 核准 kelly... 時間）'},
+ {t:'核准一筆',e:'簽核欄寫入你的真實 Google 帳號，不是任何手打值'},
+ {t:'Chat 收到「該由誰打出貨單」通知',e:'點名該業務對應的助理（靠路由對照表）。查無對應會明講「代碼 XX 查無對應」'},
+ {t:'兩個瀏覽器同時按同一筆',e:'後按的看到「這筆已經被處理過了」，不會覆蓋前一位'},
+ {t:'檢查「簽核紀錄」分頁',e:'每次核准／退回都有一列，含時間、操作者、層級、原因'},
+ {t:'開報表頁',e:'四組指標都有數字：待辦積壓、出貨趨勢、各業務、各承包商'},
+ {t:'待辦積壓的數字與三頁一致',e:'待副主管＋待主管＝簽核頁筆數；待出貨＝助理頁；待核單＝倉庫頁。不一致就是兩邊各算一套',k:1},
+ {t:'資料品質區',e:'列出疑似同一承包商的不同寫法（例如大內／大內高手）、對照表沒收錄的代碼（ST／TL）'},
+]},
+
+{u:'E. 助理（出貨登錄）',who:'vivi / wendy',page:'?page=ship',
+ sub:'',items:[
+ {t:'看到「業務已下單，等鍵 TipTop」區',e:'B 段下的那筆會在這裡，擺在最前面'},
+ {t:'業務填的資料唯讀顯示',e:'出貨品項、送貨資料、客人資料、售價（進價僅主管可見）都看得到，不用回試算表找'},
+ {t:'只補三格就能送出',e:'出貨單號（必填）、訂單編號、出貨日期'},
+ {t:'業務填的資料一個字都沒被覆蓋',e:'鍵入後回試算表確認：出貨品項、客人資料、下單業務、登錄時間都還在。登錄人才是助理',k:1},
+ {t:'出現師傅通知全文＋複製按鈕',e:'不是只有按鈕——要能先看一眼內容再貼'},
+ {t:'按複製，貼到記事本',e:'六行格式：日期／型號-時段／工項／姓名電話／地址／發包單號'},
+ {t:'師傅通知不含任何金額',e:'沒有售價、進價、承包報價。師傅群組是多人共用的',k:1},
+ {t:'Chat 收到「待撿料出貨」通知',e:'含出貨單號、品項、貨指寄'},
+ {t:'同一列重複鍵入',e:'被擋：「這筆已經鍵入過了」'},
+ {t:'出貨單號填一個已存在的',e:'被擋：「已經登錄過了（第 N 列）」'},
+]},
+
+{u:'F. 倉庫（核單）',who:'倉庫名單（DISPATCH_WAREHOUSE）',page:'?page=warehouse',
+ sub:'⚠ 請用手機開——這一頁是手機優先設計的，用電腦看不出問題。',items:[
+ {t:'手機開頁看到待撿料清單',e:'E 段鍵入的那筆會在這裡'},
+ {t:'出貨品項好讀',e:'等寬字體、淺底框、長料號不會擠成一團'},
+ {t:'按鈕好按',e:'站著單手拿手機也按得到，兩顆按鈕不會誤觸（窄螢幕會改成上下排列）'},
+ {t:'按「已撿料完成」',e:'該筆消失，訊息說「完整出貨資訊已送到 Chat 備存」'},
+ {t:'Chat 收到備存訊息',e:'出貨單號／訂單編號／發包單號／客戶／完整品項／貨指寄三行／發票別／備註／登錄人／核單人。這則就是要取代 Teams 備存的那一則',k:1},
+ {t:'「有問題」不填說明',e:'被擋，要求填寫'},
+ {t:'「有問題」並填說明',e:'該筆消失；Chat 通知點名登錄人（助理）與業務；狀態寫「有問題」、問題說明寫入試算表'},
+]},
+
+{u:'G. 全員（查詢）',who:'任何人',page:'?page=query',
+ sub:'',items:[
+ {t:'每個人都看到「查詢」頁籤',e:'唯讀、全員可用'},
+ {t:'用發包單號查',e:'找得到，且發包資訊與出貨資訊串在一起顯示'},
+ {t:'用客人姓名／電話／通路訂單編號查',e:'都查得到（跨兩張表比對）'},
+ {t:'用不完整的關鍵字查',e:'例如只打「LS-2608」也查得到（模糊比對）'},
+ {t:'非主管帳號查一筆有進價的',e:'看不到進價。⚠ 不是「畫面藏起來」——伺服器端就移除了，改前端也看不到',k:1},
+ {t:'主管帳號查同一筆',e:'看得到進價'},
+ {t:'師傅通知區可複製',e:'每筆出貨下方有通知全文與複製按鈕'},
+]},
+
+{u:'H. 權限反面測試',who:'各種帳號',page:'直接改網址',
+ sub:'最容易被忽略、但出事最嚴重的一段。頁籤看不到不等於進不去。',items:[
+ {t:'非主管改網址 ?page=report',e:'被擋，顯示「報表僅限主管檢視」。報表的本質是彙總金額，遮欄位沒有意義所以整頁擋',k:1},
+ {t:'非助理改網址 ?page=ship',e:'被擋，顯示「您沒有出貨登錄權限」',k:1},
+ {t:'非倉庫改網址 ?page=warehouse',e:'被擋，顯示「您沒有倉庫核單權限」',k:1},
+ {t:'不在對照表的人改網址 ?page=order',e:'被擋，說明要先加進路由對照表的「業務 email」欄'},
+ {t:'完全沒有任何角色的帳號開首頁',e:'只看到查詢頁（唯讀），不會看到任何可寫入的頁'},
+]},
+
+{u:'I. 收尾',who:'你自己',page:'—',
+ sub:'',items:[
+ {t:'清掉測試資料',e:'B 段下的測試單（FC-開頭）、出貨明細對應的列、簽核紀錄可保留當憑證'},
+ {t:'DISPATCH_PENDING_SINCE 已改回',e:'如果 A 段測過「待核 0」，確認改回 2026-08-01'},
+ {t:'確認 DISPATCH_SHEET_ID 指向正確的表',e:'若之前用副本測，記得指回正式表——忘了會讓主管核到副本上'},
+ {t:'把失敗項貼回來',e:'按最下面「產生驗收報告」，複製給我'},
+]},
+];
+
+var KEY = 'wf_verify_v1';
+var st = {};
+try { st = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { st = {}; }
+
+var root = document.getElementById('root');
+var total = 0, ktotal = 0, idx = 0;
+
+DATA.forEach(function (g) {
+  var c = document.createElement('div');
+  c.className = 'card';
+  var h = '<div class="unit">' + g.u +
+    '<span class="meta">帳號：' + g.who + '　·　' + g.page + '</span></div>';
+  if (g.sub) h += '<div class="usub">' + g.sub + '</div>';
+  g.items.forEach(function (it) {
+    var i = idx++; total++; if (it.k) ktotal++;
+    var v = st['s' + i] || '';
+    h += '<div class="it' + (it.k ? ' k' : '') + '">' +
+      '<div class="t"><span class="no">' + (i + 1) + '.</span>' + it.t +
+      (it.k ? '<span class="kk">必過</span>' : '') + '</div>' +
+      '<div class="e">預期：' + it.e + '</div>' +
+      '<div class="btns">' +
+        '<span class="b p' + (v === 'p' ? ' on' : '') + '" data-i="' + i + '" data-v="p">✓ 通過</span>' +
+        '<span class="b f' + (v === 'f' ? ' on' : '') + '" data-i="' + i + '" data-v="f">✗ 失敗</span>' +
+        '<span class="b s' + (v === 's' ? ' on' : '') + '" data-i="' + i + '" data-v="s">跳過</span>' +
+      '</div>' +
+      '<input class="n" id="n' + i + '" placeholder="實際看到什麼／失敗的話寫這裡" value="' +
+        String(st['n' + i] || '').replace(/"/g, '&quot;') + '">' +
+      '</div>';
+  });
+  c.innerHTML = h;
+  root.appendChild(c);
+});
+
+// 攤平成一維，方便產生報告時對回單位
+var FLAT = [];
+DATA.forEach(function (g) { g.items.forEach(function (it) { FLAT.push({ g: g.u, t: it.t, k: it.k }); }); });
+
+function save() { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) {} }
+
+function upd() {
+  var done = 0, kdone = 0, fail = 0;
+  FLAT.forEach(function (x, i) {
+    var v = st['s' + i];
+    if (v) done++;
+    if (v === 'f') fail++;
+    if (x.k && v === 'p') kdone++;
+  });
+  document.getElementById('pg').textContent = done + ' / ' + total;
+  document.getElementById('kg').textContent = kdone + ' / ' + ktotal;
+  document.getElementById('fg').textContent = fail;
+  document.getElementById('fl').style.width = (total ? Math.round(done / total * 100) : 0) + '%';
+}
+
+document.querySelectorAll('.b').forEach(function (el) {
+  el.addEventListener('click', function () {
+    var i = el.getAttribute('data-i'), v = el.getAttribute('data-v');
+    if (st['s' + i] === v) { delete st['s' + i]; } else { st['s' + i] = v; }
+    document.querySelectorAll('.b[data-i="' + i + '"]').forEach(function (x) { x.classList.remove('on'); });
+    if (st['s' + i]) el.classList.add('on');
+    save(); upd();
+  });
+});
+document.querySelectorAll('input.n').forEach(function (el) {
+  el.addEventListener('input', function () {
+    st['n' + el.id.slice(1)] = el.value; save();
+  });
+});
+upd();
+
+function gen() {
+  var L = ['內部流程驗收報告', new Date().toLocaleString('zh-TW'), ''];
+  var done = 0, kfail = [], fails = [], notes = [], skips = [];
+  FLAT.forEach(function (x, i) {
+    var v = st['s' + i], n = (st['n' + i] || '').trim();
+    if (v) done++;
+    var line = (i + 1) + '. [' + x.g.split('.')[0] + '] ' + x.t + (n ? ' — ' + n : '');
+    if (v === 'f') { fails.push(line); if (x.k) kfail.push(line); }
+    else if (v === 's') { skips.push(line); }
+    else if (n) { notes.push(line + (v === 'p' ? '（通過）' : '（未判定）')); }
+  });
+  L.push('進度：' + done + ' / ' + total + '　失敗 ' + fails.length +
+    '　跳過 ' + skips.length + '　未判定 ' + (total - done));
+  L.push('');
+  if (kfail.length) {
+    L.push('🔴 必過項失敗（' + kfail.length + '）— 這些沒過不該讓對應單位開始用');
+    kfail.forEach(function (x) { L.push('  ' + x); }); L.push('');
+  }
+  var other = fails.filter(function (x) { return kfail.indexOf(x) < 0; });
+  if (other.length) {
+    L.push('失敗（' + other.length + '）');
+    other.forEach(function (x) { L.push('  ' + x); }); L.push('');
+  }
+  if (skips.length) {
+    L.push('跳過（' + skips.length + '）');
+    skips.forEach(function (x) { L.push('  ' + x); }); L.push('');
+  }
+  if (notes.length) {
+    L.push('備註（' + notes.length + '）');
+    notes.forEach(function (x) { L.push('  ' + x); }); L.push('');
+  }
+  if (!fails.length && !skips.length && !notes.length) L.push('（沒有失敗、跳過或備註）');
+  document.getElementById('out').value = L.join('\n');
+  document.getElementById('out').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function cp() {
+  var t = document.getElementById('out');
+  if (!t.value) gen();
+  t.select();
+  var ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) {}
+  if (!ok && navigator.clipboard) {
+    navigator.clipboard.writeText(t.value).then(
+      function () { alert('已複製'); }, function () { alert('請手動全選複製'); });
+    return;
+  }
+  alert(ok ? '已複製' : '請手動全選複製');
+}
+
+function rst() {
+  if (!confirm('清空所有進度？這個動作無法復原。')) return;
+  st = {}; save();
+  location.reload();
+}
+</script>

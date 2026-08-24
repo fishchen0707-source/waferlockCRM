@@ -25,6 +25,12 @@ const hhmm = () =>
   new Date().toLocaleTimeString("zh-TW", {
     hour: "2-digit", minute: "2-digit", timeZone: "Asia/Taipei",
   });
+// 完整時間戳（YYYY-MM-DD HH:MM）供客服績效報表算跨日回覆時效用，hhmm() 只給聊天泡泡顯示，不動它的格式
+const fullTs = () => {
+  const d = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Taipei" }));
+  const p2 = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
+};
 
 // 驗證 Meta 簽章：sha256=hex(HMAC-SHA256(appSecret, rawBody))
 async function verifySignature(rawBody: string, signature: string | null) {
@@ -86,38 +92,22 @@ async function handleMessaging(senderId: string, platform: "facebook" | "instagr
     ? await getFbName(senderId)
     : await getIgName(senderId);
 
-  const msg = { id: "u" + Date.now(), from: "user", text, time: hhmm() };
-  const { data: conv } = await sb.from("conversations").select("*").eq("id", convId).maybeSingle();
+  const msg = { id: "u" + Date.now(), from: "user", text, time: hhmm(), ts: fullTs() };
 
-  let isNew = false;
-  let takeover = false;
+  // 僅用於判斷「是否為新對話／是否已被客服接手」，不參與寫入路徑
+  const { data: existing } = await sb.from("conversations").select("id, agent_takeover").eq("id", convId).maybeSingle();
+  const isNew = !existing;
+  const takeover = !!existing?.agent_takeover;
 
-  if (conv) {
-    takeover = !!conv.agent_takeover;
-    await sb.from("conversations").update({
-      msgs: [...(conv.msgs || []), msg],
-      unread: (conv.unread || 0) + 1,
-      last_msg: text,
-      last_time: hhmm(),
-      name: displayName,
-    }).eq("id", convId);
-  } else {
-    isNew = true;
-    await sb.from("conversations").insert({
-      id: convId,
-      wf_id: null,
-      name: `${displayName}（${platform === "facebook" ? "FB" : "IG"}）`,
-      platform,
-      av: displayName[0] ?? "?",
-      unread: 1,
-      last_msg: text,
-      last_time: hhmm(),
-      msgs: [msg],
-      agent_takeover: false,
-      need_case: false,
-      biz_inquiry: false,
-    });
-  }
+  // 原子 append：多筆 messaging 事件交錯處理、或與 CRM 端同時寫入，也不會互相覆蓋
+  const { error: appendErr } = await sb.rpc("append_conversation_message", {
+    p_id: convId, p_msg: msg, p_last_msg: text, p_last_time: hhmm(),
+    p_wf_id: null,
+    p_name: isNew ? `${displayName}（${platform === "facebook" ? "FB" : "IG"}）` : displayName,
+    p_platform: platform, p_av: displayName[0] ?? "?", p_unread_delta: 1,
+    p_biz_inquiry: isNew ? false : null,
+  });
+  if (appendErr) { console.error("append_conversation_message failed", appendErr); throw appendErr; }
 
   // 首則自動回覆（未被客服接手時）
   if (isNew && !takeover) {

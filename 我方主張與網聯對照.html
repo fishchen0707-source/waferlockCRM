@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>我方主張 × 網聯平台對照</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--brand:#0F2744;--brand2:#1E3A5F;--accent:#38BDF8;--ok:#10B981;--warn:#F59E0B;--err:#EF4444;
+  --wf:#2563EB;--vendor:#7C3AED;
+  --g50:#F8FAFC;--g100:#F1F5F9;--g200:#E2E8F0;--g300:#CBD5E1;--g400:#94A3B8;--g500:#64748B;--g600:#475569;--g700:#334155;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Noto Sans TC',system-ui,-apple-system,"Microsoft JhengHei",sans-serif;background:#F0F4F8;color:var(--g700);
+  line-height:1.65;padding-bottom:70px;-webkit-font-smoothing:antialiased;}
+header{background:var(--brand);color:#fff;padding:16px 24px;position:sticky;top:0;z-index:20;
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;box-shadow:0 2px 10px rgba(15,39,68,.2);}
+header h1{font-size:17px;font-weight:800;}
+header .sub{font-size:11.5px;opacity:.7;margin-top:2px;}
+.savebar{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.role-pick{display:flex;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.3);}
+.role-pick button{background:transparent;color:rgba(255,255,255,.65);border:none;padding:7px 14px;
+  font-size:12.5px;font-weight:800;cursor:pointer;font-family:inherit;}
+.role-pick button.on{background:var(--accent);color:var(--brand);}
+.savebar input{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.3);border-radius:6px;
+  padding:6px 10px;color:#fff;font-size:12.5px;outline:none;width:100px;font-family:inherit;}
+.savebar input::placeholder{color:rgba(255,255,255,.5);}
+#saveBtn{background:var(--accent);color:var(--brand);border:none;border-radius:6px;padding:7px 18px;
+  font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;}
+#saveBtn:disabled{opacity:.5;cursor:wait;}
+#saveMsg{font-size:11px;opacity:.85;width:100%;text-align:right;}
+.wrap{max-width:1120px;margin:0 auto;padding:20px 16px;}
+.frame{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;border-radius:14px;padding:20px 24px;margin-bottom:14px;}
+.frame h2{font-size:14px;margin-bottom:8px;color:var(--accent);}
+.frame .big{font-size:19px;font-weight:800;line-height:1.5;}
+.frame .note{font-size:12.5px;opacity:.85;margin-top:10px;line-height:1.85;}
+.finding{background:#EFF6FF;border:2px solid #93C5FD;border-radius:12px;padding:16px 20px;margin-bottom:14px;}
+.finding h3{font-size:14.5px;color:#1E40AF;margin-bottom:6px;}
+.finding p{font-size:12.5px;color:#1E3A8A;line-height:1.85;}
+.finding .k{background:#DBEAFE;border-radius:8px;padding:10px 14px;margin-top:9px;font-size:13px;font-weight:800;color:#1E3A8A;}
+.sec-t{font-size:16px;font-weight:800;color:var(--brand);margin:26px 0 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.sec-t .hint{font-size:11.5px;font-weight:400;color:var(--g500);}
+/* 主張卡 */
+.claim{background:#fff;border-radius:12px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden;}
+.claim-h{display:flex;align-items:flex-start;gap:12px;padding:14px 18px;background:var(--g50);border-bottom:1px solid var(--g200);}
+.claim-no{width:28px;height:28px;border-radius:8px;background:var(--wf);color:#fff;font-size:13px;font-weight:800;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.claim-h .t{font-size:14.5px;font-weight:800;color:var(--brand);flex:1;}
+.cmp{display:grid;grid-template-columns:1fr 1fr;gap:0;border-bottom:1px solid var(--g200);}
+@media(max-width:760px){.cmp{grid-template-columns:1fr;}}
+.cmp>div{padding:13px 18px;}
+.cmp .mine{border-right:1px solid var(--g200);background:#F8FBFF;}
+.cmp .theirs{background:#FBF9FF;}
+.cmp .lbl{font-size:10.5px;font-weight:800;margin-bottom:5px;}
+.cmp .mine .lbl{color:var(--wf);}
+.cmp .theirs .lbl{color:var(--vendor);}
+.cmp .txt{font-size:12.5px;line-height:1.8;color:var(--g600);}
+.ask{padding:12px 18px;background:#FFFBEB;}
+.ask .lbl{font-size:10.5px;font-weight:800;color:#B45309;margin-bottom:5px;}
+.ask ul{list-style:none;}
+.ask li{font-size:12.5px;color:#78350F;padding:3px 0 3px 16px;position:relative;line-height:1.7;}
+.ask li:before{content:'?';position:absolute;left:2px;font-weight:800;color:#B45309;}
+.conflict{background:#FEE2E2;border-left:4px solid var(--err);padding:11px 16px;margin:0;}
+.conflict .t{font-size:12.5px;font-weight:800;color:#991B1B;}
+.conflict .d{font-size:12px;color:#991B1B;line-height:1.75;margin-top:3px;}
+.fld{padding:12px 18px;border-top:1px dashed var(--g200);}
+.fld label{font-size:11px;font-weight:800;display:block;margin-bottom:3px;}
+.fld.wf label{color:var(--wf);} .fld.vendor label{color:var(--vendor);}
+.fld textarea{width:100%;border:1px solid var(--g200);border-radius:6px;padding:7px 10px;font-size:12.5px;
+  font-family:inherit;outline:none;background:var(--g50);color:var(--g700);resize:vertical;min-height:44px;}
+.fld textarea:focus{border-color:var(--accent);background:#fff;}
+.fld textarea:disabled{background:#F1F5F9;color:var(--g400);border-style:dashed;cursor:not-allowed;}
+/* 關閉計畫 */
+.warnbox{background:#FFF7ED;border:2px solid #FDBA74;border-radius:12px;padding:16px 20px;margin-bottom:12px;}
+.warnbox h3{font-size:14.5px;color:#9A3412;margin-bottom:6px;}
+.warnbox p{font-size:12.5px;color:#9A3412;line-height:1.85;}
+table{border-collapse:collapse;width:100%;font-size:12.5px;margin-top:10px;background:#fff;}
+th,td{border:1px solid var(--g200);padding:8px 10px;text-align:left;vertical-align:top;}
+th{background:var(--g50);color:var(--g600);font-weight:800;font-size:11.5px;}
+td.k{font-weight:700;color:var(--brand);}
+td input{width:100%;border:none;background:transparent;font:inherit;font-size:12.5px;color:var(--g700);outline:none;padding:2px;}
+td input:focus{background:#EFF6FF;border-radius:4px;}
+td input:disabled{color:var(--g400);cursor:not-allowed;}
+.cant{background:#FEF2F2;}
+/* ERP 界線 */
+.erp{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+@media(max-width:700px){.erp{grid-template-columns:1fr;}}
+.erp>div{background:#fff;border-radius:12px;padding:16px 18px;box-shadow:0 1px 3px rgba(0,0,0,.06);}
+.erp .can{border-top:4px solid var(--ok);}
+.erp .cannot{border-top:4px solid var(--err);}
+.erp h4{font-size:14px;color:var(--brand);margin-bottom:8px;}
+.erp ul{list-style:none;font-size:12.5px;}
+.erp li{padding:4px 0 4px 18px;position:relative;line-height:1.7;color:var(--g600);}
+.erp .can li:before{content:'✓';position:absolute;left:2px;color:var(--ok);font-weight:800;}
+.erp .cannot li:before{content:'✕';position:absolute;left:2px;color:var(--err);font-weight:800;}
+.gate{background:#FEF2F2;border-radius:8px;padding:10px 13px;margin-top:10px;font-size:12px;color:#991B1B;line-height:1.75;}
+.scope{background:#F0FDF4;border:2px solid #86EFAC;border-radius:12px;padding:16px 20px;}
+.scope h3{font-size:14.5px;color:#065F46;margin-bottom:6px;}
+.scope p{font-size:12.5px;color:#065F46;line-height:1.85;}
+.scope .q{background:#DCFCE7;border-radius:8px;padding:11px 15px;margin-top:10px;font-size:13.5px;font-weight:800;color:#065F46;line-height:1.6;}
+.toast{position:fixed;right:18px;bottom:18px;background:var(--brand);color:#fff;border-radius:8px;
+  padding:12px 18px;font-size:13px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.25);display:none;z-index:99;}
+.toast.err{background:var(--err);}
+@media print{
+  body{background:#fff;padding:0;}header{position:static;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .savebar,.toast{display:none;}.claim,.warnbox,.finding,.scope,.erp>div{break-inside:avoid;box-shadow:none;}
+  input,textarea{background:#fff!important;color:#000!important;}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>⚖️ 我方主張 × 網聯平台對照</h1>
+    <div class="sub">核心命題：平台遷移，不是流程增加</div>
+  </div>
+  <div class="savebar">
+    <div class="role-pick">
+      <button id="roleWf" class="on" onclick="setRole('wf')">維夫拉克</button>
+      <button id="roleVendor" onclick="setRole('vendor')">網聯</button>
+    </div>
+    <input id="author" placeholder="填寫人" maxlength="12">
+    <button id="saveBtn" onclick="save()">💾 儲存</button>
+    <span id="saveMsg"></span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="frame">
+    <h2>我方的基本主張</h2>
+    <div class="big">同仁的工作量不增加——只是把原本在某個平台做的事，換到另一個平台做。</div>
+    <div class="note">
+      不是要大家「多用一套系統」，是把散在電話、LINE 群組、各社群後台的同一件事，收到同一個地方。
+      因此介面必須<b>友善、簡單</b>；任何讓同仁覺得「又多一道手續」的設計，這個主張就破了。<br>
+      這與現場訪談的結論一致：<b>新增填報，必須同時移除一項現行作業。</b>
+    </div>
+  </div>
+
+  <div class="finding">
+    <h3>🔍 開場前先講一個發現：你們平台大部分已經有了</h3>
+    <p>
+      依網聯公開展示站的前端程式判讀（<b>推測性質，非合約文件，明天請以你們的說法為準</b>）：
+      多管道收件匣（LINE／FB／IG／官網／語音／WhatsApp／簡訊）、工單池與指派、顧客 360、
+      派工中心與排班時刻表、AI 知識庫與轉真人——這些模組看起來都已存在。
+    </p>
+    <div class="k">
+      ⇒ 若屬實，8 月的工作重點可能不是「開發」，而是<b>設定 ＋ 資料匯入 ＋ 流程對接</b>。這對一個月的時程是好消息。<br>
+      ⇒ 但代價是：<b>產品的既有預設會生效</b>。所以今天真正要逐項問清楚的是——<b>哪些用設定就能改？哪些要客製？客製要多久、算不算加價？</b>
+    </div>
+  </div>
+
+  <div class="sec-t">📌 五項主張逐條對照<span class="hint">左＝我方要什麼　右＝你們平台看起來已有什麼　下＝要當場確認的</span></div>
+  <div id="claims"></div>
+
+  <div class="sec-t">⚠️ 這個主張隱含的前提（沒做到就不成立）</div>
+  <div class="warnbox">
+    <h3>「換一個平台做」的前提是——原本那個平台要關掉</h3>
+    <p>
+      如果 LINE 群組還在、大家還在裡面講，那就不是「換」，是「多一個」。同仁得同時看兩個地方，
+      <b>loading 不是沒增加，是加倍</b>。所以「群組整合」必須配一張關閉計畫：哪個管道、什麼時候關、誰通知、關掉後漏接的誰撿。
+    </p>
+    <table id="closeTable"></table>
+    <p style="margin-top:10px">
+      ⚠️ 注意最後三列（紅底）：工地主任、經銷鎖店、社區秘書是<b>直接打工務個人手機</b>，
+      這三條管道<b>關不掉</b>——它們沒有後台可以停用。要等外部夥伴帳號上線、給他們一個能自己開單的入口，才可能收斂。
+      這不在 8 月範圍，但今天要讓雙方知道：<b>8 月做完群組整合，資料仍不會完整</b>，這是已知缺口，不是失敗。
+    </p>
+  </div>
+
+  <div class="sec-t">🔌 ERP 未串接時，界線劃在哪</div>
+  <div class="erp">
+    <div class="can">
+      <h4>✅ 8 月可以搬（不需要 ERP 資料）</h4>
+      <ul>
+        <li>對話回覆與客服受理</li>
+        <li>案件分類與分派到部門</li>
+        <li>產品操作問題問答（高頻 5 題已盤出）</li>
+        <li><b>維修</b>派工排程與現場回報</li>
+        <li>保固查詢（前提：保固資料先匯入）</li>
+        <li>客訴受理與追蹤</li>
+      </ul>
+    </div>
+    <div class="cannot">
+      <h4>✕ 需要 ERP，暫時搬不了</h4>
+      <ul>
+        <li>庫存與交期查詢</li>
+        <li>訂單狀態查詢</li>
+        <li>出貨確認</li>
+        <li>報價與接單</li>
+      </ul>
+      <div class="gate">
+        <b>⚠️ 一個具體卡點：</b>我方現行系統的<b>安裝單有「ERP 出貨閘門」</b>——未填入 TIPTOP 出貨單號前，
+        排程派工是鎖住的。也就是說：<b>維修派工不需要 ERP，但安裝派工需要。</b>
+        這條界線若不先講清楚，9 月派工上線時安裝流程會卡住。
+      </div>
+    </div>
+  </div>
+
+  <div class="sec-t">🎯 依此主張，8 月底的驗收文字建議</div>
+  <div class="scope">
+    <h3>把主張直接變成可驗收的一句話</h3>
+    <p>
+      合約寫的是「第一階段：智慧客服」，範圍較抽象。我方主張的說法具體得多、也可驗收，建議直接採用為第一階段驗收標準：
+    </p>
+    <div class="q">
+      「完成多平台群組整合，AI 可回應初步問題，判斷困難者轉真人並帶入對話摘要；<br>
+      中區可實際受理並正確分派轉單。」
+    </div>
+    <p style="margin-top:10px">
+      ⚠️ 建議<b>不要</b>把「AI 自動解決率達 X%」綁進第一期——那需要知識庫累積，一個月做不到。
+      且義聖外包服務至 2027/3 才終止，8 月上線屬<b>並行非切換</b>，尚有約 7 個月磨合期可把該指標養起來。
+    </p>
+    <div class="fld wf" style="padding-left:0;padding-right:0;border-top:none">
+      <label>驗收文字最終版（會中議定）</label>
+      <textarea data-side="wf" id="accept_text" placeholder="會中修訂後的正式驗收文字…"></textarea>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL='https://nkyanyjgfrmovjoqevro.supabase.co';
+const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5reWFueWpnZnJtb3Zqb3FldnJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2ODIxMTMsImV4cCI6MjA5NzI1ODExM30.LPnQyceYS7Z1-rlqUtXm3B8dGBOqnmnavTV-PAOSPZ8';
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+const WF_KEY='claim_cmp_wf', VENDOR_KEY='claim_cmp_vendor';
+
+const CLAIMS=[
+  {id:'c1',t:'先把所有平台串在一起（多個 LINE@、FB、IG…）',
+   mine:'不只一個 LINE@——我們有多組官方帳號，加上 FB、IG 等社群，全部收到同一個收件匣，客服不必在多個後台之間切換。',
+   theirs:'收件匣已支援 LINE、FB、IG、官網、語音、WhatsApp、簡訊等多管道進線，含未讀徽章與自動輪詢。',
+   asks:['支援<b>多組</b> LINE 官方帳號同時接入嗎？上限幾組？',
+         '我方目前實際有幾個 LINE@／FB／IG 帳號？（我方需先盤點清楚）',
+         '各帳號的 channel 憑證由誰保管、怎麼交付？',
+         '同一位客戶從不同管道進線，能否自動併為同一人？']},
+
+  {id:'c2',t:'各部門的案件清單，AI 分類後把人工件分派給部門',
+   mine:'AI 先分類，能自動處理的處理掉；需要人工的，依類型分派到對應部門的案件清單（就像我方 CRM 現有的清單列表）。',
+   theirs:'有「自動指派規則」，惟依前端程式判讀似為<b>進線關鍵字比對 → 團隊／個人路由</b>；另有 AI 工具呼叫可自動開工單、轉真人。',
+   asks:['分派是<b>關鍵字比對</b>還是 <b>AI 語意分類</b>？兩者準確度差很多',
+         '部門清單怎麼定？（客服課／支援課／業務／公務…我方需先給出組織對應）',
+         'AI 分錯部門時，誰會發現、多久發現？有沒有退回重分的機制？',
+         '分不出來的案件預設落在哪裡？會不會沉沒在某個清單裡沒人管？']},
+
+  {id:'c3',t:'人員接到清單要有客戶資料與處理進度（ERP 尚未串接）',
+   mine:'同仁打開案件就看得到客戶是誰、之前發生過什麼、現在進度到哪。ERP 這期還串不了，但介面要包裝得完整，讓同仁覺得是「換地方做」而不是「多一件事」。',
+   theirs:'顧客 360（整合對話、工單、保固、維修紀錄）、工單狀態追蹤、案件歷程。',
+   asks:['沒有 ERP 的情況下，顧客 360 裡實際會有哪些欄位？',
+         '同仁若需要庫存／交期／訂單狀態，這期要他去哪裡查？（見下方 ERP 界線）',
+         '客戶識別鍵：我方規則是<b>地址</b>（電話非唯一，同號可多住所），平台能否照此歸戶？',
+         '既有客戶資料怎麼匯入？格式與時程？']},
+
+  {id:'c4',t:'派工也一樣：電話、LINE 溝通全部轉移到平台',
+   mine:'原本靠電話與 LINE 群組協調的派工，全部搬到平台。師傅端 UI 必須<b>簡單</b>——現場人員沒耐心用複雜介面。',
+   theirs:'派工營運中心：師傅帳號、LINE 通知綁定、手機回報連結、派工狀態追蹤、排班時刻表，以及<b>搶單機制（廣播多師傅、先接單者確認）</b>。',
+   conflict:{t:'⚠️ 正面衝突：搶單 vs 指派',
+     d:'7/20 董事長會議<b>明確否決搶單</b>（理由：怕師傅棄單），決議為——客服指派時段 → 師傅回 OK → 官方 LINE 由 AI 自動通知客戶 → 師傅整天不行則拋回客服改派 → <b>案件 1 小時未敲定時間，客服強制介入</b>。'},
+   asks:['搶單機制能否<b>關閉</b>，改為客服指派制？是設定還是要客製？',
+         '「1 小時未敲定即升級客服」這條 SLA 能不能設定？',
+         '師傅回 OK 後由官方 LINE 自動通知客戶——這段是現成的還是要做？',
+         '外包師傅與自有工務的權限、計價是否可分開？']},
+
+  {id:'c5',t:'8 月底：群組整合完成、AI 回應初步問題、難的真人介入',
+   mine:'第一階段不求全部自動化。把管道收攏、AI 擋掉初步問題、判斷不了的轉真人——這樣同仁工作量不增加，系統也串起來了。',
+   theirs:'AI 應答、負面情緒自動轉接、轉真人時附帶通話摘要與顧客 360 視圖、營業時間與非營業時段回覆設定。',
+   asks:['AI 自動應答的<b>範圍</b>怎麼界定？（我方已盤出高頻 5 題可作首批）',
+         '轉真人時帶入摘要——是否包含客戶已試過的排除步驟？',
+         '非營業時間（深夜）由 AI 承接，這部分設定方式？',
+         '第一期驗收標準的正式文字怎麼寫？（見本頁最下方建議）']},
+];
+
+// 現行管道（前三條可關；後三條走個人手機、關不掉）
+const CHANNELS=[
+  {id:'ch1',n:'客戶電話 → 助理 → 系統建單',can:true},
+  {id:'ch2',n:'LINE 通報 → 助理建單',can:true},
+  {id:'ch3',n:'業務單位 → 群組通知助理',can:true},
+  {id:'ch4',n:'各社群後台（FB／IG／多個 LINE@）分別登入查看',can:true},
+  {id:'ch5',n:'工地主任直接聯繫工務個人手機',can:false},
+  {id:'ch6',n:'經銷鎖店直接聯繫工務個人手機',can:false},
+  {id:'ch7',n:'社區秘書聯繫工務個人手機',can:false},
+];
+
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+
+document.getElementById('claims').innerHTML=CLAIMS.map((c,i)=>`
+  <div class="claim">
+    <div class="claim-h"><div class="claim-no">${i+1}</div><div class="t">${esc(c.t)}</div></div>
+    <div class="cmp">
+      <div class="mine"><div class="lbl">我方主張</div><div class="txt">${c.mine}</div></div>
+      <div class="theirs"><div class="lbl">網聯平台看起來已有（推測，待確認）</div><div class="txt">${c.theirs}</div></div>
+    </div>
+    ${c.conflict?`<div class="conflict"><div class="t">${c.conflict.t}</div><div class="d">${c.conflict.d}</div></div>`:''}
+    <div class="ask"><div class="lbl">要當場問清楚的</div><ul>${c.asks.map(a=>`<li>${a}</li>`).join('')}</ul></div>
+    <div class="fld vendor"><label>網聯回覆（設定可改／需客製／工期）</label>
+      <textarea data-side="vendor" id="${c.id}_reply" placeholder="廠商可自行上線補填…"></textarea></div>
+    <div class="fld wf"><label>我方補充與結論</label>
+      <textarea data-side="wf" id="${c.id}_note" placeholder="會中記錄…"></textarea></div>
+  </div>`).join('');
+
+document.getElementById('closeTable').innerHTML=
+  `<tr><th style="width:30%">現行管道</th><th style="width:20%">移到平台後</th><th style="width:16%">何時關閉</th><th style="width:17%">誰負責通知</th><th>備註</th></tr>`+
+  CHANNELS.map(c=>`<tr class="${c.can?'':'cant'}">
+    <td class="k">${esc(c.n)}</td>
+    <td><input data-side="wf" id="${c.id}_to" placeholder="${c.can?'收攏至平台收件匣':'需外部帳號才能收斂'}"></td>
+    <td><input data-side="wf" id="${c.id}_when" placeholder="${c.can?'例：8/25':'—'}"></td>
+    <td><input data-side="wf" id="${c.id}_who" placeholder="${c.can?'負責人':'—'}"></td>
+    <td><input data-side="wf" id="${c.id}_memo" placeholder="${c.can?'':'8月關不掉，已知缺口'}"></td>
+  </tr>`).join('');
+
+let role=localStorage.getItem('claimcmp_role')||'wf';
+function setRole(r){
+  role=r; localStorage.setItem('claimcmp_role',r);
+  document.getElementById('roleWf').className=(r==='wf'?'on':'');
+  document.getElementById('roleVendor').className=(r==='vendor'?'on':'');
+  document.querySelectorAll('[data-side]').forEach(el=>{el.disabled=(el.dataset.side!==r);});
+  document.getElementById('saveBtn').textContent=(r==='wf'?'💾 儲存（維夫拉克）':'💾 儲存（網聯）');
+}
+function fieldsOf(side){
+  return side==='wf'
+    ? CLAIMS.map(c=>c.id+'_note').concat(CHANNELS.flatMap(c=>[c.id+'_to',c.id+'_when',c.id+'_who',c.id+'_memo']),['accept_text'])
+    : CLAIMS.map(c=>c.id+'_reply');
+}
+async function load(){
+  const {data,error}=await sb.from('config').select('key,value').in('key',[WF_KEY,VENDOR_KEY]);
+  if(error){ showToast('⚠️ 載入失敗：'+error.message,true); return; }
+  let msg=[];
+  (data||[]).forEach(row=>{
+    let s; try{ s=JSON.parse(row.value); }catch(e){ console.error('解析失敗',row.key,e); return; }
+    const side=(row.key===WF_KEY)?'wf':'vendor';
+    fieldsOf(side).forEach(f=>{
+      const el=document.getElementById(f);
+      if(el && s.fields && s.fields[f]!==undefined) el.value=s.fields[f];
+    });
+    if(s.savedAt) msg.push(`${side==='wf'?'維夫拉克':'網聯'} ${s.savedAt}｜${s.author||'—'}`);
+    if(side===role && s.author) document.getElementById('author').value=s.author;
+  });
+  if(msg.length) document.getElementById('saveMsg').textContent='上次儲存　'+msg.join('　／　');
+}
+async function save(){
+  const btn=document.getElementById('saveBtn'); btn.disabled=true;
+  const key=(role==='wf')?WF_KEY:VENDOR_KEY;
+  const payload={
+    author:document.getElementById('author').value.trim(),
+    savedAt:new Date().toLocaleString('zh-TW',{hour12:false}),
+    fields:Object.fromEntries(fieldsOf(role).map(f=>[f,(document.getElementById(f)||{}).value?.trim()||''])),
+  };
+  const {error}=await sb.from('config').upsert({key:key,value:JSON.stringify(payload)});
+  btn.disabled=false;
+  if(error){ showToast('⚠️ 儲存失敗：'+error.message,true); return; }
+  showToast('✅ 已儲存（'+(role==='wf'?'維夫拉克':'網聯')+'）');
+  load();
+}
+function showToast(m,e){const t=document.getElementById('toast');t.textContent=m;t.className='toast'+(e?' err':'');
+  t.style.display='block';setTimeout(()=>{t.style.display='none';},3000);}
+
+setRole(role);
+load();
+</script>
+</body>
+</html>

@@ -57,18 +57,30 @@ input:focus,select:focus,textarea:focus{border-color:#38BDF8}
 .rp-l{font-size:10.5px;color:#94A3B8;margin-top:2px}
 .rp-row{display:flex;justify-content:space-between;background:#fff;border-radius:8px;padding:8px 12px;margin-bottom:5px;font-size:12.5px}
 .rp-detail{background:#fff;border-radius:9px;padding:10px 12px;margin-bottom:8px;font-size:12.5px;border-left:3px solid #38BDF8}
+.tst-wrap{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:80;display:flex;flex-direction:column;gap:6px;width:calc(100% - 24px);max-width:536px}
+.tst{background:#0F2744;color:#fff;border-radius:9px;padding:10px 14px;font-size:13px;box-shadow:0 4px 12px rgba(0,0,0,.25);animation:tstIn .2s ease-out}
+@keyframes tstIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
 </style>
 </head>
 <body>
 <div id="root"></div>
+<div id="tstwrap" class="tst-wrap"></div>
 <script>
 const SUPABASE_URL='https://nkyanyjgfrmovjoqevro.supabase.co';
 const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5reWFueWpnZnJtb3Zqb3FldnJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2ODIxMTMsImV4cCI6MjA5NzI1ODExM30.LPnQyceYS7Z1-rlqUtXm3B8dGBOqnmnavTV-PAOSPZ8';
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 const $=s=>document.querySelector(s);
-const today=()=>new Date().toLocaleDateString('zh-TW');
+const today=()=>{ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 let worker=JSON.parse(localStorage.getItem('wl_tech')||'null');
 let tab='avail', cases={avail:[],mine:[],done:[],installs:[],doneInstalls:[]}, custMap={}, rep=null;
+let prevMineIds=null; // 新單提示：null=尚未做過第一次比對（避免首次載入誤報全部為新單）
+function notify(msg){
+  const el=document.createElement('div');
+  el.className='tst'; el.textContent=msg;
+  $('#tstwrap').appendChild(el);
+  if(navigator.vibrate) navigator.vibrate(200);
+  setTimeout(()=>el.remove(),5000);
+}
 const PRODUCT_NAMES={L376:'L376 智能電子鎖',L396:'L396 進階電子鎖',L600:'L600 人臉辨識旗艦',L901:'L901 掌靜脈頂規',L900:'L900 旗艦款'};
 const INSTALL_STATUS={pending:'待到場',arrived:'已到場',installed:'施工完成(待驗收)',done:'已完成',failed:'無法安裝'};
 
@@ -153,14 +165,19 @@ function pctW(install,months){if(!install||!months)return null;const s=new Date(
 function warrantyBadge(r){ if(r.warranty_in===true)return '<span class="badge b-in">保固內</span>'; if(r.warranty_in===false)return '<span class="badge b-out">保固外</span>'; return ''; }
 // 推播統一走雙軌：①寫進客戶對話 conversations（LINE 模擬頁/CRM 看得到）②綁真實 LINE 才發 App 推播。
 // 回傳 {logged, pushed} 供呼叫端顯性提示，不再靜默。
+// 寫入改走原子 append RPC（見 sql/supabase_atomic_conv_append.sql），取代舊版「讀 msgs → 整包寫回」——
+// 師傅端與客戶同時傳訊息（或 LINE/Meta webhook 同時寫入）不會再互相覆蓋。
 async function logToConversation(wfId,text){
   if(!wfId) return false;
-  const {data}=await sb.from('conversations').select('id,msgs').eq('wf_id',wfId);
+  const {data}=await sb.from('conversations').select('id').eq('wf_id',wfId);
   if(!data||!data.length) return false;
   const time=new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',hour12:false});
   for(const conv of data){
     const msg={id:'t'+Date.now()+Math.random().toString(36).slice(2,5),from:'bot',text,time};
-    await sb.from('conversations').update({msgs:[...(conv.msgs||[]),msg],last_msg:String(text).slice(0,24),last_time:time}).eq('id',conv.id);
+    const {error}=await sb.rpc('append_conversation_message',{
+      p_id:conv.id, p_msg:msg, p_last_msg:String(text).slice(0,24), p_last_time:time, p_unread_delta:0,
+    });
+    if(error) console.error('append_conversation_message error:',error);
   }
   return true;
 }
@@ -355,6 +372,10 @@ async function loadCases(){
   cases={avail:a.data||[],mine:m.data||[],done:d.data||[],installs:mi.data||[],doneInstalls:di.data||[]};
   const wfIds=[...new Set([...cases.avail,...cases.mine,...cases.done].map(r=>r.wf_id).filter(Boolean))];
   if(wfIds.length){ const {data}=await sb.from('customers').select('wf_id,name,phone,address,line_uid,product_id,install_date,warranty_months,warranty_end,lat,lng').in('wf_id',wfIds); (data||[]).forEach(c=>custMap[c.wf_id]=c); }
+  // 新單提示：偵測「派給我」的維修/安裝案件是否有新出現的（客服改派工單後，即使師傅停在列表頁不操作也會提醒）
+  const mineNow=[...cases.mine.map(r=>r.id),...cases.installs.map(o=>o.id)];
+  if(prevMineIds){ mineNow.filter(id=>!prevMineIds.has(id)).forEach(()=>notify('📋 有新的派工案件，請查看「進行中」')); }
+  prevMineIds=new Set(mineNow);
   renderApp();
 }
 
@@ -409,7 +430,10 @@ function installCard(o,kind){
     <div class="crow">📦 ${prod}${o.serial_no?` (${o.serial_no})`:''}</div>
     ${sched?`<div class="crow" style="color:#7C3AED;font-weight:600">${sched}</div>`:''}
     <div class="crow" style="font-weight:700;color:#5B21B6">狀態：${sLabel}</div>
-    ${kind==='mine'&&o.status==='pending'?`<button class="btn go" style="background:#7C3AED;color:#fff;margin-top:10px" onclick="arriveInstall('${o.id}')">📍 標記到場（推播通知）</button>`:''}
+    ${kind==='mine'&&o.accepted_at?`<div class="crow" style="color:#10B981;font-weight:700">✅ 已接單</div>`:''}
+    ${kind==='mine'&&o.status==='pending'&&!o.accepted_at?`<button class="btn go" style="background:#10B981;color:#fff;margin-top:10px" onclick="acceptInstall('${o.id}')">✋ 接下這張安裝單</button>
+      <div style="font-size:11px;color:#94A3B8;margin-top:5px;line-height:1.5">接單後客戶會收到通知，進度頁也會顯示預約時間。接單前無法標記到場。</div>`:''}
+    ${kind==='mine'&&o.status==='pending'&&o.accepted_at?`<button class="btn go" style="background:#7C3AED;color:#fff;margin-top:10px" onclick="arriveInstall('${o.id}')">📍 標記到場（推播通知）</button>`:''}
     ${kind==='mine'&&o.status==='arrived'?`<button class="btn done" style="margin-top:10px" onclick="installedInstall('${o.id}')">🔧 標記施工完成</button>`:''}
     ${kind==='mine'&&o.status==='installed'&&!hasDocs?`<button class="btn done" style="background:#7C3AED;margin-top:10px" onclick="openInstallReport('${o.id}')">📸 上傳照片 + 客戶簽名</button>`:''}
     ${kind==='mine'&&o.status==='installed'&&hasDocs?`<div style="margin-top:8px;font-size:12px;color:#10B981;font-weight:700">✅ 已上傳照片與簽名，等待 CRM 完工驗收</div>`:''}
@@ -479,6 +503,17 @@ async function confirmAccept(){
 }
 
 // ───── 安裝動作 ─────
+// 接單：安裝單本來沒有這一步（CRM 指派後就直接出現在清單裡），但客戶進度頁需要
+// 一個「師傅確實接下了」的證據，否則客戶只看得到「委派師傅中」而不知道有沒有人接。
+// 比照維修單的 confirmAccept()，但不做 ETA——installs 沒有 eta_* 欄位。
+async function acceptInstall(id){
+  const o=cases.installs.find(x=>x.id===id); if(!o)return;
+  const {error}=await sb.from('installs').update({accepted_at:new Date().toISOString()}).eq('id',id);
+  if(error){ alert('接單失敗：'+error.message); return; }   // 顯性失敗，不要靜默吞掉
+  const when=o.sched_date?`${o.sched_date} ${String(o.sched_start||9).padStart(2,'0')}:00起`:'';
+  pushByPhone(o.phone,`🧰 安裝通知\n\n${worker.name} 師傅已接下您的安裝單${when?`\n預約時間：${when}`:''}\n屆時將前往為您安裝 🔧`);
+  await loadCases();
+}
 async function arriveInstall(id){
   const o=cases.installs.find(x=>x.id===id); if(!o)return;
   await sb.from('installs').update({status:'arrived'}).eq('id',id);

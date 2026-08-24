@@ -1,2 +1,24 @@
 # 照片遷移前的本機備份（含 base64，勿進版控）
 _photo_backup/
+
+# 改檔前的本機備份（原檔名.backup_YYYYMMDD，勿進版控）
+*.backup_*
+
+# Node 相依（各子專案）
+node_modules/
+
+# Python 編譯快取
+__pycache__/
+*.pyc
+
+# 本機密鑰（勿進版控）
+secret.txt
+*.env.local
+
+# 本機測試錄音（可能含語音，勿進版控）
+stt-worker/*.wav
+stt-worker/*.m4a
+stt-worker/*.mp3
+
+# 去識別化資料集（含個資，勿進版控）
+LINE DATA/
