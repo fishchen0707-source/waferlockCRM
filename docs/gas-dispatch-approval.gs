@@ -4508,6 +4508,10 @@ function fillShipmentAs_(email, hintRow, form) {
       try { writeBackShipNo_(rec[COL_S_DISPATCH], shipNo); }
       catch (e2) { Logger.log('回寫業務分頁出貨單號失敗（不影響登錄）：' + e2); }
     }
+
+    // 鍵完單 → 把 Chat 認領卡片改成「✅ 已完成」。查無卡片就安靜跳過（不是每張單都有卡片）。
+    try { markShipClaimDone_(rec[COL_S_DISPATCH] || '', email); }
+    catch (eD) { Logger.log('Chat 卡片標記完成失敗（鍵單已成功）：' + eD); }
     try { CacheService.getScriptCache().remove(SHIP_CACHE_KEY); } catch (e3) {}
     invalidateWarehouseCache_();
 
@@ -4915,6 +4919,10 @@ function notifyAssistant_(rec) {
 
   try {
     var res = postWarehouseChat_(lines.join('\n'));
+    // 額外貼一張可認領的互動卡片到助理群組。閘門在 postShipClaimCard_ 裡：
+    // DISPATCH_ASSISTANT_SPACE 沒設就是 no-op，webhook 那則照樣送出，零影響。
+    try { postShipClaimCard_(rec); }
+    catch (eC) { Logger.log('Chat 互動卡片貼出失敗（webhook 通知已送出）：' + eC); }
     return { sent: res.sent, matched: !!(person && person.assist) };
   } catch (err) {
     Logger.log('通知助理例外（不影響簽核）：' + err);
