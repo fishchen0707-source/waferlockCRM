@@ -360,6 +360,12 @@ function doGet(e) {
     return htmlPage_(navBlock_('report', roles) + reportBlock_(email));
   }
 
+  // 儀表板：全員可進，但看得到哪幾格由 dashCounts_ 依角色決定。
+  // 這裡不擋，是因為它不顯示任何金額，只有件數。
+  if (page === 'home') {
+    return renderDashboard_(email, roles);
+  }
+
   // 查詢頁全員可用（唯讀）。進價的過濾在 runQuery 的伺服器端做，不靠畫面藏。
   if (page === 'query') {
     return htmlPage_(navBlock_('query', roles) + queryBlock_(email, roles));
@@ -1551,6 +1557,11 @@ function deepLink_(params) {
 
 function navBlock_(current, roles) {
   var tabs = [];
+  // 儀表板頁籤：只有「至少會看到一格」的人才顯示，條件與 dashCounts_ 給格子的條件一致。
+  // 完全沒有角色的人進去會是空白頁，那比不給入口更糟。
+  if (roles.boss || roles.sub || roles.assistant || roles.warehouse) {
+    tabs.push(['home', '首頁']);
+  }
   if (roles.sales) tabs.push(['order', '下單']);
   if (roles.sub || roles.boss) tabs.push(['approve', '簽核']);
   if (roles.assistant) tabs.push(['ship', '出貨登錄']);

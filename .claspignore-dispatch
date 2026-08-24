@@ -1,0 +1,14 @@
+# 派工簽核 Apps Script 專案要上傳哪些檔案
+#
+# 語法同 .gitignore：先全部排除，再用 ! 開白名單。
+# 一定要用白名單而不是黑名單——docs/ 裡有 .docx、.xlsx、逐字稿、
+# 訪談紀錄等一堆不該進 Apps Script 的東西，用黑名單遲早漏掉一個。
+#
+# 搭配指令：clasp -P .clasp-dispatch.json -I .claspignore-dispatch push
+
+**/**
+
+!appsscript.json
+!gas-dispatch-approval.gs
+!gas-dispatch-notify.gs
+!gas-dispatch-dashboard.gs
