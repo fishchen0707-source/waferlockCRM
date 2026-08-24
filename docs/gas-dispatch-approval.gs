@@ -3664,6 +3664,20 @@ function submitOrder(form) {
     try { CacheService.getScriptCache().remove(SHIP_CACHE_KEY); } catch (e0) {}
     invalidateWarehouseCache_();
 
+    // 稽核：整條鏈的起點。有這一筆，之後才能從稽核表看出「這張單從下單到出貨走了多久」
+    try {
+      // env 不在這個 scope（這裡是 one.ctx），用 getParent() 取試算表物件
+      appendAudit_(ctx.sheet.getParent(), {
+        at: stamp, who: email, role: '業務', orderNo: orderNo, action: '下單（' + kind + '）',
+        note: '客戶 ' + customer + (model ? '｜' + model : '') + (qty ? ' ×' + qty : '') +
+          (skipped.length ? '｜⚠ 分頁缺欄未寫入：' + skipped.join('、') : '') +
+          (shipWarn ? '｜🔴 出貨資訊寫入失敗' : ''),
+        sheet: ctx.name, row: newRow
+      });
+    } catch (eA) {
+      Logger.log('下單稽核寫入失敗（單已建立 ' + orderNo + '）：' + eA);
+    }
+
     // 通知下一棒。包 try：單已經建好了，通知失敗不該讓業務以為下單失敗而重下一次。
     try {
       notifyOrderSubmitted_({
@@ -3897,6 +3911,14 @@ function submitWarehouseAs_(email, shipNo, decision, note, hintRow) {
 
     removeFromWarehouseCache_(shipNo);
 
+    // 稽核：核單狀態欄只留最後結果，「有問題→再核過」的歷程只有這裡留得住
+    try {
+      auditShip_(s, target, rec, email, '倉庫',
+        decision === 'done' ? '核單通過' : '核單回報問題', note);
+    } catch (eA) {
+      Logger.log('倉庫核單稽核寫入失敗（核單本身已成功 ' + shipNo + '）：' + eA);
+    }
+
     // 通知整段包 try：它是附加動作，壞掉不該讓一次已寫入成功的核單被回報成失敗
     try {
       if (decision === 'done') notifyShipmentArchive_(rec);
@@ -4012,6 +4034,14 @@ function uploadInvoice(shipNo, fileName, mimeType, base64, hintRow, invoiceNo) {
       (hasFile ? '檔案 ' + finalName : '') + (invoiceNo ? '　號碼 ' + invoiceNo : '') +
       '｜' + email);
 
+    // 稽核：原本只寫 Logger，但執行紀錄只留 30 天，發票是金流憑證，要留在表裡
+    try {
+      auditShip_(s, target, readShipmentRow_(s, target), email, '助理', '登錄發票',
+        (hasFile ? '檔案 ' + finalName : '') + (invoiceNo ? (hasFile ? '｜' : '') + '號碼 ' + invoiceNo : ''));
+    } catch (eA) {
+      Logger.log('發票稽核寫入失敗（發票本身已登錄 ' + shipNo + '）：' + eA);
+    }
+
     var msg = [];
     if (hasFile) msg.push('已上傳 ' + finalName);
     if (invoiceNo) msg.push('已登錄發票號碼 ' + invoiceNo);
@@ -4087,6 +4117,13 @@ function requestReturnAs_(email, shipNo, reason, hintRow) {
     var rec = readShipmentRow_(s, target);
     rec[COL_S_RETURN] = value;
 
+    // 稽核：退單欄之後會被「已處理」覆蓋掉，所以「誰申請、為什麼」只有這裡留得住
+    try {
+      auditShip_(s, target, rec, email, '退單申請', '申請退單', reason);
+    } catch (eA) {
+      Logger.log('退單申請稽核寫入失敗（退單本身已成功 ' + shipNo + '）：' + eA);
+    }
+
     // 通知包 try：退單已經記錄成功了，通知壞掉不該回報成失敗而讓人再按一次
     try {
       notifyReturnRequest_(rec, target, reason, byName, stamp);
@@ -4146,6 +4183,15 @@ function resolveReturnAs_(email, shipNo, hintRow) {
 
     s.sheet.getRange(target, s.col[COL_S_RETURN]).setValue(value);
     SpreadsheetApp.flush();
+
+    // 稽核：這一步把退單欄從「🔄 申請中」改寫成「✅ 已處理」，
+    // 是流程上最後一次改動退單欄，不記就查不到是誰結掉的
+    try {
+      auditShip_(s, target, readShipmentRow_(s, target), email, '退單處理',
+        '退單標記已處理', reason ? '原退單原因：' + reason : '');
+    } catch (eA) {
+      Logger.log('退單處理稽核寫入失敗（標記本身已成功 ' + shipNo + '）：' + eA);
+    }
 
     try {
       var rec = readShipmentRow_(s, target);
@@ -4449,6 +4495,14 @@ function fillShipmentAs_(email, hintRow, form) {
     SpreadsheetApp.flush();
 
     var rec = readShipmentRow_(s, row);
+
+    // 稽核：這一步同時動了兩張表（出貨明細＋回寫業務分頁），是最需要留痕的一步
+    try {
+      auditShip_(s, row, rec, email, '助理', '鍵入出貨單號',
+        (orderId ? '訂單編號 ' + orderId : '') + (shipDate ? '｜出貨日 ' + shipDate : ''));
+    } catch (eA) {
+      Logger.log('鍵單稽核寫入失敗（鍵單本身已成功 ' + shipNo + '）：' + eA);
+    }
 
     if (rec[COL_S_DISPATCH]) {
       try { writeBackShipNo_(rec[COL_S_DISPATCH], shipNo); }
@@ -4927,6 +4981,32 @@ function appendAudit_(ss, rec) {
     if (pos[name]) out[pos[name] - 1] = vals[name];
   }
   sh.appendRow(out);
+}
+
+/**
+ * 出貨明細那一側的稽核包裝。
+ *
+ * 為什麼需要包裝：appendAudit_ 的「發包單號」欄是跨兩張表的 join key，
+ * 但出貨側的動作手上拿到的是**出貨單號**。這裡統一成
+ *   發包單號欄 → 該列的發包單號（料件出貨可能為空，退而填出貨單號）
+ *   說明欄     → 一定帶上出貨單號，這樣兩種情況都查得回來
+ *
+ * 每一個呼叫端都要自己包 try：稽核是附加動作，
+ * 它壞掉不該讓一次已經寫成功的操作被回報成失敗（沿用簽核那邊的原則）。
+ */
+function auditShip_(s, row, rec, who, role, action, note) {
+  var dispatchNo = String((rec && rec[COL_S_DISPATCH]) || '').trim();
+  var shipNo = String((rec && rec[COL_S_SHIP_NO]) || '').trim();
+  appendAudit_(s.ss, {
+    at: Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm'),
+    who: who,
+    role: role,
+    orderNo: dispatchNo || shipNo,
+    action: action,
+    note: (shipNo ? '出貨單號 ' + shipNo + (note ? '｜' : '') : '') + (note || ''),
+    sheet: SHIPMENT_SHEET,
+    row: row
+  });
 }
 
 // ────────────────────────────────────────────── 身分
