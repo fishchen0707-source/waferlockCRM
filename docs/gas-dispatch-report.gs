@@ -110,6 +110,10 @@ var COL_S_COST_PRICE = '進價';
 var COL_S_ORDER_BY   = '下單業務';
 var COL_S_WORK_TIME  = '施工時段';
 var COL_S_WORK_ITEM  = '工項';
+// 這兩欄一直沒被本程式的 knownHeaderSet_ 認得（發票電子檔上傳功能上線時漏補），
+// checkFieldParity() 早該把「發票檔案」報成不認得的欄名卻沒人發現。這次補發票號碼順手一起補上。
+var COL_S_INVOICE_URL = '發票檔案';
+var COL_S_INVOICE_NO  = '發票號碼';
 
 var OPTIONS_SHEET = '選單';
 var OPT_CHANNEL = '購買通路';
@@ -486,8 +490,12 @@ function rosterOf_(rosterSheet) {
   return out;
 }
 
-/** 「選單」分頁的購買通路清單。讀不到就用預設值（分組仍可運作）。 */
-var DEFAULT_CHANNELS = ['MOMO', '蝦皮', '官網', '散戶'];
+/**
+ * 「選單」分頁的購買通路清單。讀不到就用預設值（分組仍可運作）。
+ * 電商平台清單依公司內部業助新訓教材（2026-08-14 核對）補齊為實際使用的
+ * 交易平台，避免「選單」分頁還沒建好前，這些平台的出貨全部落到「其他」桶。
+ */
+var DEFAULT_CHANNELS = ['MOMO', '蝦皮', 'PCHOME', '燦坤', '特力屋', 'HOMEBOX', 'Pinkol', '官網', '散戶'];
 function channelsOf_(optionsSheet) {
   if (!optionsSheet || !optionsSheet.col[OPT_CHANNEL]) return DEFAULT_CHANNELS.slice();
   var c = optionsSheet.col[OPT_CHANNEL], out = [];
@@ -531,6 +539,7 @@ function knownHeaderSet_() {
     COL_S_BY, COL_S_WH_STATUS, COL_S_WH_BY, COL_S_WH_AT, COL_S_WH_NOTE, COL_S_SHIP_DATE,
     COL_S_CHANNEL_NO, COL_S_CUST_NAME, COL_S_CUST_PHONE, COL_S_CUST_ADDR, COL_S_SALE_PRICE,
     COL_S_COST_PRICE, COL_S_ORDER_BY, COL_S_WORK_TIME, COL_S_WORK_ITEM, COL_S_CASE_NO,
+    COL_S_INVOICE_URL, COL_S_INVOICE_NO,
     COL_R_CODE, COL_R_SALES, COL_R_SALES_MAIL, COL_R_TYPE, COL_R_ASSIST, COL_R_ASSIST_MAIL,
     COL_R_SHEET, OPT_CHANNEL, OPT_MODEL, OPT_ITEM, OPT_WORKER, OPT_INVOICE];
   for (var i = 0; i < std.length; i++) set[normHeader_(std[i])] = true;

@@ -97,6 +97,7 @@
       bot = startGeminiVoicebot({
         actx: actx,
         tokenUrl: FN + 'gemini-live-token',
+        toolsUrl: FN + 'voicebot-tools',
         headers: { 'Content-Type': 'application/json', apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY },
         setState: setState,
         // AI 接通即取消「50 秒無人接聽」計時器，避免對談中誤彈留言表單

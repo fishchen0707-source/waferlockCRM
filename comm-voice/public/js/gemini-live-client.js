@@ -68,6 +68,23 @@ function startGeminiVoicebot(opts) {
     return btoa(s);
   }
 
+  // 收到 AI 的工具呼叫 → 轉發 voicebot-tools 查真實資料 → 把結果回傳給 AI，AI 再依結果回答
+  function handleToolCalls(calls) {
+    calls.forEach(function (fc) {
+      console.log("[gemini live] AI 呼叫工具：" + fc.name, fc.args);
+      fetch(opts.toolsUrl, {
+        method: "POST", headers: opts.headers,
+        body: JSON.stringify({ name: fc.name, args: fc.args || {} }),
+      }).then(function (r) { return r.json(); }).then(function (result) {
+        console.log("[gemini live] 工具結果：", result);
+        if (session && !closed) session.sendToolResponse({ functionResponses: [{ id: fc.id, name: fc.name, response: result }] });
+      }).catch(function (err) {
+        console.error("[gemini live] 工具執行失敗", err);
+        if (session && !closed) session.sendToolResponse({ functionResponses: [{ id: fc.id, name: fc.name, response: { error: "查詢失敗，請稍後再試" } }] });
+      });
+    });
+  }
+
   function cleanup() {
     if (closed) return;
     closed = true;
@@ -120,6 +137,18 @@ function startGeminiVoicebot(opts) {
                 silenceDurationMs: 100,
               },
             },
+            // 工具宣告：AI 依人設的「查詢規則」自行決定何時呼叫（實際查詢在 voicebot-tools）
+            tools: [{
+              functionDeclarations: [{
+                name: "get_case_status",
+                description: "用客戶的聯絡電話查詢他目前的維修工單進度與預約時間",
+                parameters: {
+                  type: "OBJECT",
+                  properties: { phone: { type: "STRING", description: "客戶的聯絡電話號碼" } },
+                  required: ["phone"],
+                },
+              }],
+            }],
           },
           callbacks: {
             onopen: function () {
@@ -159,6 +188,11 @@ function startGeminiVoicebot(opts) {
             onmessage: function (message) {
               if (closed) return;
               msgCount++;
+              // function calling：AI 要查資料 → 轉發 voicebot-tools → 把結果回給 AI
+              if (message.toolCall && message.toolCall.functionCalls) {
+                handleToolCalls(message.toolCall.functionCalls);
+                return;
+              }
               var sc = message.serverContent;
               // barge-in：使用者插話 → 立刻停掉 AI 正在播的話
               if (sc && sc.interrupted) { console.log("[gemini live] 被打斷（barge-in）"); stopPlayback(); return; }
