@@ -24,15 +24,88 @@
  *   onRemoveFromSpace(e)    被移除
  *   onCardClick(event)      卡片按鈕被按（靠 event.common.invokedFunction 分派）
  *
- * ── 需要的 Google 服務 ──────────────────────────────────
- * 主動貼卡片 / 回寫卡片要用進階 Chat 服務（Chat.Spaces.Messages.create / .patch），
- * 已在 appsscript.json 的 enabledAdvancedServices 開啟。
- * 互動回應（按鈕→UPDATE_MESSAGE）不需要進階服務，Chat 執行環境自己處理。
+ * ── app 認證：服務帳戶 JWT，不走進階 Chat 服務 ──────────────
+ * 「主動貼卡片 / 回寫卡片」是以 app 身分呼叫 Chat API，需要 chat.bot 權限。
+ * chat.bot 是 app 專屬、**不能由使用者授權**（硬走會撞 invalid_scope）。
+ * 所以這裡用「服務帳戶簽 JWT 換 token」的標準做法：
+ *   chatAppToken_() 讀屬性裡的服務帳戶金鑰 → 簽 JWT → 換 access token（chat.bot）
+ *   再用 UrlFetchApp 直接打 Chat REST API（不用進階 Chat 服務）。
+ * 好處：appsscript.json 維持原樣、chat.bot 永不進使用者授權、正式簽核零影響。
+ *
+ * 互動回應（按鈕→UPDATE_MESSAGE）是「回應」不是「呼叫」，不需要 token，
+ * Chat 執行環境自己處理。
  * ============================================================
  */
 
 var CHATAPP_SPACE_PROP = 'DISPATCH_ASSISTANT_SPACE';  // 助理群組空間，格式 spaces/XXXXXXX
+var CHATAPP_SA_PROP = 'CHAT_APP_SA_KEY';              // 服務帳戶金鑰 JSON（整個貼進屬性，別進程式碼）
+var CHATAPP_TOKEN_CACHE = 'chatapp_sa_token_v1';     // access token 快取（省得每次都簽 JWT）
 var CHATCARD_SHEET = 'Chat卡片對照';                   // 案件↔訊息ID 對照（回寫用，不存在自動建）
+
+// ────────────────────────────────────────────── app 認證（服務帳戶 JWT）
+
+/**
+ * 以服務帳戶身分取得 chat.bot 的 access token。快取 55 分鐘（token 有效 60 分）。
+ * 金鑰放在指令碼屬性 CHAT_APP_SA_KEY（整份 service account JSON），不硬編碼。
+ */
+function chatAppToken_() {
+  var cache = CacheService.getScriptCache();
+  var hit = cache.get(CHATAPP_TOKEN_CACHE);
+  if (hit) return hit;
+
+  var raw = PropertiesService.getScriptProperties().getProperty(CHATAPP_SA_PROP);
+  if (!raw) throw new Error('未設定 ' + CHATAPP_SA_PROP + '（服務帳戶金鑰），Chat app 無法以自身身分發訊息');
+  var sa = JSON.parse(raw);
+
+  var now = Math.floor(Date.now() / 1000);
+  var header = { alg: 'RS256', typ: 'JWT' };
+  var claim = {
+    iss: sa.client_email,
+    scope: 'https://www.googleapis.com/auth/chat.bot',
+    aud: 'https://oauth2.googleapis.com/token',
+    iat: now,
+    exp: now + 3600
+  };
+  var b64 = function (obj) {
+    return Utilities.base64EncodeWebSafe(JSON.stringify(obj)).replace(/=+$/, '');
+  };
+  var toSign = b64(header) + '.' + b64(claim);
+  var sig = Utilities.computeRsaSha256Signature(toSign, sa.private_key);
+  var assertion = toSign + '.' + Utilities.base64EncodeWebSafe(sig).replace(/=+$/, '');
+
+  var resp = UrlFetchApp.fetch('https://oauth2.googleapis.com/token', {
+    method: 'post',
+    payload: {
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion: assertion
+    },
+    muteHttpExceptions: true
+  });
+  var body = JSON.parse(resp.getContentText() || '{}');
+  if (!body.access_token) {
+    throw new Error('取得 app token 失敗 HTTP ' + resp.getResponseCode() + '：' +
+      (body.error_description || body.error || resp.getContentText().slice(0, 200)));
+  }
+  cache.put(CHATAPP_TOKEN_CACHE, body.access_token, 55 * 60);
+  return body.access_token;
+}
+
+/** 以 app 身分打 Chat REST API。method=post 建訊息、patch 改訊息。回傳解析後的 JSON。 */
+function chatApi_(method, url, payloadObj) {
+  var resp = UrlFetchApp.fetch(url, {
+    method: method,
+    contentType: 'application/json; charset=UTF-8',
+    headers: { Authorization: 'Bearer ' + chatAppToken_() },
+    payload: JSON.stringify(payloadObj),
+    muteHttpExceptions: true
+  });
+  var code = resp.getResponseCode();
+  var body = resp.getContentText();
+  if (code < 200 || code >= 300) {
+    throw new Error('Chat API ' + method + ' 失敗 HTTP ' + code + '：' + body.slice(0, 300));
+  }
+  return JSON.parse(body || '{}');
+}
 
 // ────────────────────────────────────────────── 進入點
 
@@ -188,8 +261,11 @@ function postShipClaimCard_(rec) {
     model: rec.model || '', qty: rec.qty || '', worker: rec.worker || '',
     link: deepLink_({ page: 'ship', dn: rec.orderNo }) };
 
-  var msg = Chat.Spaces.Messages.create(
-    { cardsV2: buildShipCard_(info, { status: 'open' }) }, space);
+  // POST https://chat.googleapis.com/v1/{space}/messages
+  // space 形如 spaces/XXX，斜線是路徑分隔，不能 encodeURIComponent（會變 %2F 打錯 API）
+  var msg = chatApi_('post',
+    'https://chat.googleapis.com/v1/' + space + '/messages',
+    { cardsV2: buildShipCard_(info, { status: 'open' }) });
   // 存訊息名稱，之後鍵完單才找得到這張卡去回寫
   try { recordCardPosted_(info, space, msg.name); }
   catch (eR) { Logger.log('卡片對照寫入失敗（卡片已貼出）：' + eR); }
@@ -209,9 +285,10 @@ function markShipClaimDone_(orderNo, byEmail) {
     model: st.model || '', qty: st.qty || '', worker: st.worker || '',
     link: deepLink_({ page: 'ship', dn: orderNo }) };
 
-  Chat.Spaces.Messages.patch(
-    { cardsV2: buildShipCard_(info, { status: 'done', by: byEmail, at: at }) },
-    st.messageName, { updateMask: 'cardsV2' });
+  // PATCH https://chat.googleapis.com/v1/{message.name}?updateMask=cardsV2
+  chatApi_('patch',
+    'https://chat.googleapis.com/v1/' + st.messageName + '?updateMask=cardsV2',
+    { cardsV2: buildShipCard_(info, { status: 'done', by: byEmail, at: at }) });
   try { setCardDone_(orderNo, byEmail, at); } catch (eS) { Logger.log('卡片對照更新完成狀態失敗：' + eS); }
   return { done: true };
 }
