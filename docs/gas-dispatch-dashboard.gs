@@ -18,16 +18,25 @@
  *    單區失敗只顯示「本區無法載入」，其餘照常。
  * 2. 不可以動 CACHE_KEY／WH_CACHE_KEY 等既有快取，本檔用自己的 DASH_CACHE_KEY。
  *
- * ── 新鮮度 ──────────────────────────────────────────────
- * 既有簽核清單走 CACHE_TTL = 900 秒（15 分鐘）、預熱觸發器每 10 分鐘一次，
- * 所以那些數字最舊可能是 10 分鐘前的。儀表板要看「現在卡在哪」，15 分鐘太舊，
- * 因此本檔**直接呼叫未快取的原始函式**，再用自己的 60 秒短快取擋住重複掃描。
- * 前端輪詢間隔與快取一致（60 秒），不會白跑。
+ * ── 新鮮度 vs 速度（2026-08-24 修正）────────────────────
+ * 第一版為了新鮮度，刻意呼叫未快取的 getPending_()／getShippable_()，
+ * 結果 getDashboardStats 實測 **24～32 秒**（兩趟全分頁掃描），完全不能用。
+ *
+ * 改為沿用既有的預熱快取：warmCache() 觸發器已經每 10 分鐘把
+ * 待簽核／待出貨／待核單三份掃好放進 CacheService，讀它們是毫秒級。
+ * 儀表板因此變成純快取讀取，**開頁 1 秒內**。
+ *
+ * 代價是數字最舊可能是一個預熱週期前的。兩個補償措施：
+ *   1. 畫面標示資料時間與「N 分鐘前」，不假裝是即時的
+ *   2. 提供「立即重算」按鈕，需要當下數字時自己觸發（會等 20～30 秒，但是使用者自己選的）
+ * 要更即時就把 warmCache 的觸發器間隔調短（設定層，不必改程式）。
  * ============================================================
  */
 
 var DASH_CACHE_KEY = 'dispatch_dashboard_v1';
-var DASH_CACHE_TTL = 60;   // 秒。與前端輪詢間隔一致
+// TTL 必須**大於預熱間隔**（warmCache 觸發器目前 10 分鐘），否則兩次預熱之間
+// 快取會過期，那個倒楣的使用者就會踩到 20～30 秒的冷掃描。與既有 CACHE_TTL 同值。
+var DASH_CACHE_TTL = 900;  // 秒（15 分鐘），預熱每 10 分鐘，留 5 分鐘餘裕
 
 /**
  * 儀表板頁面。由 gas-dispatch-approval.gs 的 doGet 在 page === 'home' 時呼叫。
@@ -56,7 +65,6 @@ function getDashboardStats() {
  * 其他角色只看得到自己負責的那幾關——倉庫不需要知道公司今天接了幾張單。
  */
 function dashCounts_(roles) {
-  var full = !!(roles.boss || roles.sub);
   var cache = CacheService.getScriptCache();
 
   var raw = null;
@@ -68,7 +76,7 @@ function dashCounts_(roles) {
   }
 
   if (!raw) {
-    raw = scanAll_();
+    raw = scanAll_(true);   // true = 用已預熱的快取，毫秒級
     try {
       cache.put(DASH_CACHE_KEY, JSON.stringify(raw), DASH_CACHE_TTL);
     } catch (err) {
@@ -76,7 +84,15 @@ function dashCounts_(roles) {
     }
   }
 
-  // 依角色決定送哪幾格。沒有權限的格子**不送數字**，而不是送了再由前端隱藏。
+  return packCards_(raw, roles);
+}
+
+/**
+ * 依角色決定送哪幾格。沒有權限的格子**不送數字**，而不是送了再由前端隱藏。
+ * dashCounts_ 與 refreshDashboard 共用，避免兩邊的權限規則各自漂移。
+ */
+function packCards_(raw, roles) {
+  var full = !!(roles.boss || roles.sub);
   var cards = [];
   if (full) {
     cards.push(card_('today', '今日下單', raw.todayOrders, 'query', raw.err.dispatch));
@@ -96,8 +112,44 @@ function dashCounts_(roles) {
   if (full || roles.warehouse || roles.assistant) {
     cards.push(card_('ret', '退單處理中', raw.returning, 'warehouse', raw.err.shipment));
   }
+  return { cards: cards, at: raw.at, ts: raw.ts || 0 };
+}
 
-  return { cards: cards, at: raw.at };
+/**
+ * 「立即重算」按鈕的入口：清掉儀表板快取後強制重掃。
+ *
+ * 會跑 20～30 秒（兩趟全分頁掃描），但這是使用者自己按下去換來的當下數字，
+ * 跟「每次開頁都等 30 秒」是完全不同的事。
+ * 刻意不順便清掉既有的三份快取——那是簽核／出貨頁在用的，
+ * 儀表板不該有權讓別人的頁面變慢。
+ */
+function refreshDashboard() {
+  var email = currentUserEmail_();
+  if (!email) return { error: '無法辨識身分，請用公司 Google 帳號登入' };
+  var roles = rolesFor_(email);
+  try {
+    CacheService.getScriptCache().remove(DASH_CACHE_KEY);
+  } catch (err) {
+    Logger.log('清除儀表板快取失敗（仍會重掃）：' + err);
+  }
+  var raw = scanAll_(false);   // false = 不吃快取，實際重掃
+  try {
+    CacheService.getScriptCache().put(DASH_CACHE_KEY, JSON.stringify(raw), DASH_CACHE_TTL);
+  } catch (err) {
+    Logger.log('儀表板快取寫入失敗（不影響本次顯示）：' + err);
+  }
+  return packCards_(raw, roles);
+}
+
+/**
+ * 併進既有 warmCache() 的預熱項目。
+ * 由 gas-dispatch-approval.gs 的 warmCache() 在三份快取都更新完之後呼叫，
+ * 這樣它讀到的已經是新鮮的快取，不會再多掃一次表。
+ */
+function warmDashboardCache() {
+  var raw = scanAll_(true);   // 三份快取剛被 warmCache 更新過，讀它們即可
+  CacheService.getScriptCache().put(DASH_CACHE_KEY, JSON.stringify(raw), DASH_CACHE_TTL);
+  return raw;
 }
 
 function card_(key, label, value, page, errMsg) {
@@ -105,22 +157,27 @@ function card_(key, label, value, page, errMsg) {
 }
 
 /**
- * 實際掃表。兩個來源各自 try/catch——某一張表壞掉時其他格子還是要看得到，
+ * 掃出各關卡件數。
+ *
+ * @param {boolean} useCache true＝讀 warmCache() 已預熱的快取（毫秒級，資料可能舊幾分鐘）；
+ *                           false＝強制重掃（20～30 秒，只有「立即重算」按鈕會用）。
+ *
+ * 兩個來源各自 try/catch——某一張表壞掉時其他格子還是要看得到，
  * 而不是整頁變成一則錯誤訊息。
  */
-function scanAll_() {
+function scanAll_(useCache) {
   var out = {
     todayOrders: 0, waitSub: 0, waitBoss: 0, waitShip: 0, waitWh: 0, returning: 0,
     err: { dispatch: '', shipment: '' },
-    at: Utilities.formatDate(new Date(), TZ, 'HH:mm:ss')
+    at: Utilities.formatDate(new Date(), TZ, 'HH:mm'),
+    ts: new Date().getTime()   // 前端用這個算「N 分鐘前」，不假裝數字是即時的
   };
   var today = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
 
   // ── 發包單：待副簽、待主簽、今日下單（未簽核的部分）──
-  // 刻意用 getPending_() 而不是 getPendingCached_()：後者 15 分鐘快取太舊。
   var pend = null;
   try {
-    pend = getPending_();
+    pend = useCache ? getPendingCached_().rows : getPending_();
     for (var i = 0; i < pend.length; i++) {
       if (pend[i].stage === 'sub') out.waitSub++;
       else if (pend[i].stage === 'boss') out.waitBoss++;
@@ -134,7 +191,7 @@ function scanAll_() {
   // 今日下單量＝今天申請的單，不分簽核與否，所以兩邊都要算。
   // getShippable_() 是「已簽核但還沒出現在出貨登錄」的單，與上面的待核清單不重疊。
   try {
-    var shippable = getShippable_();
+    var shippable = useCache ? getShippableCached_().rows : getShippable_();
     out.waitShip = shippable.length;
     for (var j = 0; j < shippable.length; j++) {
       if (isToday_(shippable[j].applyAt, today)) out.todayOrders++;
@@ -145,7 +202,7 @@ function scanAll_() {
 
   // ── 出貨登錄：待倉庫核單、退單處理中 ──
   try {
-    out.waitWh = getWarehousePending_().length;
+    out.waitWh = (useCache ? getWarehouseCached_().rows : getWarehousePending_()).length;
     out.returning = countReturning_();
   } catch (err) {
     out.err.shipment = String(err);
@@ -207,17 +264,22 @@ function dashBlock_(email, roles) {
     '.dbar{display:flex;align-items:center;gap:8px;font-size:11.5px;color:#64748B;margin-bottom:10px}' +
     '.dbar .dot{width:7px;height:7px;border-radius:50%;background:#CBD5E1}' +
     '.dskel{color:#CBD5E1}' +
+    '.dbtn{margin-left:auto;background:#0F2744;color:#fff;border:0;border-radius:6px;' +
+      'padding:5px 11px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit}' +
+    '.dbtn:disabled{background:#94A3B8;cursor:wait}' +
+    '.dage{color:#B45309;font-weight:700}' +
     '</style>';
 
   var body = '<div class="hd"><div class="ic">📊</div>' +
     '<div><h1>派工出貨儀表板</h1><p>' + esc_(email) + '</p></div></div>' + css +
     '<div class="dbar"><span class="dot" id="ddot"></span><span id="dat">載入中…</span>' +
-    '<span style="margin-left:auto">每 60 秒自動更新</span></div>' +
+    '<button class="dbtn" id="dbtn" onclick="hardRefresh()">↻ 立即重算</button></div>' +
     '<div class="dgrid" id="dgrid">' +
       '<div class="dcard"><div class="dl">讀取中</div><div class="dv dskel">—</div></div>' +
     '</div>' +
     '<div style="font-size:11.5px;color:#94A3B8;line-height:1.7">' +
-      '數字點下去會跳到對應的作業頁，可以在那裡追溯單據或申請退單。' +
+      '數字點下去會跳到對應的作業頁，可以在那裡追溯單據或申請退單。<br>' +
+      '數字每 10 分鐘由背景自動更新一次；需要當下的即時數字，按「立即重算」（約 20～30 秒）。' +
     '</div>';
 
   // 前端輪詢。HtmlService 沙箱裡不能 fetch 自己的 /exec，只能用 google.script.run。
@@ -236,7 +298,7 @@ function dashBlock_(email, roles) {
         '"<div class=\\"dcard\\"><div class=\\"dl\\">沒有可顯示的項目</div>"+' +
         '"<div style=\\"font-size:12px;color:#64748B;line-height:1.7\\">您的帳號目前不在任何一份角色名單中"+' +
         '"（簽核／助理／倉庫）。若這不正確，請聯絡系統管理者加入。</div></div>";' +
-        'at.textContent="更新於 "+res.at;dot.style.background="#94A3B8";return;}' +
+        'at.innerHTML="資料時間 "+esc(res.at);dot.style.background="#94A3B8";return;}' +
       'var h="";' +
       'for(var i=0;i<res.cards.length;i++){var c=res.cards[i];' +
         'var href=BASE?BASE+"?page="+c.page:"#";' +
@@ -245,7 +307,19 @@ function dashBlock_(email, roles) {
           '"<div class=\\"dv\\">"+(c.err?"—":c.value)+"<span class=\\"du\\">件</span></div>"+' +
           '(c.err?"<div class=\\"de\\">本區讀取失敗，其餘數字仍為最新</div>":"")+"</a>";}' +
       'document.getElementById("dgrid").innerHTML=h;' +
-      'at.textContent="更新於 "+res.at;dot.style.background="#16A34A";}' +
+      'at.innerHTML="資料時間 "+esc(res.at)+age(res.ts);dot.style.background="#16A34A";}' +
+    // 誠實標示資料幾分鐘前——使用者才知道什麼時候該按「立即重算」
+    'function age(ts){if(!ts)return"";var m=Math.floor((Date.now()-ts)/60000);' +
+      'if(m<1)return" <span class=\\"dage\\">（剛更新）</span>";' +
+      'return" <span class=\\"dage\\">（"+m+" 分鐘前）</span>";}' +
+    'function hardRefresh(){var b=document.getElementById("dbtn");' +
+      'b.disabled=true;b.textContent="重算中…";' +
+      'document.getElementById("dat").textContent="重新掃描試算表，約需 20～30 秒…";' +
+      'document.getElementById("ddot").style.background="#D97706";' +
+      'google.script.run.withSuccessHandler(function(r){' +
+        'b.disabled=false;b.textContent="↻ 立即重算";draw(r);})' +
+      '.withFailureHandler(function(e){b.disabled=false;b.textContent="↻ 立即重算";fail(e);})' +
+      '.refreshDashboard();}' +
     'function fail(e){document.getElementById("dat").textContent="更新失敗："+e;' +
       'document.getElementById("ddot").style.background="#DC2626";}' +
     'function poll(){google.script.run.withSuccessHandler(draw).withFailureHandler(fail)' +

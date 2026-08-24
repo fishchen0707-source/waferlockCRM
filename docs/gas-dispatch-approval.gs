@@ -2496,6 +2496,17 @@ function warmCache() {
     }
   }
 
+  // 儀表板快取：一定要放在三份快取都更新完之後，這樣它只是讀剛寫好的快取（毫秒），
+  // 不會再多掃一次表。失敗不影響上面三份——儀表板是附屬品，不能拖累簽核。
+  try {
+    var d0 = new Date().getTime();
+    warmDashboardCache();
+    Logger.log('✅ 儀表板快取已更新，耗時 ' +
+      ((new Date().getTime() - d0) / 1000).toFixed(1) + ' 秒');
+  } catch (err) {
+    Logger.log('❌ 儀表板快取更新失敗（不影響其他三份）：' + err);
+  }
+
   // GAS 單次執行上限 6 分鐘。總耗時接近 3 分鐘就該回頭考慮 Advanced Sheets Service
   // 的 batchGet（一次往返讀完所有分頁），而不是繼續加預熱項目。
   var secs = (new Date().getTime() - total) / 1000;
