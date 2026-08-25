@@ -132,6 +132,20 @@ const G = sandbox;
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; } else { fail++; console.log('  ✗ ' + m); } };
 
+// 把 <script> 區塊丟進 new Function 檢查語法，回 true/false 而不是拋例外。
+// 直接讓例外往上炸會中斷整個套件，後面幾百條斷言的結果就都看不到了。
+const scriptsParse = blocks => {
+  for (const b of blocks) {
+    try {
+      new Function(b.replace(/^<script>/, '').replace(/<\/script>$/, ''));
+    } catch (err) {
+      console.log('    語法錯誤：' + err.message);
+      return false;
+    }
+  }
+  return true;
+};
+
 // ── 測試 1：每個真實分頁的欄位對應 ──
 console.log('\n【1】18 個分頁的欄位對應');
 SHEETS = Object.keys(HEADS).map(n => makeSheet(n, HEADS[n], [], n === '行銷' ? 1 : 2));
@@ -1216,15 +1230,20 @@ console.log('【16】業務下單頁');
   reset();
   const me = G.salesFor_('sammi.lin@waferlock.com');
   const page = G.orderBlock_('sammi.lin@waferlock.com', me);
-  ok(/發包下單/.test(page) && /LS/.test(page), '應顯示身分與代碼');
+  ok(/<h1>下單<\/h1>/.test(page) && /LS/.test(page), '應顯示身分與代碼');
   ok(/發包安裝/.test(page) && /料件出貨/.test(page), '應有兩個單別按鈕');
   ok(/零售-Sammi/.test(page), '應告知會寫進哪個分頁');
   ok(/id="installOnly"/.test(page), '承包商欄要能依單別隱藏');
   ok(/display:none/.test(page), '未選單別前欄位應隱藏');
   ok(!/發包單號/.test(page.split('<script>')[0]) || /自動編號/.test(page),
      '不可讓人手填發包單號');
-  new Function(page.match(/<script>([\s\S]*?)<\/script>/)[1]);
-  ok(true, '內嵌 JS 語法正確');
+  // 合併截圖下單後這一頁有**兩個** <script>（表單一個、截圖下單的 IIFE 一個）。
+  // 只驗第一個會讓另一個悄悄失去語法檢查，所以全部都要跑過。
+  const blocks = page.match(/<script>([\s\S]*?)<\/script>/g) || [];
+  ok(blocks.length === 2, '下單頁應有兩個內嵌腳本（表單＋截圖下單），實際 ' + blocks.length);
+  // 語法錯誤要當成一條失敗的斷言，不能讓 new Function 直接把整個套件炸掉——
+  // 崩潰的話後面所有測試結果都看不到，反而更難定位。
+  ok(scriptsParse(blocks), '兩段內嵌 JS 語法都正確');
 
   const nav = G.navBlock_('order', { sales: true, boss: true });
   ok(/下單/.test(nav) && /簽核/.test(nav), '兼具下單與簽核時兩個頁籤都要在');
@@ -1490,8 +1509,9 @@ console.log('【18】下單寫兩張表、助理只補單號');
   ok(/id="items"/.test(opage) && /id="custAddr"/.test(opage) && /id="costPrice"/.test(opage),
      '新欄位都要在');
   ok(/沒有欄位級權限/.test(opage), '進價的權限限制要寫在畫面上');
-  new Function(opage.match(/<script>([\s\S]*?)<\/script>/)[1]);
-  ok(true, '下單頁 JS 語法正確');
+  // 下單頁自 2026-08-25 起有兩段腳本（表單＋截圖下單），要全部驗過。
+  // 用 .match(/…/)[1] 只會拿到第一段，另一段就悄悄失去語法檢查。
+  ok(scriptsParse(opage.match(/<script>[\s\S]*?<\/script>/g) || []), '下單頁 JS 語法正確');
 })();
 
 // ── 測試 19：⑤ 查詢頁 ──
@@ -1909,8 +1929,7 @@ console.log('【22】下拉選單');
   ok(/MOMO/.test(page) && /蔣家工程行/.test(page), '選項要出現在 HTML 裡');
   ok(/onchange="oth\(/.test(page), '要綁切換邏輯');
   ok(/function val\(id\)/.test(page), '要有取值函式（選其他時取文字框）');
-  new Function(page.match(/<script>([\s\S]*?)<\/script>/)[1]);
-  ok(true, '內嵌 JS 語法正確');
+  ok(scriptsParse(page.match(/<script>[\s\S]*?<\/script>/g) || []), '內嵌 JS 語法正確');
 
   // 選單分頁是系統分頁，不可被當成業務發包分頁
   ok(G.isSystemSheet_('選單') === true, '選單分頁應被排除');
@@ -2218,8 +2237,7 @@ console.log('【25】資料驗證當選項來源');
      '🔴 下單頁要出現下拉（先前只讀「選單」分頁，所以一直沒得選）');
   ok(/<select id="worker"/.test(page) && /大內高手/.test(page), '承包商也要有下拉');
   ok(/<input id="workItem"/.test(page), '沒有來源的欄位仍退回文字輸入');
-  new Function(page.match(/<script>([\s\S]*?)<\/script>/)[1]);
-  ok(true, '內嵌 JS 語法正確');
+  ok(scriptsParse(page.match(/<script>[\s\S]*?<\/script>/g) || []), '內嵌 JS 語法正確');
 
   // 「選單」分頁優先，逐欄合併
   const OH = ['購買通路', '工項'];
@@ -3273,6 +3291,88 @@ console.log('\n【31】截圖下單');
   sandbox.UrlFetchApp.fetch = origFetch;
   asUser('boss@waferlock.com');
   reset();
+})();
+
+// 三種下單方式（發包安裝／料件出貨／截圖下單）2026-08-25 合併到同一頁。
+// 這一組鎖的是「合併之後容易靜默壞掉」的事，不是重測各自的送出邏輯——
+// 那些在【16】【18】【31】已經有了。
+console.log('\n【32】下單頁三合一');
+(() => {
+  const asUser = e => { sandbox.Session.getActiveUser = () => ({ getEmail: () => e }); };
+  const SALES_SHEET = '零售-Sammi';
+  const withSheet = ['LS', '小林', 'ls@waferlock.com', '零售', 'Vivi',
+                     'vivi@waferlock.com', SALES_SHEET];
+  const noSheet   = ['NS', '無分頁', 'ns@waferlock.com', '零售', 'Vivi',
+                     'vivi@waferlock.com', ''];
+  const build = rows => {
+    SHEETS = [
+      makeSheet(SALES_SHEET, HEADS[SALES_SHEET], [], 2),
+      makeSheet('出貨明細', G.SHIPMENT_HEADERS, [], 1),
+      makeSheet('人員代碼',
+        ['業務代碼', '業務姓名', '業務email', '類別', '對應助理', '助理email', '發包分頁'],
+        rows, 1),
+    ];
+    props.DISPATCH_SHEET_NAME = '*';
+    CACHE = {};
+  };
+
+  // ── 正常業務（有發包分頁）：三顆按鈕都在，兩種表單都在同一頁 ──
+  build([withSheet, noSheet]);
+  asUser('ls@waferlock.com');
+  const full = G.orderBlock_('ls@waferlock.com', G.salesFor_('ls@waferlock.com'));
+  ok(/發包安裝/.test(full) && /料件出貨/.test(full) && /截圖下單/.test(full),
+     '三種下單方式應同頁並列');
+  ok(/id="fields"/.test(full) && /id="quickFields"/.test(full),
+     '兩種表單區塊要同時存在，靠切換顯示而非換頁');
+  ok(/id="k0"/.test(full) && /id="k1"/.test(full) && /id="k2"/.test(full),
+     '按鈕索引要連號，否則切換時舊的 on 樣式清不掉');
+  ok(/var NBTN=3;/.test(full), '重設樣式的按鈕數要跟實際渲染的顆數一致');
+
+  // 🔑 id="msg" 只能有一個：兩個的話 getElementById 只認得第一個，
+  //    訊息會顯示在錯的位置，而且完全不會報錯。
+  ok((full.match(/id="msg"/g) || []).length === 1,
+     '整頁只能有一個 id="msg"，實際 ' + (full.match(/id="msg"/g) || []).length);
+
+  // 🔑 截圖下單的腳本必須維持 IIFE：它的 g／show 與表單那組同名，
+  //    拆掉外層 IIFE 兩邊就會互相覆蓋（後定義的贏），而且不會有任何錯誤。
+  const quickPart = full.slice(full.indexOf('id="quickFields"'));
+  ok(/<script>\(function\(\)\{/.test(quickPart),
+     '截圖下單腳本必須包在 IIFE 內，否則 g／show 會與表單那組互相覆蓋');
+
+  ok(scriptsParse(full.match(/<script>([\s\S]*?)<\/script>/g) || []),
+     '兩段內嵌腳本語法都正確');
+
+  // ── 缺發包分頁：不可整頁擋掉，截圖下單仍要能用 ──
+  // 合併前截圖下單是獨立頁、權限不需要發包分頁。若合併後照舊在頁面層擋，
+  // 這些人會連截圖下單都進不去——那是合併造成的倒退。
+  asUser('ns@waferlock.com');
+  const bare = G.orderBlock_('ns@waferlock.com', G.salesFor_('ns@waferlock.com'));
+  // 🔑 要驗「按得到」，不是「區塊存在」。quickOrderBlock_ 是無條件串上去的，
+  //    只檢查 id="quickFields" 的話，就算按鈕被拿掉、沒有任何入口，斷言照樣通過。
+  ok(/id="quickFields"/.test(bare) && /onclick="pickQuick\(/.test(bare),
+     '缺發包分頁時截圖下單仍必須可用（區塊在，而且要有按鈕能到達）');
+  ok(!/id="fields"/.test(bare), '缺發包分頁時不可畫出無處可寫的發包表單');
+  ok(/只能用截圖下單/.test(bare), '要明說為什麼少了兩個選項，不能只是靜靜不顯示');
+  ok(/var NBTN=1;/.test(bare) && /id="k0"/.test(bare),
+     '只剩一顆按鈕時索引要從 k0 開始');
+  ok(/pickQuick\(0\);/.test(bare),
+     '只有一種選擇時要自動選好，否則畫面像是壞掉（一顆按鈕、什麼都沒展開）');
+  ok(!/loadOptions/.test('') && bare.length > 0, '缺分頁時不應呼叫 loadOptions_ 而拋錯');
+
+  // ── 舊網址 ?page=quick 當別名，預選截圖下單 ──
+  asUser('ls@waferlock.com');
+  build([withSheet, noSheet]);
+  const viaOld = G.orderBlock_('ls@waferlock.com', G.salesFor_('ls@waferlock.com'), true);
+  ok(/pickQuick\(2\);/.test(viaOld), '從 ?page=quick 進來要自動切到截圖下單那一頁');
+  const viaNew = G.orderBlock_('ls@waferlock.com', G.salesFor_('ls@waferlock.com'));
+  ok(!/pickQuick\(2\);/.test(viaNew), '正常進下單頁不可預選任何單別（單別必選是刻意設計）');
+
+  // ── 導覽列不該再有獨立的截圖下單頁籤 ──
+  const nav = G.navBlock_('order', { sales: true });
+  ok(!/page=quick/.test(nav), '截圖下單已併入下單頁，導覽列不應再有獨立頁籤');
+  ok(/下單/.test(nav), '下單頁籤仍要在');
+
+  asUser('boss@waferlock.com');
 })();
 
 console.log('\n' + (fail ? '❌' : '✅') + ' 通過 ' + pass + '／失敗 ' + fail);

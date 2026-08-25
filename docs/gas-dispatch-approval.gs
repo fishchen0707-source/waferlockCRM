@@ -116,6 +116,14 @@ var ORDER_KIND_INSTALL = '發包安裝';
 var ORDER_KIND_PARTS   = '料件出貨';
 var ORDER_KINDS = [ORDER_KIND_INSTALL, ORDER_KIND_PARTS];
 
+// 截圖下單是下單頁上跟前兩者並列的第三顆按鈕，但它**刻意不是 ORDER_KINDS 的一員**。
+// ORDER_KINDS 裡的值會被原樣寫進試算表的單別欄，而且免簽核判定（ORDER_NO_SIGN_MARK）、
+// 通知文案、報表分類全都靠比對那個值。截圖下單走的是完全不同的路徑
+// （submitQuickOrder → 發案件號、不寫發包單號），沒有「單別」這個欄位要填。
+// 把它加進 ORDER_KINDS 會讓「截圖下單」四個字被當成一種單別寫進試算表，
+// 那是資料汙染，而且要等到有人去看報表分類才會發現。
+var ORDER_MODE_QUICK = '截圖下單';
+
 // 料件出貨不經主管簽核（2026-08-07 確認）。但它必須能進助理的待出貨清單，
 // 而那份清單是用 isApproved_()（只認 ✅ 開頭）判定的，簽核欄留空又會讓它
 // 出現在主管待核清單裡。所以寫一個以 ✅ 開頭、文字明講免簽核的標記：
@@ -406,29 +414,22 @@ function doGet(e) {
     return htmlPage_(navBlock_('query', roles) + queryBlock_(email, roles));
   }
 
-  if (page === 'order') {
+  // 下單頁：發包安裝／料件出貨／截圖下單三種模式同頁（2026-08-25 由三個入口合併）。
+  //
+  // ⚠ 「缺發包分頁」的檢查**刻意不放在這裡擋整頁**。合併前截圖下單是獨立頁，
+  //   權限只要 roles.sales、不需要 salesInfo.sheet（經銷商訂單不寫發包分頁）。
+  //   若照舊在頁面層擋，對照表沒填分頁的業務會連截圖下單都進不去——
+  //   那是合併造成的功能倒退，而且症狀是「本來能用的東西突然說你沒權限」。
+  //   所以分頁的有無改成往下傳，由 orderBlock_ 決定哪幾顆按鈕能用。
+  if (page === 'order' || page === 'quick') {
     if (!roles.sales) {
       return htmlPage_(errorBlock_('您沒有下單權限',
         email + ' 不在路由對照表的「' + COL_R_SALES_MAIL +
-        '」欄中。下單需要知道您的業務代碼與要寫入哪個分頁，' +
-        '這兩項只在對照表裡，所以必須先把您加進去。'));
+        '」欄中。下單需要知道您的業務代碼，這只在對照表裡，所以必須先把您加進去。'));
     }
-    if (!roles.salesInfo.sheet) {
-      return htmlPage_(errorBlock_('對照表缺少「' + COL_R_SHEET + '」',
-        '代碼 ' + roles.salesInfo.code + ' 沒有填發包分頁，系統不知道要把單寫到哪裡。' +
-        '可執行 suggestSheetMapping() 產生建議清單，人工確認後填入對照表。'));
-    }
-    return renderOrderPage_(email, roles.salesInfo);
-  }
-
-  // 截圖下單：權限沿用 order 頁同一道閘門（roles.sales），但不需要 salesInfo.sheet——
-  // 這條路刻意不寫發包分頁，經銷商訂單不走發包單，只有 code 反查對應助理時會用到 me。
-  if (page === 'quick') {
-    if (!roles.sales) {
-      return htmlPage_(errorBlock_('您沒有下單權限',
-        email + ' 不在路由對照表的「' + COL_R_SALES_MAIL + '」欄中。'));
-    }
-    return htmlPage_(navBlock_('quick', roles) + quickOrderBlock_(email));
+    // page=quick 是合併前的舊網址，保留當別名（有人可能加了書籤），
+    // 直接開在下單頁並預選截圖下單那一頁，不必記新網址。
+    return renderOrderPage_(email, roles.salesInfo, page === 'quick');
   }
 
   if (!canApprove) {
@@ -752,48 +753,75 @@ function reportBlock_(email) {
     '</script>';
 }
 
-function renderOrderPage_(email, me) {
-  return htmlPage_(navBlock_('order', rolesFor_(email)) + orderBlock_(email, me));
+function renderOrderPage_(email, me, wantQuick) {
+  return htmlPage_(navBlock_('order', rolesFor_(email)) + orderBlock_(email, me, wantQuick));
 }
 
 /**
- * ① 業務下單畫面。
+ * ① 業務下單畫面。三種下單方式同一頁，用最上方的按鈕切換：
+ *   發包安裝／料件出貨 → 22 欄位表單，送 submitOrder
+ *   截圖下單           → 上傳截圖給 AI 讀，送 submitQuickOrder
  *
- * 單別（發包安裝／料件出貨）放在最上面且必選：它決定後面整條路徑
- * （要不要簽核、要不要填承包商），選錯的成本比多點一下高得多。
- * 選了之後才顯示對應欄位——料件出貨沒有「承包商」這件事，
- * 顯示一個不該填的欄位只會製造錯誤資料。
+ * 單別放在最上面且必選：它決定後面整條路徑（要不要簽核、要不要填承包商），
+ * 選錯的成本比多點一下高得多。選了之後才顯示對應欄位——料件出貨沒有
+ * 「承包商」這件事，顯示一個不該填的欄位只會製造錯誤資料。
+ *
+ * ⚠ 前兩者與截圖下單**不是同一種東西**，只是入口併在一起：
+ *   前兩者寫「單別」欄與發包單號、可能要簽核；截圖下單發案件號、不寫發包單號、
+ *   一律免簽核。共用的只有這顆按鈕列與訊息區，兩邊的送出邏輯完全獨立。
+ *
+ * ⚠ me.sheet 可能是空的（對照表沒填發包分頁）。那種情況下前兩者無處可寫、
+ *   只有截圖下單能用，所以整段表單連同 loadOptions_ 一起跳過——
+ *   loadOptions_('') 會去開一個不存在的分頁，不是留空而是直接出錯。
  */
-function orderBlock_(email, me) {
+function orderBlock_(email, me, wantQuick) {
+  var canStd = !!(me && me.sheet);   // 能不能走發包安裝／料件出貨
+
   var head =
     '<div class="hd"><div class="ic">📝</div><div>' +
-    '<h1>發包下單</h1><p>' + esc_(email) +
+    '<h1>下單</h1><p>' + esc_(email) +
     '　·　' + esc_(me.code) + '　' + esc_(me.name) + '</p></div></div>' +
     '<div id="msg"></div>';
 
-  var kindBtns = '';
-  for (var i = 0; i < ORDER_KINDS.length; i++) {
-    kindBtns += '<button class="kind" id="k' + i + '" onclick="pick(\'' +
-      jsq_(ORDER_KINDS[i]) + '\',' + i + ')">' + esc_(ORDER_KINDS[i]) + '</button>';
+  // 按鈕索引要連號（k0、k1、k2…），因為切換時是用 g("k"+j) 逐一重設樣式。
+  // 缺分頁時前兩顆不畫，截圖下單就會變成 k0——所以索引用累加的，不寫死。
+  var kindBtns = '', btnCount = 0;
+  if (canStd) {
+    for (var i = 0; i < ORDER_KINDS.length; i++) {
+      kindBtns += '<button class="kind" id="k' + btnCount + '" onclick="pick(\'' +
+        jsq_(ORDER_KINDS[i]) + '\',' + btnCount + ')">' + esc_(ORDER_KINDS[i]) + '</button>';
+      btnCount++;
+    }
   }
+  var quickIdx = btnCount;
+  kindBtns += '<button class="kind" id="k' + quickIdx + '" onclick="pickQuick(' +
+    quickIdx + ')">📷 ' + esc_(ORDER_MODE_QUICK) + '</button>';
+  btnCount++;
 
   // 選項由「選單」分頁維護。該分頁沒有「發票別」欄時沿用程式裡的既有常數——
   // 不能因為分頁還沒建好就讓發票別變成空的下拉。
   // 帶入該業務自己的分頁：若沒有「選單」分頁，就讀那個分頁儲存格上的資料驗證
   // （使用者本來就是用資料驗證做下拉的）
-  var OPT = loadOptions_(me.sheet);
+  var OPT = canStd ? loadOptions_(me.sheet) : {};
   var invList = OPT[OPT_INVOICE] || INVOICE_OPTIONS;
   var invOpts = '<option value=""></option>';
   for (var v = 0; v < invList.length; v++) {
     invOpts += '<option>' + esc_(invList[v]) + '</option>';
   }
 
-  var form =
+  var kindCard =
     '<div class="card">' +
-      '<div class="ometa"><b>單別</b><span>決定後面要不要經主管簽核</span></div>' +
+      '<div class="ometa"><b>單別</b><span>決定後面要填什麼、要不要經主管簽核</span></div>' +
       '<div class="kinds">' + kindBtns + '</div>' +
       '<div id="kindNote" class="note"></div>' +
-    '</div>' +
+      (canStd ? '' :
+        '<div class="note">⚠ 對照表的「' + esc_(COL_R_SHEET) + '」沒填代碼 ' +
+        esc_(me.code) + ' 要寫入哪個分頁，系統不知道發包單要寫到哪，' +
+        '所以此帳號目前只能用截圖下單。' +
+        '可執行 suggestSheetMapping() 產生建議清單，人工確認後填入對照表。</div>') +
+    '</div>';
+
+  var stdFields = !canStd ? '' :
     '<div id="fields" style="display:none">' +
       '<div class="card">' +
         '<div class="ometa"><b>發包資訊</b><span>主管簽核與累計請款用</span></div>' +
@@ -848,7 +876,13 @@ function orderBlock_(email, me) {
       '</div>' +
     '</div>';
 
-  var footer = '<div class="note">' +
+  var form = kindCard + stdFields + quickOrderBlock_();
+
+  // 這段說明只適用發包安裝／料件出貨（講的是發包單號與寫入分頁）。
+  // 截圖下單不發發包單號、不寫這個分頁，所以跟著 #fields 一起切換顯示，
+  // 不能固定放在頁尾——在截圖下單模式下它是錯的資訊。
+  var footer = !canStd ? '' :
+    '<div class="note" id="stdFoot" style="display:none">' +
     '發包單號由系統自動編號（' + esc_(me.code) + '-年月日-流水），不必手填——' +
     'LS 與 SL 只差字母順序、是兩個不同的人，人工填遲早會錯。<br>' +
     '單會寫進您的分頁「' + esc_(me.sheet || '（尚未設定）') + '」。' +
@@ -871,15 +905,27 @@ function orderBlock_(email, me) {
       'return e.value;}' +
     'function show(t,c){g("msg").innerHTML=\'<div class="msg \'+c+\'">\'+t+\'</div>\';' +
       'window.scrollTo(0,0);}' +
-    'function pick(k,i){KIND=k;' +
-      'for(var j=0;j<' + ORDER_KINDS.length + ';j++){' +
-        'var b=g("k"+j);if(b){b.className=(j===i)?"kind on":"kind";}}' +
-      'g("fields").style.display="";' +
+    // 三顆按鈕共用一組樣式重設：按鈕數量由後端算好帶進來（缺發包分頁時只有一顆），
+    // 不能寫死 ORDER_KINDS.length——那樣截圖下單那顆的 on 樣式永遠不會被清掉。
+    'var NBTN=' + btnCount + ';' +
+    'function setBtns(i){for(var j=0;j<NBTN;j++){' +
+      'var b=g("k"+j);if(b){b.className=(j===i)?"kind on":"kind";}}}' +
+    // 切換到另一種下單方式時清掉訊息區：上一種模式的成功／錯誤訊息留在畫面上，
+    // 會被誤讀成剛切過來這一種的結果。
+    'function swap(showStd){var f=g("fields"),q=g("quickFields"),ft=g("stdFoot");' +
+      'if(f)f.style.display=showStd?"":"none";' +
+      'if(ft)ft.style.display=showStd?"":"none";' +
+      'if(q)q.style.display=showStd?"none":"";' +
+      'g("msg").innerHTML="";}' +
+    'function pick(k,i){KIND=k;setBtns(i);swap(true);' +
       'var inst=(k==="' + jsq_(ORDER_KIND_INSTALL) + '");' +
       'g("installOnly").style.display=inst?"":"none";' +
       'g("kindNote").innerHTML=inst?"送出後進主管簽核佇列。":' +
         '"免簽核，送出後直接進助理出貨清單。";' +
       'g("customer").focus();}' +
+    'function pickQuick(i){KIND="";setBtns(i);swap(false);' +
+      'g("kindNote").innerHTML="上傳經銷商在 LINE 傳的進貨截圖，' +
+        'AI 讀出客戶與品項後由您確認。免簽核，送出後直接進助理待鍵單。";}' +
     'function send(){' +
       'if(!KIND){show("請先選擇單別","fail");return;}' +
       'var f={kind:KIND,customer:val("customer"),project:val("project"),' +
@@ -920,6 +966,10 @@ function orderBlock_(email, me) {
           'show("連線失敗："+e.message,"fail");})' +
         '.submitOrder(f);' +
     '}' +
+    // 預選截圖下單的兩種情況：從舊網址 ?page=quick 進來（保留書籤可用），
+    // 或這個帳號沒有發包分頁、截圖下單是唯一能用的方式（此時不預選會看到
+    // 一顆孤零零的按鈕、什麼都沒展開，像是壞掉）。
+    ((wantQuick || !canStd) ? 'pickQuick(' + quickIdx + ');' : '') +
     '</script>';
 
   return head + form + footer + script;
@@ -939,18 +989,21 @@ function renderWarehousePage_(email, roles) {
 }
 
 /**
- * 截圖下單畫面。上傳 → AI 辨識 → 業務確認（可編輯）→ 送出。
+ * 截圖下單區塊。上傳 → AI 辨識 → 業務確認（可編輯）→ 送出。
  *
  * 品項用可增刪的列，不是固定欄位：截圖裡的品項數不固定（1～3 都有過），
  * 業務也可能要手動補一項 AI 沒讀到的。整份草稿都在前端 JS 陣列裡組，
  * 沒有伺服器端初始資料——頁面一開始是空的，等使用者上傳圖片。
+ *
+ * ⚠ 2026-08-25 從獨立頁併進下單頁，所以這裡**只回內容區塊**：
+ *   沒有自己的 <div class="hd"> 標題，也沒有自己的 <div id="msg">。
+ *   下單頁已經有一個 id="msg"，這裡再放一個就會有兩個相同 id，
+ *   getElementById 只認得到第一個——訊息會顯示在錯的位置，而且不會報錯。
+ *
+ * ⚠ 下方 script 刻意整段包在 IIFE 裡：它的 g／show／esc 與下單頁表單那組同名，
+ *   靠函式作用域各自獨立。拆掉 IIFE 兩邊就會互相覆蓋。
  */
-function quickOrderBlock_(email) {
-  var head =
-    '<div class="hd"><div class="ic">📷</div><div><h1>截圖下單</h1><p>' +
-    esc_(email) + '</p></div></div>' +
-    '<div id="msg"></div>';
-
+function quickOrderBlock_() {
   var upload =
     '<div class="card">' +
       '<div class="ometa"><b>1. 上傳截圖</b></div>' +
@@ -979,7 +1032,7 @@ function quickOrderBlock_(email) {
       '</div>' +
     '</div>';
 
-  var footer = '<div class="note">送出後會通知您的對應助理去 TipTop 開單。' +
+  var qfooter = '<div class="note">送出後會通知您的對應助理去 TipTop 開單。' +
     '這條路徑不經過發包簽核——經銷商進貨本來就不走發包單。</div>';
 
   var script = '<script>' +
@@ -1082,7 +1135,12 @@ function quickOrderBlock_(email) {
     '})();' +
     '</script>';
 
-  return head + upload + draft + footer + script;
+  // 整組包在可切換的容器裡，預設隱藏——下單頁載入時是「還沒選單別」的狀態。
+  // script 放在容器外：它用 onclick 綁定，容器隱藏不影響綁定，
+  // 但若放進容器內、將來有人改成動態插入 innerHTML，腳本就不會被執行。
+  return '<div id="quickFields" style="display:none">' +
+    upload + draft + qfooter +
+    '</div>' + script;
 }
 
 // ──────────────────────── 深連結單筆頁（Chat 通知點進來就直接是那一筆）
@@ -1762,7 +1820,8 @@ function navBlock_(current, roles) {
     tabs.push(['home', '首頁']);
   }
   if (roles.sales) tabs.push(['order', '下單']);
-  if (roles.sales) tabs.push(['quick', '截圖下單']);
+  // 「截圖下單」2026-08-25 併進下單頁的單別按鈕，不再是獨立頁籤。
+  // ?page=quick 仍可用（doGet 當別名導到下單頁並預選），書籤不會失效。
   if (roles.sub || roles.boss) tabs.push(['approve', '簽核']);
   if (roles.assistant) tabs.push(['ship', '出貨登錄']);
   if (roles.warehouse) tabs.push(['warehouse', '倉庫核單']);
