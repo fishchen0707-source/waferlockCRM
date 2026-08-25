@@ -42,6 +42,21 @@ var CHATAPP_SA_PROP = 'CHAT_APP_SA_KEY';              // 服務帳戶金鑰 JSON
 var CHATAPP_TOKEN_CACHE = 'chatapp_sa_token_v1';     // access token 快取（省得每次都簽 JWT）
 var CHATCARD_SHEET = 'Chat卡片對照';                   // 案件↔訊息ID 對照（回寫用，不存在自動建）
 
+// 允許使用問答功能的空間，逗號分隔的 spaces/XXXX（可設多個）。
+//
+// 🔑 **這是問答功能唯一的安全邊界**，不是可有可無的設定。
+//   使用者已拍板「認不出發問者也照答」「沒指定對象就查全部」，
+//   兩者都選了便利——那麼「誰能進到這個 Chat 空間」就等於「誰能查到所有單」。
+//   上線前必須確認過空間成員名單。
+//
+// ⚠ 跟 DISPATCH_ASSISTANT_SPACE 是**兩件事**，不要合併：
+//   前者是「小幫手主動貼認領卡片到哪」，這裡是「允許誰對它提問」。
+//   助理群組要貼卡片，但業務群組只提問不貼卡片，兩邊的名單本來就不會一樣。
+//
+// 未設定 → 問答功能整個關閉，onMessage 退回原本那句固定導引。
+// 沿用 postShipClaimCard_ 的「沒設就不動作」慣例：預設關閉，開燈是明確的動作。
+var CHATASK_SPACES_PROP = 'CHATAPP_ALLOWED_SPACES';
+
 // ────────────────────────────────────────────── 設定用測試工具（在編輯器手動執行）
 
 /**
@@ -170,13 +185,133 @@ function chatUpdateCard_(cardsV2) {
 
 // ────────────────────────────────────────────── 進入點
 
+/** 沒開問答、或聽不懂時的自我介紹。 */
+var CHATAPP_INTRO = '我是派工小幫手 🛠️\n我會在主管簽核後，把待鍵單的案件卡片貼到助理群組，' +
+  '卡片上按「我來處理」就能認領，其他人就知道有人接手了。';
+
 /**
- * 使用者直接傳訊給應用程式。這支 app 不是聊天機器人，只回一句導引。
- * 有這個函式，app 在 GCP 設定才算完整（缺 onMessage 會被判定沒 App logic）。
+ * 使用者直接傳訊給應用程式。
+ *
+ * 🔑 **閘門一定要在最前面**：問答功能沒開（CHATAPP_ALLOWED_SPACES 未設定，
+ *   或這個空間不在名單裡）就退回自我介紹，**一個字的業務資料都不能吐**。
+ *   原本這支對任何空間、任何人都回同一句話，那時無所謂；接上查詢之後
+ *   「誰能進這個空間」就等於「誰能查到所有單」，閘門漏一次就是資料外洩。
  */
 function onMessage(event) {
-  return chatText_('我是派工小幫手 🛠️\n我會在主管簽核後，把待鍵單的案件卡片貼到助理群組，' +
-    '卡片上按「我來處理」就能認領，其他人就知道有人接手了。');
+  var space = eventSpace_(event);
+  if (!chatAskAllowed_(space)) return chatText_(CHATAPP_INTRO);
+
+  var text = eventMessageText_(event);
+  if (!text) return chatText_(CHATAPP_INTRO);
+
+  var user = eventUser_(event);
+  var asker = {
+    mention: chatMention_(user),
+    name: String(user.displayName || ''),
+    email: chatAskerEmail_(user)
+  };
+
+  try {
+    return chatText_(answerChatQuestion_(text, asker));
+  } catch (err) {
+    // 問答壞掉不能讓小幫手變成已讀不回——那會讓人以為訊息沒送出去而一直重問。
+    Logger.log('❌ Chat 問答失敗：' + err);
+    return chatText_((asker.mention ? asker.mention + ' ' : '') +
+      '抱歉，我這邊出了點問題，暫時查不了。請改用查詢頁，或稍後再問一次。');
+  }
+}
+
+/**
+ * 取出使用者輸入的文字，兩種模式都吃（理由同 eventParams_）。
+ *
+ * ⚠ 優先用 argumentText 而不是 text：在群組裡提問一定會 @小幫手，
+ *   `text` 會包含「@派工小幫手 」這段前綴，`argumentText` 是去掉提及後的純內容。
+ *   拿 text 去餵 AI，AI 就得自己判斷哪段是提及、哪段是問題——那是白白增加它出錯的機會。
+ */
+function eventMessageText_(event) {
+  if (!event) return '';
+  var c = event.chat || {};
+  var msg = (c.messagePayload && c.messagePayload.message) ||
+            (c.appCommandPayload && c.appCommandPayload.message) ||
+            event.message || {};
+  return String(msg.argumentText || msg.text || '').trim();
+}
+
+/**
+ * 組出 @提及發問者用的字串。
+ *
+ * Chat 的提及格式是 <users/數字UID>，UID 取自事件裡的 user.name——
+ * 那是 Chat 自己簽發的，發話端偽造不了，比 displayName 可靠。
+ * 拿不到就退化成顯示名稱（純文字，不會真的 @到人，但至少看得出在回誰）。
+ */
+function chatMention_(user) {
+  var name = user && user.name ? String(user.name) : '';
+  if (/^users\//.test(name)) return '<' + name + '>';
+  return (user && user.displayName) ? String(user.displayName) : '';
+}
+
+/**
+ * 發問者的 email：Chat 事件不保證有，拿不到就用 UID 反查「Chat人員對照」分頁。
+ * 兩條路都失敗回空字串——呼叫端要能接受「不知道你是誰」並降級回答（使用者已拍板）。
+ */
+function chatAskerEmail_(user) {
+  var direct = user && user.email ? String(user.email).trim() : '';
+  if (direct) return direct;
+  return emailOfChatUid_(user && user.name);
+}
+
+/**
+ * UID → email，反查「Chat人員對照」分頁。
+ *
+ * 複用既有的 loadChatUids_()（approval.gs，回 {email: UID}），把它反過來查即可，
+ * 不另外讀一次表——那張表的讀取邏輯（表頭正規化、找表頭列）意外地繁瑣，
+ * 抄第二份遲早會有一份忘了跟上。
+ *
+ * ⚠ loadChatUids_ 的註解提醒它不可放進每次開頁都跑的路徑。Chat 是「每則訊息一次」，
+ *   頻率遠低於開頁，可以直接呼叫。
+ */
+function emailOfChatUid_(uid) {
+  uid = String(uid || '').trim();
+  if (!uid) return '';
+  var bare = uid.replace(/^users\//, '');
+  var map;
+  try {
+    map = loadChatUids_();
+  } catch (err) {
+    Logger.log('UID 反查失敗（讀不到 Chat人員對照）：' + err);
+    return '';
+  }
+  for (var email in map) {
+    if (!Object.prototype.hasOwnProperty.call(map, email)) continue;
+    var v = String(map[email] || '').replace(/^users\//, '');
+    if (v && v === bare) return email;
+  }
+  return '';
+}
+
+/** 問答功能允許的空間清單（逗號或空白分隔）。未設定＝功能關閉。 */
+function chatAskSpaces_() {
+  var raw = '';
+  try {
+    raw = String(PropertiesService.getScriptProperties()
+      .getProperty(CHATASK_SPACES_PROP) || '').trim();
+  } catch (err) {
+    return [];
+  }
+  if (!raw) return [];
+  return raw.split(/[,\s]+/).map(function (s) { return s.trim(); })
+    .filter(function (s) { return !!s; });
+}
+
+/** 這個空間可以用問答嗎？未設定屬性一律 false（預設關閉）。 */
+function chatAskAllowed_(space) {
+  space = String(space || '').trim();
+  if (!space) return false;
+  var list = chatAskSpaces_();
+  for (var i = 0; i < list.length; i++) {
+    if (list[i] === space) return true;
+  }
+  return false;
 }
 
 /**

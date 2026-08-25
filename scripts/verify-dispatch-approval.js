@@ -3375,5 +3375,245 @@ console.log('\n【32】下單頁三合一');
   asUser('boss@waferlock.com');
 })();
 
+// 【33】Chat 小幫手問答
+console.log('\n【33】Chat 小幫手問答');
+(() => {
+  const asUser = e => { sandbox.Session.getActiveUser = () => ({ getEmail: () => e }); };
+  const origFetch = sandbox.UrlFetchApp.fetch;
+  const SALES_SHEET = '零售-Sammi';
+  const OHEAD = HEADS[SALES_SHEET];
+  const SHEAD = G.SHIPMENT_HEADERS;
+
+  // 用欄名建列，不手動數欄位順序——數錯不會報錯，只會讓斷言莫名其妙地失敗
+  const rowOf = (head, obj) => head.map(h => (obj[h] === undefined ? '' : obj[h]));
+
+  // 讓 Gemini 回固定的解析結果。這裡測的是「拿到條件之後程式怎麼做」，
+  // 不是 Gemini 準不準——後者本機測不了，也不該用假資料假裝測過。
+  const geminiReturns = obj => {
+    sandbox.UrlFetchApp.fetch = () => ({
+      getResponseCode: () => 200,
+      getContentText: () => JSON.stringify({
+        candidates: [{ content: { parts: [{ text: JSON.stringify(obj) }] } }]
+      })
+    });
+  };
+
+  const ORDER = rowOf(OHEAD, {
+    '發包申請日期': '2026-08-25', '發包單號': 'LS-260825-01', '客戶': '金宏鎖店',
+    '型號': 'L396', '報價單數量': '10', '發包人員': '小林',
+    '主管KEY英文名押日期': '✅ 已核准'
+  });
+
+  const reset = (shipRows = []) => {
+    SHEETS = [
+      makeSheet(SALES_SHEET, OHEAD, [ORDER], 2),
+      makeSheet('出貨明細', SHEAD, shipRows, 1),
+      makeSheet('人員代碼',
+        ['業務代碼', '業務姓名', '業務email', '類別', '對應助理', '助理email', '發包分頁'],
+        [['LS', '小林', 'ls@waferlock.com', '零售', 'Vivi', 'vivi@waferlock.com', SALES_SHEET]], 1),
+      makeSheet('Chat人員對照', ['email', 'Chat UID', '姓名備註'],
+        [['ls@waferlock.com', '111222333444555666', '小林']], 1),
+    ];
+    props.DISPATCH_SHEET_NAME = '*';
+    props.GEMINI_API_KEY = 'test-key';
+    CACHE = {};
+  };
+  reset();
+  asUser('ls@waferlock.com');
+
+  // ══ 空間白名單：問答功能唯一的安全邊界 ══
+  {
+    delete props.CHATAPP_ALLOWED_SPACES;
+    // 🔑 一定要先讓 Gemini 回得出有效條件。否則閘門被拿掉時解析會失敗，
+    //    資料「剛好」沒外洩，下面那條斷言就變成靠巧合通過的空測試。
+    geminiReturns({ intent: 'ship_status', date_from: '2026-08-25', date_to: '2026-08-25',
+      customer: '金宏鎖店', order_no: '', person: '', self: false, confidence: 'high' });
+    const ev = { chat: {
+      messagePayload: { message: { argumentText: '8/25 金宏鎖店出貨了嗎' },
+                        space: { name: 'spaces/AAA' } },
+      user: { name: 'users/111222333444555666', displayName: '小林' } } };
+    const r = JSON.stringify(G.onMessage(ev));
+    ok(/派工小幫手/.test(r), '白名單未設定時應退回自我介紹');
+    ok(!/金宏|LS-260825/.test(r), '🔴 白名單未設定時一個字的業務資料都不能吐');
+
+    props.CHATAPP_ALLOWED_SPACES = 'spaces/BBB';
+    ok(!/LS-260825/.test(JSON.stringify(G.onMessage(ev))),
+       '🔴 不在白名單的空間不可查到單');
+
+    props.CHATAPP_ALLOWED_SPACES = 'spaces/AAA, spaces/BBB';
+    ok(G.chatAskAllowed_('spaces/AAA') && G.chatAskAllowed_('spaces/BBB'),
+       '白名單應支援逗號分隔多個空間');
+    ok(!G.chatAskAllowed_('spaces/CCC'), '不在名單的空間應為 false');
+    ok(!G.chatAskAllowed_(''), '空的空間名一律 false');
+  }
+
+  // ══ shipmentStage_：誠實的狀態 ══
+  {
+    const mk = o => { const r = {}; SHEAD.forEach(h => { r[h] = o[h] || ''; }); return r; };
+
+    ok(G.shipmentStage_(null).code === 'ordered_only', '沒有出貨列＝助理尚未鍵單');
+    ok(G.shipmentStage_(mk({})).code === 'entered_no_no', '有列但無單號無日期');
+    ok(G.shipmentStage_(mk({ '出貨單號': 'SO-1' })).code === 'entered_no_date', '有單號無出貨日期');
+    ok(G.shipmentStage_(mk({ '出貨單號': 'SO-1', '出貨日期': '2026-08-26' })).code === 'date_filled',
+       '出貨日期有值');
+    ok(G.shipmentStage_(mk({ '倉庫核單狀態': '已核' })).code === 'wh_ok', '倉庫已核');
+
+    const iss = G.shipmentStage_(mk({ '倉庫核單狀態': '有問題', '問題說明': '少兩支' }));
+    ok(iss.code === 'wh_issue' && /少兩支/.test(iss.label),
+       '有問題要帶出問題說明（常數名寫錯的話這裡會是空的）');
+    ok(G.shipmentStage_(mk({ '倉庫核單狀態': '有問題', '出貨日期': '2026-08-26' })).code === 'wh_issue',
+       '🔴 有問題要壓過出貨日期——那是唯一需要有人處理的狀態，被埋掉就沒人知道');
+
+    // 🔴 本設計最重要的一條
+    const labels = [null, mk({}), mk({ '出貨單號': 'SO-1' }), mk({ '出貨日期': '2026-08-26' }),
+      mk({ '倉庫核單狀態': '已核' }), mk({ '倉庫核單狀態': '有問題' })]
+      .map(r => G.shipmentStage_(r).label).join('|');
+    ok(!/已出貨|未出貨/.test(labels),
+       '🔴 任何狀態都不可輸出「已出貨／未出貨」——系統根本沒有這個資訊');
+  }
+
+  // ══ 回覆內容 ══
+  {
+    reset();
+    props.CHATAPP_ALLOWED_SPACES = 'spaces/AAA';
+    geminiReturns({ intent: 'ship_status', date_from: '2026-08-25', date_to: '2026-08-25',
+      customer: '金宏鎖店', order_no: '', person: '', self: false, confidence: 'high' });
+
+    const ans = G.answerChatQuestion_('8/25 金宏鎖店出貨了嗎',
+      { mention: '<users/111222333444555666>', name: '小林', email: 'ls@waferlock.com' });
+
+    ok(/^<users\/111222333444555666>/.test(ans), '回覆要以 @發問者 開頭');
+    ok(/金宏鎖店/.test(ans) && /2026-08-25/.test(ans), '要把理解到的條件覆述回去');
+    ok(/LS-260825-01/.test(ans), '應找到那張單');
+    ok(/不是貨運公司的實際出貨紀錄/.test(ans), '每則答案都要附免責聲明');
+    ok(!/已出貨/.test(ans), '🔴 回覆不可出現「已出貨」');
+
+    geminiReturns({ intent: 'ship_status', date_from: '2026-01-01', date_to: '2026-01-01',
+      customer: 'ZZZ不存在', order_no: '', person: '', self: false, confidence: 'high' });
+    const none = G.answerChatQuestion_('1/1 ZZZ不存在', { mention: '', name: '', email: '' });
+    ok(/找不到/.test(none), '查無時要說「我找不到」');
+    ok(/寫法不同|換個說法/.test(none),
+       '🔴 查無時要提示可能只是寫法不同，不可讓人以為單真的不存在而重下一張');
+  }
+
+  // ══ 金額一律不進 Chat ══
+  {
+    reset([rowOf(SHEAD, {
+      '案件號': 'IW202608250001', '登錄時間': '2026-08-25', '出貨單號': 'SO-9',
+      '出貨日期': '2026-08-26', '發包單號': 'LS-260825-01', '客戶': '金宏鎖店',
+      '售價': '99999', '進價': '88888'
+    })]);
+    props.CHATAPP_ALLOWED_SPACES = 'spaces/AAA';
+    geminiReturns({ intent: 'ship_status', date_from: '2026-08-25', date_to: '2026-08-25',
+      customer: '金宏鎖店', order_no: '', person: '', self: false, confidence: 'high' });
+    const ans = G.answerChatQuestion_('8/25 金宏鎖店', { mention: '', name: '', email: '' });
+    ok(/LS-260825-01/.test(ans), '前提：這個情境要真的查到單，否則下面兩條是空測試');
+    ok(!/99999/.test(ans), '🔴 售價不可出現在 Chat 回覆');
+    ok(!/88888/.test(ans), '🔴 進價不可出現在 Chat 回覆');
+    ok(/2026-08-26/.test(ans), '出貨日期應如實顯示');
+  }
+
+  // ══ 聽不懂 / 沒有條件 ══
+  {
+    reset(); props.CHATAPP_ALLOWED_SPACES = 'spaces/AAA';
+    geminiReturns({ intent: 'unknown', date_from: '', date_to: '', customer: '',
+      order_no: '', person: '', self: false, confidence: 'low' });
+    const a = G.answerChatQuestion_('今天天氣如何', { mention: '', name: '', email: '' });
+    ok(/看不懂/.test(a), '聽不懂要明說');
+    ok(/可以這樣問/.test(a), '聽不懂時要給可用的問法，不能只說聽不懂');
+    ok(/不能查貨運進度|不會給金額/.test(a), '要講明做不到什麼，避免使用者一直亂試');
+
+    geminiReturns({ intent: 'ship_status', date_from: '', date_to: '', customer: '',
+      order_no: '', person: '', self: false, confidence: 'high' });
+    ok(/看不懂/.test(G.answerChatQuestion_('查一下', { mention: '', name: '', email: '' })),
+       '🔴 一個條件都沒有時不可放行去掃全表');
+  }
+
+  // ══ 「我的單」：認不出人時不可默默查成全部 ══
+  {
+    reset(); props.CHATAPP_ALLOWED_SPACES = 'spaces/AAA';
+    geminiReturns({ intent: 'ship_status', date_from: '', date_to: '', customer: '',
+      order_no: '', person: '', self: true, confidence: 'high' });
+    const a = G.answerChatQuestion_('我這週的單', { mention: '', name: '路人', email: '' });
+    ok(/認不出你/.test(a), '認不出身分時要明說');
+    // 這條有**兩道獨立防線**（實測確認）：拿掉「認不出就明說」那道之後，
+    // salesFor_('') 查無業務仍然會擋下來。刻意兩條都留著——
+    // 前者給的是看得懂的訊息，後者是萬一前者被改壞時的兜底。
+    ok(!/LS-260825-01/.test(a),
+       '🔴 問「我的單」但認不出人時，不可回一份其實是所有人的清單');
+
+    const b = G.answerChatQuestion_('我這週的單',
+      { mention: '', name: '小林', email: 'ls@waferlock.com' });
+    ok(/LS-260825-01/.test(b), '認得出人時應查到他自己的單');
+  }
+
+  // ══ 超過一個月直接擋 ══
+  {
+    reset(); props.CHATAPP_ALLOWED_SPACES = 'spaces/AAA';
+    geminiReturns({ intent: 'ship_status', date_from: '2026-01-01', date_to: '2026-08-25',
+      customer: '', order_no: '', person: '', self: false, confidence: 'high' });
+    const a = G.answerChatQuestion_('今年所有單', { mention: '', name: '', email: '' });
+    ok(/超過一個月|逾時/.test(a), '🔴 大範圍查詢要當場擋下，不可讓它掃到逾時（使用者只會看到沒反應）');
+  }
+
+  // ══ UID → email 反查 ══
+  {
+    reset();
+    ok(G.emailOfChatUid_('users/111222333444555666') === 'ls@waferlock.com', 'UID 反查 email');
+    ok(G.emailOfChatUid_('111222333444555666') === 'ls@waferlock.com', '沒有 users/ 前綴也要能查');
+    ok(G.emailOfChatUid_('users/999') === '', '查不到回空字串');
+    ok(G.emailOfChatUid_('') === '', '空值回空字串');
+  }
+
+  // ══ 事件解析：兩種模式都要吃（先前踩過同一類坑）══
+  {
+    ok(G.eventMessageText_({ chat: { messagePayload: { message: { argumentText: ' 查單 ' } } } })
+       === '查單', '外掛模式應讀 chat.messagePayload 並 trim');
+    ok(G.eventMessageText_({ message: { text: '傳統' } }) === '傳統', '傳統模式仍要能讀');
+    ok(G.eventMessageText_({ chat: { messagePayload: { message:
+       { text: '@派工小幫手 查單', argumentText: '查單' } } } }) === '查單',
+       '🔴 要優先用 argumentText，否則 @提及前綴會被餵給 AI');
+    ok(G.eventMessageText_({}) === '', '空事件回空字串');
+
+    ok(G.chatMention_({ name: 'users/123' }) === '<users/123>', 'UID 應組成 Chat 提及格式');
+    ok(G.chatMention_({ displayName: '小林' }) === '小林', '沒有 UID 時退化成顯示名稱');
+    ok(G.chatMention_({}) === '', '什麼都沒有回空字串');
+  }
+
+  // ══ callGeminiJson_：全系統唯一的 Gemini 入口 ══
+  {
+    reset();
+    delete props.GEMINI_API_KEY;
+    ok(G.callGeminiJson_([{ text: 'hi' }], { type: 'OBJECT' }, 't').reason === 'nokey',
+       '沒金鑰要回 nokey 而不是拋錯');
+    props.GEMINI_API_KEY = 'test-key';
+
+    sandbox.UrlFetchApp.fetch = () => ({ getResponseCode: () => 500, getContentText: () => 'boom' });
+    ok(G.callGeminiJson_([{ text: 'hi' }], {}, 't').reason === 'http', 'HTTP 失敗回 http');
+
+    sandbox.UrlFetchApp.fetch = () => ({
+      getResponseCode: () => 200,
+      getContentText: () => JSON.stringify({ candidates: [{ content: { parts: [{ text: '不是json' }] } }] })
+    });
+    ok(G.callGeminiJson_([{ text: 'hi' }], {}, 't').reason === 'parse', '解析失敗回 parse');
+
+    let body = '';
+    sandbox.UrlFetchApp.fetch = (url, opt) => {
+      body = opt.payload;
+      return { getResponseCode: () => 200, getContentText: () => JSON.stringify({
+        candidates: [{ content: { parts: [{ text: '{"a":1}' }] } }] }) };
+    };
+    const r = G.callGeminiJson_([{ text: 'hi' }], { type: 'OBJECT' }, 't');
+    ok(r.ok && r.data.a === 1, '正常路徑應回解析後的物件');
+    ok(!/inline_data/.test(body),
+       '純文字呼叫不可夾帶 inline_data（全庫第一支純文字呼叫，最容易照抄圖片版）');
+    ok(/responseSchema/.test(body), '必須帶 responseSchema，否則回的不保證是 JSON');
+  }
+
+  sandbox.UrlFetchApp.fetch = origFetch;
+  asUser('boss@waferlock.com');
+  reset();
+})();
+
 console.log('\n' + (fail ? '❌' : '✅') + ' 通過 ' + pass + '／失敗 ' + fail);
 process.exit(fail ? 1 : 0);

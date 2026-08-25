@@ -3606,16 +3606,22 @@ function buildReport_() {
  *
  * 只讀必要欄位，並沿用 pendingOfSheet_ 那套「先用單號欄定出資料邊界」的做法。
  */
-function queryOrders_(q) {
-  q = String(q || '').trim().toLowerCase();
-  if (!q) return { rows: [], truncated: false };
-
-  var MAX = 50;   // 超過就截斷：查詢頁不是用來一次看完全部的
-  var out = [];
-  var truncated = false;
-
-  // 先建出貨明細的索引（發包單號 → 出貨列陣列）。同一發包單號可有多次出貨。
-  var shipByNo = {}, shipLoose = [];
+/**
+ * 讀整張出貨明細，建成索引：{ byNo: {發包單號: [列…]}, loose: [沒有發包單號的列…] }。
+ *
+ * 每一列都轉成「欄名 → 字串值」的物件，Date 一律經 fmtDate_ 轉 yyyy-MM-dd，
+ * 呼叫端不必再處理型別。
+ *
+ * ⚠ loose 不是「壞資料」：沒有發包單號的出貨約佔一半（料件出貨、截圖下單、
+ *   弱電料件、鎖胚、建案整批本來就不走發包單），漏掉它們等於查詢只涵蓋一半。
+ *
+ * 抽出來的原因：這是整個查詢裡**最貴的一段**（讀整張表），
+ * 查詢頁與 Chat 問答都需要，抄第二份就會讀兩次表。
+ * 讀失敗回空索引而不是拋錯——查詢頁沿用原本的行為：出貨明細掛掉時
+ * 仍然查得到發包單本身，只是看不到出貨資訊。
+ */
+function buildShipIndex_() {
+  var byNo = {}, loose = [];
   try {
     var s = openShipmentSheet_();
     var sLast = s.sheet.getLastRow();
@@ -3633,16 +3639,29 @@ function queryOrders_(q) {
         rec.row = i + 2;
         var dno = rec[COL_S_DISPATCH];
         if (dno) {
-          if (!shipByNo[dno]) shipByNo[dno] = [];
-          shipByNo[dno].push(rec);
+          if (!byNo[dno]) byNo[dno] = [];
+          byNo[dno].push(rec);
         } else {
-          shipLoose.push(rec);   // 無發包單號的出貨（約一半）
+          loose.push(rec);   // 無發包單號的出貨（約一半）
         }
       }
     }
   } catch (err) {
     Logger.log('查詢時讀出貨明細失敗：' + err);
   }
+  return { byNo: byNo, loose: loose };
+}
+
+function queryOrders_(q) {
+  q = String(q || '').trim().toLowerCase();
+  if (!q) return { rows: [], truncated: false };
+
+  var MAX = 50;   // 超過就截斷：查詢頁不是用來一次看完全部的
+  var out = [];
+  var truncated = false;
+
+  var idx = buildShipIndex_();
+  var shipByNo = idx.byNo, shipLoose = idx.loose;
 
   // 掃業務分頁
   var env = openSheets_();
@@ -3732,6 +3751,326 @@ function queryOrders_(q) {
   }
 
   return { rows: out, truncated: truncated };
+}
+
+// ═══════════════════════════════════════════ Chat 小幫手問答
+//
+// 業務在 Chat 裡直接問「8/25 下單給金宏鎖店的案件出貨了嗎？」，不必跳出去開網頁。
+//
+// 分工鐵則（使用者拍板）：**AI 只負責聽懂問題，查資料與組答案一律由程式碼做。**
+// AI 的輸出只會是「查詢條件」，不會是任何數字、日期或狀態文字——
+// 那些一律從試算表的值直接取。AI 說錯話的代價是查錯條件（看得出來），
+// 不是回報錯誤的出貨狀態（看不出來）。
+//
+// ⚠ 回覆一律不含金額（進價、售價、承包金額）。Chat 是群組場合，
+//   而 runQuery 那套「只有主管看得到進價」的分級在群組裡沒有意義——
+//   訊息是貼給整個空間看的，不是貼給發問者一個人。
+
+/**
+ * 🔑 一列出貨明細的**誠實狀態**。
+ *
+ * ⚠ **刻意不輸出「已出貨／未出貨」這種二分答案**，因為系統根本沒有這個資訊：
+ *   - 出貨明細沒有貨運單號欄位
+ *   - 「出貨日期」是助理人工回填的，不是系統判定
+ *   - 「倉庫核單狀態」是**單據**審核，不是貨物離庫
+ *   - 真正的依據是貨運單，而貨運單在另一套系統（Supabase），目前兩邊沒有 join
+ *
+ * 使用者確認過「要看到貨運單才算出貨」。在貨運單串進來之前（見 v2），
+ * 這裡能做的只有**如實回報登錄到哪一步**，讓人自己判斷。
+ * 給一個聽起來確定的「已出貨」，比說「我不知道」危險得多。
+ *
+ * @return {code, label}
+ */
+function shipmentStage_(rec) {
+  if (!rec) return { code: 'ordered_only', label: '已下單，但出貨明細還沒有這一筆（助理尚未鍵單）' };
+
+  var wh = String(rec[COL_S_WH_STATUS] || '').trim();
+  var shipDate = String(rec[COL_S_SHIP_DATE] || '').trim();
+  var shipNo = String(rec[COL_S_SHIP_NO] || '').trim();
+
+  // 有問題排在最前面：這是唯一「需要有人去處理」的狀態，被其他狀態蓋掉就沒人知道。
+  if (wh === WH_ISSUE) {
+    var why = String(rec[COL_S_WH_NOTE] || '').trim();
+    return { code: 'wh_issue', label: '⚠ 倉庫標記有問題' + (why ? '：' + why : '') };
+  }
+  if (wh === WH_DONE) {
+    return { code: 'wh_ok', label: '倉庫單據已核' + (shipDate ? '，出貨日期 ' + shipDate : '') };
+  }
+  if (shipDate) {
+    return { code: 'date_filled', label: '出貨日期填了 ' + shipDate + '（此欄由助理人工回填）' };
+  }
+  if (shipNo) {
+    return { code: 'entered_no_date', label: '已鍵 TipTop 單號 ' + shipNo + '，出貨日期還沒填' };
+  }
+  return { code: 'entered_no_no', label: '助理已建立這筆，但還沒鍵 TipTop 單號' };
+}
+
+/** 每則答案都附這一句。不是禮貌用語，是防止有人把登錄狀態當成實際出貨。 */
+var CHAT_SHIP_DISCLAIMER =
+  '※ 以上是系統登錄狀態，不是貨運公司的實際出貨紀錄。' +
+  '要確認貨真的走了，請看貨運單或問倉庫。';
+
+/** 聽不懂時回這個。列出實際可用的問法，比一句「我聽不懂」有用得多。 */
+var CHAT_HELP =
+  '我看不懂這個問題 🤔 可以這樣問我：\n' +
+  '・「8/25 金宏鎖店的單出貨了嗎」\n' +
+  '・「查 LS-260825-01」（發包單號／出貨單號／案件號都可以）\n' +
+  '・「我這週下的單」\n\n' +
+  '我目前**只能查登錄狀態**，不能查貨運進度、不會給金額、也不能改資料。';
+
+/**
+ * 用 AI 把一句中文問題轉成查詢條件。**這是整條路徑上唯一有 AI 的地方。**
+ *
+ * ⚠ 今天的日期由程式帶進 prompt，不讓 AI 自己假設——它不知道今天幾號，
+ *   一旦自己編一個，「這週」「昨天」全部會算錯，而且錯得很合理、看不出來。
+ *
+ * ⚠ Prompt 的口吻沿用 recognizeOrderImage：**讀不出來就留空並標 low，不要猜**。
+ *   查詢條件猜錯的後果是查到別人的單或查不到，兩種都比留空糟。
+ */
+function parseChatQuestion_(text) {
+  var today = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
+
+  var schema = {
+    type: 'OBJECT',
+    properties: {
+      intent:     { type: 'STRING' },   // ship_status / order_lookup / unknown
+      date_from:  { type: 'STRING' },
+      date_to:    { type: 'STRING' },
+      customer:   { type: 'STRING' },
+      order_no:   { type: 'STRING' },
+      person:     { type: 'STRING' },
+      self:       { type: 'BOOLEAN' },  // 問的是「我的單」
+      confidence: { type: 'STRING' }
+    },
+    required: ['intent', 'date_from', 'date_to', 'customer', 'order_no',
+               'person', 'self', 'confidence']
+  };
+
+  var prompt =
+    '你是出貨查詢系統的問題解析器。今天是 ' + today + '（台北時間）。\n' +
+    '把下面這句話轉成查詢條件的 JSON，欄位如下：\n' +
+    '- intent："ship_status"（問某批單的出貨/處理狀態）、"order_lookup"（單純要查某張單）、' +
+    '"unknown"（看不懂，或問的是這個系統答不了的事）\n' +
+    '- date_from / date_to：yyyy-MM-dd。單一日期時兩者相同。' +
+    '「這週」「上週」「這個月」要換算成實際區間。只講月日（如 8/25）就用今年。讀不出日期就兩個都留空字串\n' +
+    '- customer：客戶或鎖店名稱，**原文照抄**（例如「金宏鎖店」就寫「金宏鎖店」），不要自己擴寫或補全。沒提到就留空字串\n' +
+    '- order_no：發包單號／出貨單號／案件號，有講才填，沒有就留空字串\n' +
+    '- person：問句裡指名的業務或助理姓名，沒有就留空字串\n' +
+    '- self：問句是在問「我的單」「我下的」時為 true，否則 false\n' +
+    '- confidence："high" 或 "low"\n\n' +
+    '規則：\n' +
+    '1. **讀不出來的欄位一律留空字串，絕對不要猜**。留空我會問清楚，猜錯我會查到錯的單。\n' +
+    '2. 沒有任何條件可填（沒日期、沒客戶、沒單號、也不是問自己的單）→ intent 設 "unknown"。\n' +
+    '3. 問到金額、毛利、貨運進度、要求修改資料、或跟出貨查詢無關的閒聊 → intent 設 "unknown"。\n\n' +
+    '這句話是：\n' + text;
+
+  var got = callGeminiJson_([{ text: prompt }], schema, 'Chat問答解析');
+  if (!got.ok) return null;
+
+  var p = got.data || {};
+  return {
+    intent: String(p.intent || 'unknown'),
+    dateFrom: String(p.date_from || '').trim(),
+    dateTo: String(p.date_to || '').trim(),
+    customer: String(p.customer || '').trim(),
+    orderNo: String(p.order_no || '').trim(),
+    person: String(p.person || '').trim(),
+    self: p.self === true,
+    confidence: (p.confidence === 'low') ? 'low' : 'high'
+  };
+}
+
+/**
+ * 依結構化條件查單。**與 queryOrders_ 刻意分開，不是重複實作。**
+ *
+ * queryOrders_ 服務查詢頁，契約是「單一關鍵字、任一欄命中、50 筆」；
+ * 這裡要的是「多條件 AND ＋ 日期區間 ＋ 10 筆」。兩者的比對語意相衝
+ * （前者 OR、後者 AND），硬擠進同一支會讓查詢頁的行為隨 Chat 的需求漂移。
+ * 共用最貴的那一段（buildShipIndex_，讀整張出貨明細）就夠了。
+ *
+ * ⚠ 上限 10 筆不是效能考量而是**可讀性**：Chat 訊息塞不下 50 筆，
+ *   硬塞只會變成沒人看的一大坨。超過就明說「還有更多，請用查詢頁」。
+ */
+function chatQueryOrders_(f) {
+  var MAX = 10;
+  var out = [], truncated = false;
+  var idx = buildShipIndex_();
+
+  var wantCust = String(f.customer || '').toLowerCase();
+  var wantNo = String(f.orderNo || '').toLowerCase();
+  var wantPerson = String(f.person || '').toLowerCase();
+
+  // 日期比對用字串：欄位已經過 fmtDate_ 轉成 yyyy-MM-dd，字串比大小就等於日期比大小。
+  var from = f.dateFrom || '', to = f.dateTo || '';
+  var inRange = function (d) {
+    d = String(d || '').slice(0, 10);
+    if (!d) return false;
+    if (from && d < from) return false;
+    if (to && d > to) return false;
+    return true;
+  };
+
+  var env = openSheets_();
+  for (var k = 0; k < env.list.length && !truncated; k++) {
+    var ctx = env.list[k];
+    var startRow = ctx.headerRow + 1;
+    var lastRow = ctx.lastRow || ctx.sheet.getLastRow();
+    if (lastRow < startRow) continue;
+
+    var width = ctx.lastCol || ctx.sheet.getLastColumn();
+    var values = ctx.sheet.getRange(startRow, 1, lastRow - startRow + 1, width).getValues();
+
+    for (var r = 0; r < values.length && !truncated; r++) {
+      var row = values[r];
+      var pick = function (name) {
+        var c = ctx.col[name];
+        if (!c || c > row.length) return '';
+        var v = row[c - 1];
+        return (v instanceof Date) ? fmtDate_(v) : String(v == null ? '' : v).trim();
+      };
+
+      var no = pick(COL_ORDER_NO);
+      if (!ORDER_NO_RE.test(no)) continue;
+
+      var cust = pick(COL_CUSTOMER);
+      var applyAt = pick(COL_APPLY_AT);
+      var by = pick(COL_DISPATCHER);
+      var ships = idx.byNo[no] || [];
+
+      // 條件是 AND：每一個有值的條件都必須成立。
+      if (wantNo) {
+        var hitNo = no.toLowerCase().indexOf(wantNo) >= 0;
+        if (!hitNo) {
+          for (var s1 = 0; s1 < ships.length && !hitNo; s1++) {
+            var sn = String(ships[s1][COL_S_SHIP_NO] || '').toLowerCase();
+            var cn = String(ships[s1][COL_S_CASE_NO] || '').toLowerCase();
+            if ((sn && sn.indexOf(wantNo) >= 0) || (cn && cn.indexOf(wantNo) >= 0)) hitNo = true;
+          }
+        }
+        if (!hitNo) continue;
+      }
+      if (wantCust && cust.toLowerCase().indexOf(wantCust) < 0 &&
+          ctx.name.toLowerCase().indexOf(wantCust) < 0) continue;
+      if (wantPerson && by.toLowerCase().indexOf(wantPerson) < 0 &&
+          ctx.name.toLowerCase().indexOf(wantPerson) < 0) continue;
+      if ((from || to) && !inRange(applyAt)) continue;
+
+      out.push({
+        no: no, sheet: ctx.name, customer: cust, at: applyAt,
+        model: pick(COL_MODEL), qty: pick(COL_QUOTE_QTY),
+        by: by, approval: pick(COL_APPROVAL), ships: ships
+      });
+      if (out.length >= MAX) truncated = true;
+    }
+  }
+
+  return { rows: out, truncated: truncated };
+}
+
+/**
+ * Chat 問答的總入口：一句問題進來，一段回覆出去。由 chatapp.gs 的 onMessage 呼叫。
+ *
+ * @param text  使用者輸入（已去掉 @小幫手 前綴）
+ * @param asker {mention, name, email}——email 可能是空的（認不出這個人）
+ *
+ * ⚠ 回傳純文字，不丟例外：呼叫端在 Chat 事件裡，拋錯會讓小幫手變成已讀不回，
+ *   使用者會以為訊息沒送出去而一直重問。
+ *
+ * ⚠ **一個金額欄位都不輸出**。runQuery 那套「主管才看得到進價」的分級在這裡
+ *   沒有意義——Chat 訊息是貼給整個空間看的，不是貼給發問者一個人。
+ */
+function answerChatQuestion_(text, asker) {
+  asker = asker || {};
+  var at = asker.mention ? asker.mention + ' ' : '';
+
+  var f = parseChatQuestion_(text);
+  if (!f) {
+    return at + '我現在聽不懂問題（辨識服務暫時打不通），請稍後再試或改用查詢頁。';
+  }
+
+  var hasCond = !!(f.customer || f.orderNo || f.person || f.dateFrom || f.self);
+  if (f.intent === 'unknown' || !hasCond) return at + CHAT_HELP;
+
+  // 「我的單」要知道你是誰。認不出來就不能默默查成全部——那會回一份
+  // 看起來像「你的單」但其實是所有人的清單，比拒絕回答誤導得多。
+  if (f.self) {
+    if (!asker.email) {
+      return at + '我認不出你的帳號，沒辦法判斷哪些是「你的」單。\n' +
+        '請管理員跑一次 writeUidsToSheet() 把你加進「Chat人員對照」，' +
+        '或直接告訴我客戶名或單號。';
+    }
+    var me = salesFor_(asker.email);
+    if (!me) {
+      return at + '你（' + asker.email + '）不在路由對照表的業務名單裡，' +
+        '我查不到「你的」單。可以改問客戶名或單號。';
+    }
+    f.person = me.name || me.code || '';
+  }
+
+  // 大範圍查詢會掃 17 個分頁而 Chat 需要秒回。與其逾時（使用者只會看到沒反應），
+  // 不如當場擋下來並給出替代方案。
+  if (f.dateFrom && f.dateTo) {
+    var days = (new Date(f.dateTo) - new Date(f.dateFrom)) / 86400000;
+    if (days > 31) {
+      return at + '你問的範圍超過一個月，我在 Chat 查會逾時。' +
+        '請縮小到一個月內，或用查詢頁。';
+    }
+  }
+
+  var res;
+  try {
+    res = chatQueryOrders_(f);
+  } catch (err) {
+    Logger.log('Chat 查詢失敗：' + err);
+    return at + '查詢時出了問題，請改用查詢頁。';
+  }
+
+  var cond = chatCondText_(f);
+  if (!res.rows.length) {
+    // 措辭刻意是「我找不到」不是「沒有這張單」——查無可能是日期或客戶名寫法不同，
+    // 說成「沒有」會讓人以為單真的不存在而去重下一張。
+    return at + '我找不到符合「' + cond + '」的單。\n' +
+      '可能是日期或客戶名的寫法不同，換個說法再問一次，或用查詢頁查。';
+  }
+
+  var lines = [at + '「' + cond + '」找到 ' + res.rows.length + ' 筆：', ''];
+  for (var i = 0; i < res.rows.length; i++) {
+    var r = res.rows[i];
+    lines.push('▪ ' + r.no + '　' + (r.customer || '(無客戶)') +
+      (r.at ? '　下單 ' + r.at : ''));
+    if (r.model) lines.push('　品項：' + r.model + (r.qty ? ' ×' + r.qty : ''));
+
+    if (!r.ships.length) {
+      lines.push('　狀態：' + shipmentStage_(null).label);
+    } else {
+      for (var s = 0; s < r.ships.length; s++) {
+        var st = shipmentStage_(r.ships[s]);
+        lines.push('　狀態：' + st.label);
+      }
+    }
+    lines.push('');
+  }
+
+  if (res.truncated) {
+    lines.push('（只顯示前 10 筆，還有更多請用查詢頁）');
+  }
+  lines.push(CHAT_SHIP_DISCLAIMER);
+
+  var link = deepLink_({ page: 'query' });
+  if (link) lines.push('<' + link + '|➡ 開查詢頁看完整資料>');
+
+  return lines.join('\n');
+}
+
+/** 把查詢條件講回去給使用者聽，讓他知道我理解成什麼——查錯時一眼就看得出是誤解。 */
+function chatCondText_(f) {
+  var parts = [];
+  if (f.dateFrom && f.dateTo && f.dateFrom === f.dateTo) parts.push(f.dateFrom);
+  else if (f.dateFrom || f.dateTo) parts.push((f.dateFrom || '?') + '～' + (f.dateTo || '?'));
+  if (f.customer) parts.push(f.customer);
+  if (f.orderNo) parts.push(f.orderNo);
+  if (f.person) parts.push(f.person);
+  return parts.length ? parts.join('・') : '(無條件)';
 }
 
 /**
@@ -4059,6 +4398,95 @@ function writeOrderShipment_(orderNo, kind, form, email, me, stamp) {
  * 權限沿用 submitOrder 同一套：只有 salesFor_ 認得的業務能呼叫，因為這支最終
  * 是要幫業務下單，不該開放給不會下單的人。
  */
+/**
+ * 呼叫 Gemini 取得**結構化 JSON**，是全系統唯一的 Gemini 進入點。
+ *
+ * @param parts  contents[0].parts 陣列。純文字就 [{text:...}]；
+ *               要送圖片再加 {inline_data:{mime_type,data}}。
+ * @param schema responseSchema（Gemini 會保證回傳符合此結構的 JSON）
+ * @param tag    寫進 Logger 的識別字串，出事時要能一眼看出是誰在呼叫
+ * @return {ok:true, data, model} 或 {ok:false, reason:'nokey'|'http'|'parse', code, body}
+ *
+ * ⚠ 抽出來的原因：模型名稱會過期，而且過期的方式不只一種——
+ *   2026-08-25 一天之內就遇到 404（型號下架）與 503（暫時過載）兩種。
+ *   模型輪替、失敗記錄、回應解析這三件事每個呼叫端都要做一遍，
+ *   抄第二份的那一刻就會開始各自長歪（其中一份忘了輪替、另一份記錄格式不同）。
+ *
+ * ⚠ **順序是「已驗證的優先」不是「版本號最大優先」**，理由見 GEMINI_MODELS 的註解：
+ *   把沒實測過的型號放第一順位，代價是每次呼叫都先白等一輪（實測慢 9 秒），
+ *   而且結果是對的、只是慢，沒有人會回報。
+ *
+ * ⚠ 回傳刻意不含任何**使用者看得到的文案**：不同呼叫端的失敗訊息不一樣
+ *   （截圖下單要說「改用下單頁」、Chat 問答要說「請用查詢頁」），
+ *   在這裡寫死一種，第二個呼叫端就得繞過它。
+ */
+function callGeminiJson_(parts, schema, tag) {
+  var key = PropertiesService.getScriptProperties().getProperty(GEMINI_KEY_PROP);
+  if (!key) {
+    Logger.log('Gemini 未設定 ' + GEMINI_KEY_PROP + '｜' + tag);
+    return { ok: false, reason: 'nokey', code: 0, body: '' };
+  }
+
+  // 依序試 GEMINI_MODELS 清單，第一個打不通就換下一個——404（型號不存在／已下架）
+  // 與 503（暫時過載）都算「打不通」，用同一套退路處理：換一個型號通常比乾等或
+  // 對同一個過載的型號重試更快解決，而且不需要 Utilities.sleep 拖長使用者等待時間。
+  var resp = null, lastCode = 0, lastBody = '', usedModel = '';
+  for (var m = 0; m < GEMINI_MODELS.length; m++) {
+    var model = GEMINI_MODELS[m];
+    var attempt;
+    try {
+      attempt = UrlFetchApp.fetch(
+        'https://generativelanguage.googleapis.com/v1beta/models/' + model +
+          ':generateContent?key=' + key,
+        {
+          method: 'post',
+          contentType: 'application/json',
+          payload: JSON.stringify({
+            contents: [{ parts: parts }],
+            generationConfig: {
+              responseMimeType: 'application/json',
+              responseSchema: schema
+            }
+          }),
+          muteHttpExceptions: true
+        }
+      );
+    } catch (e1) {
+      Logger.log('Gemini 呼叫例外｜' + model + '｜' + e1);
+      lastCode = 0; lastBody = String(e1);
+      continue;
+    }
+    var attemptCode = attempt.getResponseCode();
+    Logger.log('Gemini ' + tag + '｜' + model + '｜HTTP ' + attemptCode);
+    if (attemptCode >= 200 && attemptCode < 300) {
+      resp = attempt; usedModel = model;
+      break;
+    }
+    lastCode = attemptCode;
+    lastBody = attempt.getContentText();
+    Logger.log('Gemini 失敗內容｜' + model + '｜' + lastBody.slice(0, 300));
+  }
+
+  if (!resp) return { ok: false, reason: 'http', code: lastCode, body: lastBody };
+
+  // 不是第一個模型才成功 → 留一行警告。連續看到這行代表第一個型號該從清單移除了。
+  if (usedModel !== GEMINI_MODELS[0]) {
+    Logger.log('⚠ 第一個模型（' + GEMINI_MODELS[0] + '）打不通，改用 ' + usedModel + ' 才成功。');
+  }
+
+  try {
+    var data = JSON.parse(resp.getContentText());
+    var raw = data && data.candidates && data.candidates[0] &&
+      data.candidates[0].content && data.candidates[0].content.parts &&
+      data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
+    if (!raw) throw new Error('回應內容為空');
+    return { ok: true, data: JSON.parse(raw), model: usedModel };
+  } catch (e2) {
+    Logger.log('Gemini 回應解析失敗：' + e2 + '｜' + resp.getContentText().slice(0, 300));
+    return { ok: false, reason: 'parse', code: 0, body: resp.getContentText() };
+  }
+}
+
 function recognizeOrderImage(base64, mimeType) {
   var email = currentUserEmail_();
   if (!email) return { ok: false, message: '無法辨識身分，未執行辨識。' };
@@ -4123,70 +4551,18 @@ function recognizeOrderImage(base64, mimeType) {
     required: ['customer', 'items', 'note', 'confidence']
   };
 
-  // 依序試 GEMINI_MODELS 清單，第一個打不通就換下一個——404（型號不存在／已下架）
-  // 與 503（暫時過載）都算「打不通」，用同一套退路處理：換一個型號通常比乾等或
-  // 對同一個過載的型號重試更快解決，而且不需要 Utilities.sleep 拖長使用者等待時間。
-  var resp = null, lastCode = 0, lastBody = '', usedModel = '';
-  for (var m = 0; m < GEMINI_MODELS.length; m++) {
-    var model = GEMINI_MODELS[m];
-    var attempt;
-    try {
-      attempt = UrlFetchApp.fetch(
-        'https://generativelanguage.googleapis.com/v1beta/models/' + model +
-          ':generateContent?key=' + key,
-        {
-          method: 'post',
-          contentType: 'application/json',
-          payload: JSON.stringify({
-            contents: [{ parts: [
-              { text: prompt },
-              { inline_data: { mime_type: mimeType, data: base64 } }
-            ] }],
-            generationConfig: {
-              responseMimeType: 'application/json',
-              responseSchema: schema
-            }
-          }),
-          muteHttpExceptions: true
-        }
-      );
-    } catch (e1) {
-      Logger.log('Gemini 呼叫例外｜' + model + '｜' + e1);
-      lastCode = 0; lastBody = String(e1);
-      continue;
-    }
-    var attemptCode = attempt.getResponseCode();
-    Logger.log('Gemini 辨識呼叫｜' + email + '｜' + model + '｜HTTP ' + attemptCode + '｜圖片 ' +
-      Math.round(bytes.length / 1024) + ' KB');
-    if (attemptCode >= 200 && attemptCode < 300) {
-      resp = attempt; usedModel = model;
-      break;
-    }
-    lastCode = attemptCode;
-    lastBody = attempt.getContentText();
-    Logger.log('Gemini 失敗內容｜' + model + '｜' + lastBody.slice(0, 300));
-  }
+  var got = callGeminiJson_(
+    [{ text: prompt }, { inline_data: { mime_type: mimeType, data: base64 } }],
+    schema,
+    '辨識呼叫｜' + email + '｜圖片 ' + Math.round(bytes.length / 1024) + ' KB');
 
-  if (!resp) {
-    return { ok: false, message: '辨識服務目前打不通（HTTP ' + (lastCode || '連線失敗') +
-      '），請稍後再試或改用原本的下單頁。' };
+  if (!got.ok) {
+    return { ok: false, message: got.reason === 'parse'
+      ? '辨識結果格式異常，請改用原本的下單頁手動輸入。'
+      : '辨識服務目前打不通（HTTP ' + (got.code || '連線失敗') +
+        '），請稍後再試或改用原本的下單頁。' };
   }
-  if (usedModel !== GEMINI_MODELS[0]) {
-    Logger.log('⚠ 第一個模型（' + GEMINI_MODELS[0] + '）打不通，改用 ' + usedModel + ' 才成功。');
-  }
-
-  var parsed;
-  try {
-    var data = JSON.parse(resp.getContentText());
-    var raw = data && data.candidates && data.candidates[0] &&
-      data.candidates[0].content && data.candidates[0].content.parts &&
-      data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
-    if (!raw) throw new Error('回應內容為空');
-    parsed = JSON.parse(raw);
-  } catch (e2) {
-    Logger.log('Gemini 回應解析失敗：' + e2 + '｜' + resp.getContentText().slice(0, 300));
-    return { ok: false, message: '辨識結果格式異常，請改用原本的下單頁手動輸入。' };
-  }
+  var parsed = got.data;
 
   var items = [];
   var srcItems = (parsed && parsed.items) || [];
