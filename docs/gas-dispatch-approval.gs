@@ -4035,6 +4035,158 @@ function chatQueryOrders_(f) {
            nearMiss: nearMiss, nearLatest: nearLatest };
 }
 
+// ═══════════════════════════════════════════ 貨運單辨識（階段 0：驗證）
+//
+// 目標是讓「出貨了嗎」真的答得出來——使用者定義的判準是「看到貨運單才算」。
+//
+// 🔴 這一段目前**只有驗證工具，還沒有正式功能**。理由：有兩個假設沒被驗證過，
+//    而今天早上才因為「猜 Gemini 的能力」付出過代價（猜模型名稱猜錯三次，
+//    每次辨識白等 9 秒）：
+//      ① Gemini 讀不讀得了 PDF？現有的 QUICK_IMG_MIME_OK 只允許 jpeg/png/webp
+//      ② 一份 20+ 列的貨運清單，它認得準嗎？截圖下單只有 1~3 個品項，
+//         多列表格是 AI 最容易漏行、串行的情境
+//    先用真實檔案測過、人工比對正確率，合格才往下做。
+
+/** 貨運單辨識的回應結構。total 是**讓 AI 自己報總列數**，用來偵測它有沒有偷偷截斷。 */
+var SHIPDOC_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    carrier: { type: 'STRING' },
+    total: { type: 'NUMBER' },
+    rows: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          order_no: { type: 'STRING' },
+          tracking_no: { type: 'STRING' },
+          ship_date: { type: 'STRING' },
+          recipient: { type: 'STRING' }
+        },
+        required: ['order_no', 'tracking_no', 'ship_date', 'recipient']
+      }
+    }
+  },
+  required: ['carrier', 'total', 'rows']
+};
+
+var SHIPDOC_PROMPT =
+  '這是一份貨運公司的託運清單（新竹物流或嘉里大榮），**一份文件裡含多筆託運紀錄**。\n' +
+  '請用繁體中文輸出 JSON：\n' +
+  '- carrier：貨運公司名稱，讀不到就留空字串\n' +
+  '- total：你在這份文件裡**總共看到幾筆**託運紀錄（先自己數一遍再填）\n' +
+  '- rows：每一筆一個物件，含：\n' +
+  '  · order_no：該筆的「訂單編號」或「出貨單號」（這是我方的單號，例如 W5501-260807005）。' +
+  '**這一欄常常是空的**，空的就留空字串\n' +
+  '  · tracking_no：託運單號／貨運單號（貨運公司自己的編號）\n' +
+  '  · ship_date：出貨或託運日期，格式 yyyy-MM-dd，讀不到留空字串\n' +
+  '  · recipient：收件人或收件公司\n\n' +
+  '規則：\n' +
+  '1. **一筆都不能漏**。漏一筆的後果是那張單永遠查不到貨運單號。\n' +
+  '2. **絕對不要把不同列的資料湊在一起**。如果某一列讀不清楚，' +
+  '該欄留空字串，不要拿隔壁列的值來補。\n' +
+  '3. 讀不出來一律留空字串，不要猜、不要編。';
+
+/**
+ * 【階段 0 驗證工具】拿一份真實貨運單 PDF 測 Gemini 認不認得。
+ *
+ * 用法：Apps Script 編輯器執行，參數給 Drive 檔案 ID；
+ *      不給的話會自動從 SHIPMENT_FOLDER_ID 資料夾抓最新一份 PDF。
+ * **不寫入任何資料**，只印進執行記錄供人工比對。
+ *
+ * 驗收要看兩件事（計畫裡的硬關卡）：
+ *   ① 列數對不對（AI 自報的 total 與實際回傳的列數是否一致，以及跟 PDF 上是否相符）
+ *   ② 出貨單號與貨運單號有沒有串行（拿兩三列去 PDF 上核對）
+ */
+function testShippingDocParse(fileId) {
+  var file;
+  try {
+    if (fileId) {
+      file = DriveApp.getFileById(fileId);
+    } else {
+      var folderId = PropertiesService.getScriptProperties()
+        .getProperty('SHIPMENT_FOLDER_ID');
+      if (!folderId) {
+        Logger.log('❌ 沒給 fileId，指令碼屬性 SHIPMENT_FOLDER_ID 也沒設定。');
+        Logger.log('　 用法：testShippingDocParse("Drive檔案ID")');
+        return;
+      }
+      var it = DriveApp.getFolderById(folderId).getFilesByType('application/pdf');
+      var newest = null;
+      while (it.hasNext()) {
+        var f = it.next();
+        if (!newest || f.getDateCreated() > newest.getDateCreated()) newest = f;
+      }
+      if (!newest) { Logger.log('❌ 資料夾裡沒有 PDF。'); return; }
+      file = newest;
+    }
+  } catch (err) {
+    Logger.log('❌ 開檔失敗：' + err);
+    return;
+  }
+
+  var blob = file.getBlob();
+  var bytes = blob.getBytes();
+  var mime = blob.getContentType();
+  Logger.log('檔案：' + file.getName());
+  Logger.log('　　　' + mime + '　' + Math.round(bytes.length / 1024) + ' KB');
+  if (bytes.length > INVOICE_MAX_BYTES) {
+    Logger.log('⚠ 超過目前的上傳上限 ' + (INVOICE_MAX_BYTES / 1048576) +
+      ' MB。正式功能要放寬上限或改分頁處理。');
+  }
+  Logger.log('');
+
+  var t0 = Date.now();
+  var got = callGeminiJson_(
+    [{ text: SHIPDOC_PROMPT },
+     { inline_data: { mime_type: mime, data: Utilities.base64Encode(bytes) } }],
+    SHIPDOC_SCHEMA, '貨運單辨識測試');
+  var secs = Math.round((Date.now() - t0) / 100) / 10;
+
+  if (!got.ok) {
+    Logger.log('❌ 辨識失敗（' + got.reason + '，HTTP ' + got.code + '）耗時 ' + secs + ' 秒');
+    Logger.log(String(got.body || '').slice(0, 500));
+    if (got.reason === 'http' && /mime|unsupported|invalid/i.test(String(got.body))) {
+      Logger.log('');
+      Logger.log('🔴 看起來是 Gemini 不吃這個檔案型別 → 計畫的假設①不成立，');
+      Logger.log('　 要改走退路：PDF 轉圖片，或回頭用 shipment-worker/parsers.py。');
+    }
+    return;
+  }
+
+  var d = got.data || {};
+  var rows = d.rows || [];
+  Logger.log('✅ 辨識成功，用的模型 ' + got.model + '，耗時 ' + secs + ' 秒');
+  Logger.log('貨運公司：' + (d.carrier || '(讀不到)'));
+  Logger.log('AI 自報總筆數：' + d.total + '　實際回傳：' + rows.length + ' 筆');
+  if (Number(d.total) !== rows.length) {
+    Logger.log('🔴 兩個數字對不上 → AI 自己知道有 ' + d.total +
+      ' 筆卻只回了 ' + rows.length + ' 筆，這是**截斷**，正式功能必須處理。');
+  }
+  Logger.log('');
+
+  var withNo = 0;
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i] || {};
+    if (String(r.order_no || '').trim()) withNo++;
+    Logger.log((i + 1) + '. 出貨單號=' + (r.order_no || '(空)') +
+      '　貨運單號=' + (r.tracking_no || '(空)') +
+      '　日期=' + (r.ship_date || '(空)') +
+      '　收件=' + (r.recipient || '(空)'));
+  }
+
+  Logger.log('');
+  Logger.log('── 判讀 ──');
+  Logger.log('有讀到「出貨單號」的：' + withNo + ' / ' + rows.length + ' 筆');
+  if (!withNo) {
+    Logger.log('⚠ 一筆都沒有出貨單號。這**多半不是 AI 讀錯**——');
+    Logger.log('　 sql/supabase_shipments.sql 記載兩家貨運公司這一欄實際上都沒填。');
+    Logger.log('　 要先請倉庫在貨運系統 key 單時填這一欄，這條鏈才成立。');
+  }
+  Logger.log('');
+  Logger.log('👉 請人工核對：①上面的筆數跟 PDF 上是否一致　②抽兩三列看單號有沒有串行');
+}
+
 /**
  * 診斷：把一句問題跑完整條路徑，印出**每個條件各刷掉多少列**。
  * 在編輯器執行（可改參數），不寫任何資料。
