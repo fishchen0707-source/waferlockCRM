@@ -6818,6 +6818,53 @@ function notifyShipmentArchive_(rec) {
 }
 
 /**
+ * 通知裡的「業務：」那一行——找出這張出貨單該點名哪位業務。
+ *
+ * 🔴 **修的是一個實際的通知缺漏**（2026-08-25 真實通知截圖看到）：
+ *   原本只會「從發包單號反解代碼再查對照表」，沒有發包單號就直接印
+ *   「（無發包單號，無法自動點名業務）」——而**沒有發包單號的出貨約佔一半**
+ *   （料件出貨、截圖下單、弱電料件、鎖胚、建案整批本來就不走發包單）。
+ *   等於有一半的出貨出問題時，業務根本不會被通知到。
+ *
+ * 🔑 **資料一直都在，只是通知沒讀它**：出貨明細有「下單業務」欄，
+ *   submitOrder 與 submitQuickOrder 都會寫入。報表那邊早就用對了
+ *   （見 reportBlock_ 的「業務歸屬：優先用『下單業務』，沒有就用發包單號前綴查」），
+ *   通知這邊卻沒跟上。這裡沿用報表那套已驗證的優先序。
+ */
+function salesLine_(rec, uids) {
+  var roster = {};
+  try { roster = loadRoster_(); } catch (err) { Logger.log('讀人員代碼失敗：' + err); }
+
+  // ① 下單業務（業務自己下單時帶入的姓名）——沒有發包單號的單只有這個
+  var who = String(rec[COL_S_ORDER_BY] || '').trim();
+  if (who) {
+    // 有姓名就再查一次 email，才能真的 @到人而不只是寫名字
+    for (var code in roster) {
+      if (!Object.prototype.hasOwnProperty.call(roster, code)) continue;
+      if (roster[code].sales === who && roster[code].salesMail) {
+        return '業務：' + mentionOf_(roster[code].salesMail, who, uids);
+      }
+    }
+    return '業務：' + who + '（對照表查無 email，無法 @到本人）';
+  }
+
+  // ② 退回原本的做法：從發包單號前綴反解代碼
+  var dispatchNo = String(rec[COL_S_DISPATCH] || '').trim();
+  if (dispatchNo) {
+    var c = codeOf_(dispatchNo);
+    var hit = c ? roster[c] : null;
+    if (hit && (hit.sales || hit.salesMail)) {
+      return '業務：' + mentionOf_(hit.salesMail, hit.sales || hit.salesMail, uids);
+    }
+    if (c) return '業務：代碼 ' + c + ' 查無對應（請補「人員代碼」對照表）';
+  }
+
+  // ③ 兩條路都沒有。**明講而不是靜默略過**——業務不知道自己的單卡住了，
+  //    比訊息裡多一行難看的字糟得多。
+  return '業務：查不到（這張單沒有「下單業務」也沒有發包單號）';
+}
+
+/**
  * 發票電子檔在 Chat 訊息裡的呈現。
  *
  * ⚠ 「未上傳」這三個字很重要，不要改成留白：倉庫核完單之後，
@@ -6849,22 +6896,7 @@ function notifyShipmentIssue_(rec) {
   lines.push('請 ' + mentionOf_(rec[COL_S_BY], rec[COL_S_BY] || '登錄人', uids) +
     ' 處理（登錄人）');
 
-  // 有發包單號才查得到業務。查不到就明講，不要靜默略過——
-  // 那會讓業務永遠不知道自己的單卡住了。
-  var dispatchNo = rec[COL_S_DISPATCH];
-  if (dispatchNo) {
-    var code = codeOf_(dispatchNo);
-    var roster = {};
-    try { roster = loadRoster_(); } catch (err) { Logger.log('讀人員代碼失敗：' + err); }
-    var hit = code ? roster[code] : null;
-    if (hit && (hit.sales || hit.salesMail)) {
-      lines.push('業務：' + mentionOf_(hit.salesMail, hit.sales || hit.salesMail, uids));
-    } else if (code) {
-      lines.push('業務：代碼 ' + code + ' 查無對應（請補「人員代碼」對照表）');
-    }
-  } else {
-    lines.push('（無發包單號，無法自動點名業務）');
-  }
+  lines.push(salesLine_(rec, uids));
   lines.push('倉庫回報：' + rec[COL_S_WH_BY] + '　' + rec[COL_S_WH_AT]);
 
   var link = deepLink_({ page: 'ship', ship: rec[COL_S_SHIP_NO] });
