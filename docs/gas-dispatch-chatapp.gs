@@ -42,6 +42,44 @@ var CHATAPP_SA_PROP = 'CHAT_APP_SA_KEY';              // 服務帳戶金鑰 JSON
 var CHATAPP_TOKEN_CACHE = 'chatapp_sa_token_v1';     // access token 快取（省得每次都簽 JWT）
 var CHATCARD_SHEET = 'Chat卡片對照';                   // 案件↔訊息ID 對照（回寫用，不存在自動建）
 
+// ────────────────────────────────────────────── 設定用測試工具（在編輯器手動執行）
+
+/**
+ * 一鍵測試：貼一張假的認領卡片到助理群組空間。
+ * 用途：設定服務帳戶＋DISPATCH_ASSISTANT_SPACE 之後，在 Apps Script 編輯器選這支按執行，
+ * 立刻驗證「服務帳戶認證 → 以 app 身分貼卡片」整條通不通，不必等真的簽核。
+ * 成功 → 群組會出現一張「待鍵單：TEST-…」卡片，可按「我來處理」測認領。
+ * 失敗 → 執行記錄會有明確錯誤（多半是金鑰或空間 ID 沒設對）。
+ */
+/**
+ * 列出「派工小幫手」目前在哪些空間，印出**正確的 API 空間 ID**。
+ * 用途：瀏覽器網址的 room/XXX 常跟 API 的 spaces/XXX 不同，導致貼卡片 404。
+ * 在編輯器執行這支，把 log 印出的 spaces/XXX 設進 DISPATCH_ASSISTANT_SPACE 才會對。
+ */
+function listMySpaces() {
+  var res = chatApi_('get', 'https://chat.googleapis.com/v1/spaces', null);
+  var arr = (res && res.spaces) || [];
+  if (!arr.length) {
+    Logger.log('⚠ 這個 app 目前不在任何空間。請先在 Google Chat 把「派工小幫手」加進助理群組。');
+    return arr;
+  }
+  Logger.log('派工小幫手在以下空間（把要用的那個 name 設進 DISPATCH_ASSISTANT_SPACE）：');
+  for (var i = 0; i < arr.length; i++) {
+    Logger.log('  ' + (arr[i].displayName || '(無名稱/私訊)') + '　→　' + arr[i].name);
+  }
+  return arr;
+}
+
+function testPostClaimCard() {
+  var r = postShipClaimCard_({
+    orderNo: 'TEST-' + Utilities.formatDate(new Date(), TZ, 'HHmmss'),
+    customer: '測試客戶', model: '（測試卡片）', qty: '1', worker: '—'
+  });
+  Logger.log(r.posted ? '✅ 已貼出測試卡片：' + r.name
+    : '❌ 未貼出：' + r.reason + '（檢查 CHAT_APP_SA_KEY 與 DISPATCH_ASSISTANT_SPACE）');
+  return r;
+}
+
 // ────────────────────────────────────────────── app 認證（服務帳戶 JWT）
 
 /**
@@ -90,21 +128,44 @@ function chatAppToken_() {
   return body.access_token;
 }
 
-/** 以 app 身分打 Chat REST API。method=post 建訊息、patch 改訊息。回傳解析後的 JSON。 */
+/** 以 app 身分打 Chat REST API。method=get 查詢、post 建訊息、patch 改訊息。回傳解析後的 JSON。 */
 function chatApi_(method, url, payloadObj) {
-  var resp = UrlFetchApp.fetch(url, {
+  var opt = {
     method: method,
-    contentType: 'application/json; charset=UTF-8',
     headers: { Authorization: 'Bearer ' + chatAppToken_() },
-    payload: JSON.stringify(payloadObj),
     muteHttpExceptions: true
-  });
+  };
+  // GET 不帶 body；帶了 payload UrlFetchApp 會出問題
+  if (payloadObj != null && method !== 'get') {
+    opt.contentType = 'application/json; charset=UTF-8';
+    opt.payload = JSON.stringify(payloadObj);
+  }
+  var resp = UrlFetchApp.fetch(url, opt);
   var code = resp.getResponseCode();
   var body = resp.getContentText();
   if (code < 200 || code >= 300) {
     throw new Error('Chat API ' + method + ' 失敗 HTTP ' + code + '：' + body.slice(0, 300));
   }
   return JSON.parse(body || '{}');
+}
+
+// ────────────────────────────────────────────── 回應格式（Workspace 外掛程式）
+
+// ⚠ 外掛程式模式的回應格式跟傳統 Chat app 完全不同：
+//   傳統：{ text } 或 { actionResponse:{type:'UPDATE_MESSAGE'}, cardsV2 }
+//   外掛：{ hostAppDataAction:{ chatDataAction:{ createMessageAction|updateMessageAction:{ message } }}}
+//   回錯格式，函式明明執行成功，Chat 仍顯示「無法處理你的要求」（本專案實測踩過）。
+
+/** 回一則文字訊息（外掛格式）。 */
+function chatText_(text) {
+  return { hostAppDataAction: { chatDataAction: { createMessageAction: {
+    message: { text: text } } } } };
+}
+
+/** 更新「按鈕所在」的那張卡片（外掛格式）。 */
+function chatUpdateCard_(cardsV2) {
+  return { hostAppDataAction: { chatDataAction: { updateMessageAction: {
+    message: { cardsV2: cardsV2 } } } } };
 }
 
 // ────────────────────────────────────────────── 進入點
@@ -114,8 +175,8 @@ function chatApi_(method, url, payloadObj) {
  * 有這個函式，app 在 GCP 設定才算完整（缺 onMessage 會被判定沒 App logic）。
  */
 function onMessage(event) {
-  return { text: '我是派工小幫手 🛠️\n我會在主管簽核後，把待鍵單的案件卡片貼到助理群組，' +
-    '卡片上按「我來處理」就能認領，其他人就知道有人接手了。' };
+  return chatText_('我是派工小幫手 🛠️\n我會在主管簽核後，把待鍵單的案件卡片貼到助理群組，' +
+    '卡片上按「我來處理」就能認領，其他人就知道有人接手了。');
 }
 
 /**
@@ -127,7 +188,7 @@ function onAddToSpace(event) {
   var space = (event && event.space && event.space.name) || '(未知)';
   Logger.log('✅ 派工小幫手已加入空間：' + space +
     '　→ 若這是助理群組，請把這串設進指令碼屬性 ' + CHATAPP_SPACE_PROP);
-  return { text: '大家好，我是派工小幫手 🛠️\n之後主管一簽核，待鍵單的案件會出現在這裡，按「我來處理」就能認領。' };
+  return chatText_('大家好，我是派工小幫手 🛠️\n之後主管一簽核，待鍵單的案件會出現在這裡，按「我來處理」就能認領。');
 }
 
 function onRemoveFromSpace(event) {
@@ -135,15 +196,24 @@ function onRemoveFromSpace(event) {
 }
 
 /**
- * 卡片按鈕被按。所有按鈕都進這支，靠 invokedFunction 分派。
- * 目前只有一顆互動按鈕：claimShipment（我來處理）。
+ * 「我來處理」按鈕的直接進入點。
+ *
+ * ⚠ Workspace 外掛程式模式的關鍵差異（實測 "Script function not found: claimShipment" 得知）：
+ *   按鈕的 onClick.action.function 值會被 Chat **直接當成函式名呼叫**，
+ *   不是像傳統 Chat app 那樣統一進 onCardClick 再靠 invokedFunction 分派。
+ *   所以按鈕寫 function:'claimShipment' 就必須有一個頂層 claimShipment(event)。
+ */
+function claimShipment(event) {
+  return handleClaimShipment_(event);
+}
+
+/**
+ * 傳統 Chat app 模式的統一入口（外掛程式模式用不到，保留以防日後切換模式）。
  */
 function onCardClick(event) {
   var fn = (event && event.common && event.common.invokedFunction) || '';
   if (fn === 'claimShipment') return handleClaimShipment_(event);
-  // 不認得的按鈕：不改卡片，只回一則暫時訊息，避免整個沒反應
-  return { text: '（這顆按鈕我還不會處理：' + fn + '）',
-    actionResponse: { type: 'NEW_MESSAGE' } };
+  return chatText_('（這顆按鈕我還不會處理：' + fn + '）');
 }
 
 // ────────────────────────────────────────────── 認領
@@ -188,8 +258,7 @@ function handleClaimShipment_(event) {
     Logger.log('認領處理失敗，仍嘗試更新卡片：' + err);
   }
 
-  return { actionResponse: { type: 'UPDATE_MESSAGE' },
-    cardsV2: buildShipCard_(info, updated) };
+  return chatUpdateCard_(buildShipCard_(info, updated));
 }
 
 // ────────────────────────────────────────────── 卡片

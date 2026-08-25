@@ -6,5 +6,12 @@
   "webapp": {
     "executeAs": "USER_DEPLOYING",
     "access": "DOMAIN"
+  },
+  "addOns": {
+    "common": {
+      "name": "派工小幫手",
+      "logoUrl": "https://developers.google.com/chat/images/quickstart-app-avatar.png"
+    },
+    "chat": {}
   }
 }
