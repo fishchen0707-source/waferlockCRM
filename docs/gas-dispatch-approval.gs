@@ -230,6 +230,23 @@ var INVOICE_MIME_OK = {
 //   選單若寫成「電子發票」，助理選了會跟 TipTop 實際開出來的發票種類對不起來。
 var INVOICE_OPTIONS = ['出貨待驗無發票', '電子計算機發票', '二聯', '三聯'];
 
+// ── 截圖下單：Gemini 影像辨識 ──────────────────────────────────
+//
+// 經銷商在 LINE 傳貨的訊息現在是業務截圖丟給助理、助理自己讀圖去 TipTop key 單。
+// 這裡讓業務直接上傳截圖，AI 讀出客戶與品項，業務確認後送出即可，不必逐欄手打。
+//
+// ⚠ 金鑰、端點、請求格式**照抄 supabase/functions/rtc-recording/index.ts 裡
+//   已經在正式環境跑得動的那支**（inline_data + responseSchema），不要照最新的
+//   官方文件重寫——查文件當下看到的端點格式跟這支能跑的版本不一致，以能跑的為準。
+var GEMINI_KEY_PROP = 'GEMINI_API_KEY';
+var GEMINI_MODEL = 'gemini-2.0-flash';
+var QUICK_IMG_MAX_BYTES = 10 * 1024 * 1024;   // 10 MB，手機截圖遠小於此
+var QUICK_IMG_MIME_OK = {
+  'image/jpeg': true,
+  'image/png': true,
+  'image/webp': true
+};
+
 // ── 下拉選單（選項由試算表的「選單」分頁維護）──────────────────
 //
 // 為什麼放試算表而不是寫死在程式：業務要新增一個購買通路時不必找人改程式。
@@ -384,6 +401,16 @@ function doGet(e) {
         '可執行 suggestSheetMapping() 產生建議清單，人工確認後填入對照表。'));
     }
     return renderOrderPage_(email, roles.salesInfo);
+  }
+
+  // 截圖下單：權限沿用 order 頁同一道閘門（roles.sales），但不需要 salesInfo.sheet——
+  // 這條路刻意不寫發包分頁，經銷商訂單不走發包單，只有 code 反查對應助理時會用到 me。
+  if (page === 'quick') {
+    if (!roles.sales) {
+      return htmlPage_(errorBlock_('您沒有下單權限',
+        email + ' 不在路由對照表的「' + COL_R_SALES_MAIL + '」欄中。'));
+    }
+    return htmlPage_(navBlock_('quick', roles) + quickOrderBlock_(email));
   }
 
   if (!canApprove) {
@@ -893,6 +920,153 @@ function renderWarehousePage_(email, roles) {
     warehouseBlock_(email, rows, roles, { at: at, cached: cached }));
 }
 
+/**
+ * 截圖下單畫面。上傳 → AI 辨識 → 業務確認（可編輯）→ 送出。
+ *
+ * 品項用可增刪的列，不是固定欄位：截圖裡的品項數不固定（1～3 都有過），
+ * 業務也可能要手動補一項 AI 沒讀到的。整份草稿都在前端 JS 陣列裡組，
+ * 沒有伺服器端初始資料——頁面一開始是空的，等使用者上傳圖片。
+ */
+function quickOrderBlock_(email) {
+  var head =
+    '<div class="hd"><div class="ic">📷</div><div><h1>截圖下單</h1><p>' +
+    esc_(email) + '</p></div></div>' +
+    '<div id="msg"></div>';
+
+  var upload =
+    '<div class="card">' +
+      '<div class="ometa"><b>1. 上傳截圖</b></div>' +
+      '<div class="note" style="margin-bottom:10px">把經銷商在 LINE 傳的進貨截圖整張上傳，' +
+        'AI 會讀出客戶與品項，讀完您可以再修改。</div>' +
+      '<input type="file" id="qimg" accept="image/jpeg,image/png,image/webp">' +
+      '<div class="row" style="margin-top:12px">' +
+        '<button class="ok" id="qgo" onclick="return false;">🔍 辨識</button>' +
+      '</div>' +
+    '</div>';
+
+  var draft =
+    '<div class="card" id="qdraft" style="display:none">' +
+      '<div class="ometa"><b>2. 確認內容</b></div>' +
+      '<div id="qwarn"></div>' +
+      '<label>客戶</label><input id="qcust" placeholder="讀不到的話請手動輸入">' +
+      '<label style="margin-top:10px;display:block">品項</label>' +
+      '<div id="qitems"></div>' +
+      '<div class="row" style="margin-top:8px">' +
+        '<button class="ghost" onclick="return false;" id="qadd">＋ 新增品項</button>' +
+      '</div>' +
+      '<label style="margin-top:10px;display:block">備註</label>' +
+      '<input id="qnote" placeholder="不屬於任何單一品項的整體備註">' +
+      '<div class="row" style="margin-top:12px">' +
+        '<button class="ok big" id="qsub" onclick="return false;">📦 送出</button>' +
+      '</div>' +
+    '</div>';
+
+  var footer = '<div class="note">送出後會通知您的對應助理去 TipTop 開單。' +
+    '這條路徑不經過發包簽核——經銷商進貨本來就不走發包單。</div>';
+
+  var script = '<script>' +
+    '(function(){' +
+    'var ITEMS=[];' +
+    'function g(id){return document.getElementById(id);}' +
+    'function show(t,c){g("msg").innerHTML=\'<div class="msg \'+c+\'">\'+t+\'</div>\';window.scrollTo(0,0);}' +
+    'function esc(s){var d=document.createElement("div");d.textContent=s==null?"":s;return d.innerHTML;}' +
+
+    // 重繪品項列。每次資料變動（辨識完、增列、刪列）都整組重畫，
+    // 不做局部更新——品項數量小（1~5 列），整組重畫比追蹤 diff 簡單得多，
+    // 也不會有「刪到一半索引錯位」這類 bug。
+    'function renderItems(){' +
+      'var h="";' +
+      'for(var i=0;i<ITEMS.length;i++){' +
+        'h+=\'<div class="two" style="margin-bottom:6px" data-i="\'+i+\'">\'+' +
+          '\'<div><input class="qmodel" placeholder="型號" value="\'+esc(ITEMS[i].model)+\'"></div>\'+' +
+          '\'<div><input class="qqty" placeholder="數量" value="\'+esc(ITEMS[i].qty)+\'"></div>\'+' +
+        '\'</div>\'+' +
+        '\'<div style="margin-bottom:10px" data-i="\'+i+\'">\'+' +
+          '\'<input class="qspec" placeholder="規格／備註（顏色、配件…）" value="\'+esc(ITEMS[i].spec)+\'" style="width:75%">\'+' +
+          '\' <button class="no-btn" onclick="qdel(\'+i+\')">✕</button>\'+' +
+        '\'</div>\';' +
+      '}' +
+      'g("qitems").innerHTML=h;' +
+    '}' +
+    // 送出前從畫面上的輸入框重新收值（使用者可能改過），不是直接送 ITEMS 陣列本身
+    'function collectItems(){' +
+      'var rows=g("qitems").querySelectorAll("[data-i]");' +
+      'var seen={};var out=[];' +
+      'for(var i=0;i<rows.length;i++){' +
+        'var idx=rows[i].getAttribute("data-i");' +
+        'if(seen[idx])continue;seen[idx]=true;' +
+        'var m=g("qitems").querySelector(\'[data-i="\'+idx+\'"] .qmodel\');' +
+        'var q=g("qitems").querySelector(\'[data-i="\'+idx+\'"] .qqty\');' +
+        'var s=g("qitems").querySelector(\'[data-i="\'+idx+\'"] .qspec\');' +
+        'if(!m)continue;' +
+        'out.push({model:m.value,qty:q?q.value:"",spec:s?s.value:""});' +
+      '}' +
+      'return out;' +
+    '}' +
+    'window.qdel=function(i){ITEMS=collectItems();ITEMS.splice(i,1);renderItems();};' +
+    'g("qadd").onclick=function(){ITEMS=collectItems();ITEMS.push({model:"",qty:"",spec:""});renderItems();};' +
+
+    'g("qgo").onclick=function(){' +
+      'var f=g("qimg").files&&g("qimg").files[0];' +
+      'if(!f){show("請先選擇圖片","fail");return;}' +
+      'if(f.size>10485760){show("圖片超過 10 MB，請截小一點的範圍","fail");return;}' +
+      'var btn=g("qgo");var old=btn.textContent;btn.disabled=true;btn.textContent="辨識中…";' +
+      'var rd=new FileReader();' +
+      'rd.onerror=function(){btn.disabled=false;btn.textContent=old;show("讀取圖片失敗","fail");};' +
+      'rd.onload=function(){' +
+        'var b64=String(rd.result).split(",")[1]||"";' +
+        'google.script.run' +
+          '.withSuccessHandler(function(res){' +
+            'btn.disabled=false;btn.textContent=old;' +
+            'if(!res.ok){show(res.message,"fail");return;}' +
+            'g("qcust").value=res.customer||"";' +
+            'ITEMS=(res.items&&res.items.length)?res.items:[{model:"",qty:"",spec:""}];' +
+            'renderItems();' +
+            'g("qnote").value=res.note||"";' +
+            'g("qdraft").style.display="";' +
+            'g("qwarn").innerHTML=(res.confidence==="low")?' +
+              '\'<div class="msg fail" style="margin-bottom:10px">這張圖有讀不準的地方，請逐項確認再送出。</div>\':\'\';' +
+            'show(res.customer?"辨識完成，請確認內容":"辨識完成但沒讀到客戶名稱，請手動輸入","done");' +
+          '})' +
+          '.withFailureHandler(function(e){' +
+            'btn.disabled=false;btn.textContent=old;' +
+            'show("連線失敗："+e.message,"fail");' +
+          '})' +
+          '.recognizeOrderImage(b64,f.type);' +
+      '};' +
+      'rd.readAsDataURL(f);' +
+    '};' +
+
+    'g("qsub").onclick=function(){' +
+      'var customer=g("qcust").value.trim();' +
+      'if(!customer){show("客戶為必填","fail");return;}' +
+      'var items=collectItems();' +
+      'var hasModel=false;' +
+      'for(var i=0;i<items.length;i++){if(items[i].model.trim()){hasModel=true;break;}}' +
+      'if(!hasModel){show("至少需要一個型號","fail");return;}' +
+      'var btn=g("qsub");var old=btn.textContent;btn.disabled=true;btn.textContent="送出中…";' +
+      'google.script.run' +
+        '.withSuccessHandler(function(res){' +
+          'btn.disabled=false;btn.textContent=old;' +
+          'if(res.ok){' +
+            'show(res.message,"done");' +
+            'g("qdraft").style.display="none";' +
+            'g("qimg").value="";' +
+            'ITEMS=[];' +
+          '}else{show(res.message,"fail");}' +
+        '})' +
+        '.withFailureHandler(function(e){' +
+          'btn.disabled=false;btn.textContent=old;' +
+          'show("連線失敗："+e.message,"fail");' +
+        '})' +
+        '.submitQuickOrder(customer,items,g("qnote").value);' +
+    '};' +
+    '})();' +
+    '</script>';
+
+  return head + upload + draft + footer + script;
+}
+
 // ──────────────────────── 深連結單筆頁（Chat 通知點進來就直接是那一筆）
 //
 // 這三支的共同鐵則：**一律不呼叫 getPending_ / getPendingCached_ /
@@ -1103,7 +1277,7 @@ function renderShipOne_(email, roles, dispatchNo, hintRow) {
     row = findShipmentRowByDispatch_(s, dispatchNo, hintRow);
     if (!row) {
       return htmlPage_(navBlock_('ship', roles) +
-        errorBlock_('找不到待鍵入的發包單號 ' + dispatchNo,
+        errorBlock_('找不到待鍵入的單號 ' + dispatchNo,
           '可能已經有人鍵過單號了，或這筆已被刪除。') +
         backToListNote_('ship', '出貨登錄'));
     }
@@ -1130,11 +1304,15 @@ function renderShipOne_(email, roles, dispatchNo, hintRow) {
  * 驗證條件刻意是**兩個都要成立**：發包單號吻合，而且出貨單號還是空的。
  * 只比對發包單號不夠——同一個發包單號可以有多筆出貨，
  * 只驗單號的話會把提示指到一筆已經鍵過的列上，助理就會覆蓋掉別人填的資料。
+ *
+ * ⚠ dn 參數同時也接**案件號**（截圖下單用，見 nextCaseNo_）：那種列沒有發包單號
+ *   （經銷商訂單不走發包單），要用「案件號」欄當錨點。兩者互斥不會同時有值，
+ *   所以同一個比對邏輯可以兩種都吃，不必為此另開一組深連結參數。
  */
 function findShipmentRowByDispatch_(s, dispatchNo, hintRow) {
   dispatchNo = String(dispatchNo || '').trim();
   if (!dispatchNo) return 0;
-  var cDn = s.col[COL_S_DISPATCH], cNo = s.col[COL_S_SHIP_NO];
+  var cDn = s.col[COL_S_DISPATCH], cNo = s.col[COL_S_SHIP_NO], cCase = s.col[COL_S_CASE_NO];
   if (!cDn || !cNo) return 0;
   var last = s.sheet.getLastRow();
   if (last < 2) return 0;
@@ -1142,15 +1320,18 @@ function findShipmentRowByDispatch_(s, dispatchNo, hintRow) {
   var hr = Number(hintRow || 0);
   if (hr >= 2 && hr <= last) {
     var dnAt = String(s.sheet.getRange(hr, cDn).getValue() || '').trim();
+    var caseAt = cCase ? String(s.sheet.getRange(hr, cCase).getValue() || '').trim() : '';
     var noAt = String(s.sheet.getRange(hr, cNo).getValue() || '').trim();
-    if (dnAt === dispatchNo && !noAt) return hr;
+    if ((dnAt === dispatchNo || (cCase && caseAt === dispatchNo)) && !noAt) return hr;
   }
 
-  var vals = s.sheet.getRange(2, 1, last - 1, Math.max(cDn, cNo)).getValues();
+  var width = Math.max(cDn, cNo, cCase || 0);
+  var vals = s.sheet.getRange(2, 1, last - 1, width).getValues();
   for (var i = 0; i < vals.length; i++) {
     var dn = String(vals[i][cDn - 1] == null ? '' : vals[i][cDn - 1]).trim();
+    var cs = cCase ? String(vals[i][cCase - 1] == null ? '' : vals[i][cCase - 1]).trim() : '';
     var no = String(vals[i][cNo - 1] == null ? '' : vals[i][cNo - 1]).trim();
-    if (dn === dispatchNo && !no) return i + 2;
+    if ((dn === dispatchNo || (cCase && cs === dispatchNo)) && !no) return i + 2;
   }
   return 0;
 }
@@ -1563,6 +1744,7 @@ function navBlock_(current, roles) {
     tabs.push(['home', '首頁']);
   }
   if (roles.sales) tabs.push(['order', '下單']);
+  if (roles.sales) tabs.push(['quick', '截圖下單']);
   if (roles.sub || roles.boss) tabs.push(['approve', '簽核']);
   if (roles.assistant) tabs.push(['ship', '出貨登錄']);
   if (roles.warehouse) tabs.push(['warehouse', '倉庫核單']);
@@ -3517,6 +3699,46 @@ function runQuery(q) {
  * ⚠ 必須在 LockService 保護下呼叫。兩個人同時下單、都讀到「今天最大是 03」，
  * 就會產生兩張 04——而發包單號是後面所有流程的鍵，撞號等於兩筆資料混在一起。
  */
+/**
+ * 產生下一個「案件號」：`IW<YYYYMMDD><4碼流水>`，例：IW202608250001。
+ *
+ * ⚠ 格式刻意跟 CRM／Supabase 的 next_case_no() 對齊（R 報修／C 客訴／IW 安裝，
+ *   前綴+8碼日期+4碼流水），但**這支不呼叫 Supabase**——GAS 從未串接過 Supabase，
+ *   Supabase 目前只是使用者自己在測，正式版不會用它。所以號碼完全在 GAS 這邊
+ *   自己發、直接回填 Google Sheet；格式先對齊，將來真的要接 Supabase 時
+ *   不必轉換既有資料，兩邊的號碼天生就能並存不撞。
+ *
+ * 用途：截圖下單目前不走發包單（經銷商訂單沒有發包單號可當錨點），
+ * 這個號碼就是深連結指得到那一列所需要的穩定錨點。
+ *
+ * 流水只掃**出貨明細這一張表**當天已有的案件號，不分業務——案件號本來就是
+ * 全公司共用序列，不能像發包單號那樣用代碼前綴隔開分頁。
+ *
+ * ⚠ 必須在 LockService 保護下呼叫，理由同 nextOrderNo_：兩個人同時送出、
+ *   都讀到「今天最大是 0003」，會產生兩個 0004——這個號碼是深連結的鍵，
+ *   撞號等於兩筆資料的通知會互相指到對方。
+ */
+function nextCaseNo_(s, when) {
+  var prefix = 'IW' + Utilities.formatDate(when || new Date(), TZ, 'yyyyMMdd');
+  var c = s.col[COL_S_CASE_NO];
+  var last = s.sheet.getLastRow();
+  var max = 0;
+
+  if (c && last >= 2) {
+    var vals = s.sheet.getRange(2, c, last - 1, 1).getValues();
+    for (var i = 0; i < vals.length; i++) {
+      var v = String(vals[i][0] || '').trim();
+      if (v.indexOf(prefix) !== 0) continue;
+      var n = parseInt(v.slice(prefix.length), 10);
+      if (!isNaN(n) && n > max) max = n;
+    }
+  }
+  var seq = max + 1;
+  var padded = String(seq);
+  while (padded.length < 4) padded = '0' + padded;
+  return prefix + padded;
+}
+
 function nextOrderNo_(ctx, code, when) {
   var ymd = Utilities.formatDate(when || new Date(), TZ, 'yyMMdd');
   var prefix = String(code).toUpperCase() + '-' + ymd + '-';
@@ -3747,6 +3969,268 @@ function writeOrderShipment_(orderNo, kind, form, email, me, stamp) {
   }
   s.sheet.appendRow(line);
   SpreadsheetApp.flush();
+}
+
+// ────────────────────────────────────────────── 截圖下單
+
+/**
+ * 讀業務上傳的截圖，回傳 { ok, customer, items:[{model,qty,spec}], note, confidence, message }。
+ *
+ * 不存檔——截圖只是辨識的輸入，辨識完就丟。存起來等於多一份含客戶名稱與對話內容
+ * 的檔案要管，而且發票上傳（uploadInvoice）需要留底才存 Drive，這裡不需要。
+ *
+ * 權限沿用 submitOrder 同一套：只有 salesFor_ 認得的業務能呼叫，因為這支最終
+ * 是要幫業務下單，不該開放給不會下單的人。
+ */
+function recognizeOrderImage(base64, mimeType) {
+  var email = currentUserEmail_();
+  if (!email) return { ok: false, message: '無法辨識身分，未執行辨識。' };
+  if (!salesFor_(email)) {
+    return { ok: false, message: '您（' + email + '）不在路由對照表的業務 email 欄中，無法使用截圖下單。' };
+  }
+
+  if (!QUICK_IMG_MIME_OK[mimeType]) {
+    return { ok: false, message: '只接受 JPG、PNG、WEBP 圖片，收到的是「' + mimeType + '」。' };
+  }
+  if (!base64) return { ok: false, message: '沒有收到圖片內容，請重新選擇檔案。' };
+
+  var bytes;
+  try {
+    bytes = Utilities.base64Decode(base64);
+  } catch (e0) {
+    return { ok: false, message: '圖片內容解不開，請重新選擇檔案。' };
+  }
+  if (bytes.length > QUICK_IMG_MAX_BYTES) {
+    return { ok: false, message: '圖片 ' + Math.round(bytes.length / 1048576) +
+      ' MB 超過上限 ' + (QUICK_IMG_MAX_BYTES / 1048576) + ' MB，請截小一點的範圍。' };
+  }
+
+  var key = PropertiesService.getScriptProperties().getProperty(GEMINI_KEY_PROP);
+  if (!key) {
+    return { ok: false, message: '未設定指令碼屬性 ' + GEMINI_KEY_PROP + '，無法辨識圖片。' };
+  }
+
+  var prompt =
+    '這是一張 LINE 對話截圖，經銷商（鎖店）業務在跟客戶或同事討論進貨需求。' +
+    '請用繁體中文輸出 JSON，欄位如下：\n' +
+    '- customer：畫面最上方的聊天室名稱／對象名稱（不是對話內容裡的人名），原樣照抄，讀不到就留空字串\n' +
+    '- items：品項陣列，每項含 model（型號，讀到的簡稱即可，例如「396」「D300」，不要自己補成完整料號）、' +
+    'qty（數量，轉成數字，寫法可能是「×5」「*10組」「兩組」「+10」等）、' +
+    'spec（顏色／連動或不連動／側板／配件等規格備註，原樣描述，讀不到就留空字串）\n' +
+    '- note：讀到但不屬於任何單一品項的整體備註（例如日期要求、出貨方式），沒有就留空字串\n' +
+    '- confidence：整體讀取把握，"high" 或 "low"\n\n' +
+    '⚠ 對話可能跨好幾則才把一件事講完（例如「396兩組/黑」→「配件要嗎」→「不然各一」，' +
+    '「各一」要對應回前面兩種配件各一份）。看得懂就寫進對應欄位，看不懂或不確定就把那個欄位' +
+    '留空字串，並把 confidence 設為 "low"——寧可留空讓人補，不要用猜的填一個看起來合理但錯的值。\n' +
+    '只輸出 JSON，不要其他文字。';
+
+  var schema = {
+    type: 'OBJECT',
+    properties: {
+      customer: { type: 'STRING' },
+      items: {
+        type: 'ARRAY',
+        items: {
+          type: 'OBJECT',
+          properties: {
+            model: { type: 'STRING' },
+            qty: { type: 'NUMBER' },
+            spec: { type: 'STRING' }
+          },
+          required: ['model', 'qty', 'spec']
+        }
+      },
+      note: { type: 'STRING' },
+      confidence: { type: 'STRING' }
+    },
+    required: ['customer', 'items', 'note', 'confidence']
+  };
+
+  var resp;
+  try {
+    resp = UrlFetchApp.fetch(
+      'https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL +
+        ':generateContent?key=' + key,
+      {
+        method: 'post',
+        contentType: 'application/json',
+        payload: JSON.stringify({
+          contents: [{ parts: [
+            { text: prompt },
+            { inline_data: { mime_type: mimeType, data: base64 } }
+          ] }],
+          generationConfig: {
+            responseMimeType: 'application/json',
+            responseSchema: schema
+          }
+        }),
+        muteHttpExceptions: true
+      }
+    );
+  } catch (e1) {
+    Logger.log('Gemini 呼叫例外：' + e1);
+    return { ok: false, message: '辨識服務連線失敗，請稍後再試。' };
+  }
+
+  var code = resp.getResponseCode();
+  Logger.log('Gemini 辨識呼叫｜' + email + '｜HTTP ' + code + '｜圖片 ' +
+    Math.round(bytes.length / 1024) + ' KB');
+  if (code < 200 || code >= 300) {
+    Logger.log('Gemini 失敗內容：' + resp.getContentText().slice(0, 300));
+    return { ok: false, message: '辨識失敗（HTTP ' + code + '），請稍後再試或改用原本的下單頁。' };
+  }
+
+  var parsed;
+  try {
+    var data = JSON.parse(resp.getContentText());
+    var raw = data && data.candidates && data.candidates[0] &&
+      data.candidates[0].content && data.candidates[0].content.parts &&
+      data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
+    if (!raw) throw new Error('回應內容為空');
+    parsed = JSON.parse(raw);
+  } catch (e2) {
+    Logger.log('Gemini 回應解析失敗：' + e2 + '｜' + resp.getContentText().slice(0, 300));
+    return { ok: false, message: '辨識結果格式異常，請改用原本的下單頁手動輸入。' };
+  }
+
+  var items = [];
+  var srcItems = (parsed && parsed.items) || [];
+  for (var i = 0; i < srcItems.length; i++) {
+    var it = srcItems[i] || {};
+    items.push({
+      model: String(it.model || '').trim(),
+      qty: (typeof it.qty === 'number' && !isNaN(it.qty)) ? it.qty : '',
+      spec: String(it.spec || '').trim()
+    });
+  }
+
+  return {
+    ok: true,
+    customer: String((parsed && parsed.customer) || '').trim(),
+    items: items,
+    note: String((parsed && parsed.note) || '').trim(),
+    confidence: ((parsed && parsed.confidence) === 'low') ? 'low' : 'high'
+  };
+}
+
+/**
+ * 業務確認截圖辨識結果後送出。回傳 {ok, message, caseNo}。
+ *
+ * 🔴 刻意不寫發包試算表：經銷商訂單不走發包單（使用者已確認），
+ *   所以這支只碰出貨明細，跟簽核／報表／超額請款檢查完全不相干。
+ *   反向驗證：送出後業務發包分頁的列數不該變。
+ *
+ * 沿用出貨明細既有的「發包單號留空＝助理從出貨頁直接建單」路徑
+ * （見出貨登錄頁「已核准待出貨（舊流程）」那段既有說明），
+ * 差別只在這裡是業務用截圖建立、不是助理手填。
+ */
+function submitQuickOrder(customer, items, note) {
+  var email = currentUserEmail_();
+  if (!email) return { ok: false, message: '無法辨識身分，未寫入任何資料。' };
+
+  var me = salesFor_(email);
+  if (!me) {
+    return { ok: false, message: '您（' + email + '）不在路由對照表的業務 email 欄中，無法下單。' };
+  }
+
+  customer = String(customer || '').trim();
+  if (!customer) return { ok: false, message: '客戶為必填。' };
+
+  items = items || [];
+  var lines = [];
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i] || {};
+    var model = String(it.model || '').trim();
+    if (!model) continue;   // 空列（業務加了列但沒填）直接跳過，不當錯誤
+    var qty = it.qty;
+    var qtyOk = (qty !== '' && qty !== null && qty !== undefined && !isNaN(Number(qty)));
+    var line = model + (qtyOk ? ' *' + Number(qty) : '');
+    var spec = String(it.spec || '').trim();
+    if (spec) line += '　' + spec;
+    lines.push(line);
+  }
+  if (!lines.length) return { ok: false, message: '至少需要一個型號。' };
+
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(20000);
+  } catch (errLock) {
+    return { ok: false, message: '系統忙碌中（有人正在寫入），請稍候再試一次。' };
+  }
+
+  try {
+    var s = openShipmentSheet_();
+    var now = new Date();
+    var stamp = Utilities.formatDate(now, TZ, 'yyyy-MM-dd HH:mm');
+    var caseNo = nextCaseNo_(s, now);
+
+    var rec = {};
+    rec[COL_S_CASE_NO] = caseNo;
+    rec[COL_S_AT] = stamp;
+    rec[COL_S_CUSTOMER] = customer;
+    rec[COL_S_ITEMS] = lines.join('\n');
+    rec[COL_S_NOTE] = String(note || '').trim();
+    rec[COL_S_ORDER_BY] = me.name || email;
+    rec[COL_S_WH_STATUS] = WH_PENDING;
+    // 發包單號、出貨單號刻意都留空：經銷商訂單沒有發包單，
+    // 出貨單號等助理去 TipTop 開單後回填（既有的 fillShipment 流程）。
+
+    var width = Math.max(s.sheet.getLastColumn(), SHIPMENT_HEADERS.length);
+    var line = [];
+    for (var w = 0; w < width; w++) line.push('');
+    for (var key in rec) {
+      var c = s.col[key];
+      if (c && c <= width) line[c - 1] = rec[key];
+    }
+    s.sheet.appendRow(line);
+    SpreadsheetApp.flush();
+
+    try { CacheService.getScriptCache().remove(SHIP_CACHE_KEY); } catch (e3) {}
+
+    try { appendAudit_(s.ss, { at: stamp, who: email, orderNo: caseNo, role: '業務',
+      action: '截圖下單', note: customer, sheet: SHIPMENT_SHEET, row: '' }); }
+    catch (e4) { Logger.log('截圖下單稽核寫入失敗（不影響下單）：' + e4); }
+
+    // 🔴 這裡刻意不呼叫 notifyOrderSubmitted_：那支靠 codeOf_(orderNo) 從
+    // 「代碼-日期-流水」格式的發包單號反解業務代碼，再去查對應助理。
+    // 案件號是 IW+日期+流水，沒有連字號，codeOf_ 對它一定回空字串，
+    // 通知會變成「查無對應助理」而永遠沒人被 @到。
+    // submitQuickOrder 手上已經有 me（salesFor_ 查來的，本來就含 assist/assistMail），
+    // 不需要反解代碼，直接用 me 自己組通知。
+    try { notifyQuickOrder_(caseNo, customer, lines, me); }
+    catch (e5) { Logger.log('截圖下單通知失敗（單已建立 ' + caseNo + '）：' + e5); }
+
+    return { ok: true, message: '已建立 ' + caseNo + '，已通知助理鍵單。', caseNo: caseNo };
+  } catch (err) {
+    return { ok: false, message: '寫入失敗：' + err };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * 截圖下單的通知。不走 notifyOrderSubmitted_（理由見呼叫端註解），
+ * 直接用呼叫端已經查到的 me（該業務自己的路由紀錄）@提及對應助理。
+ */
+function notifyQuickOrder_(caseNo, customer, itemLines, me) {
+  var uids = loadChatUids_();
+  var lines = ['*新單（截圖下單，免簽核）*', ''];
+  lines.push('• 案件號：' + caseNo);
+  lines.push('• 客戶：' + customer);
+  lines.push('• 品項：');
+  for (var i = 0; i < itemLines.length; i++) lines.push('　' + itemLines[i]);
+  lines.push('');
+
+  if (me && me.assist) {
+    lines.push('請 ' + mentionOf_(me.assistMail, me.assist, uids) + ' 鍵 TipTop 單號');
+  } else {
+    lines.push('⚠ 路由對照表沒有填「' + COL_R_ASSIST + '」，請人工確認由誰接手。');
+  }
+
+  var link = deepLink_({ page: 'ship', dn: caseNo });
+  if (link) { lines.push(''); lines.push('<' + link + '|➡ 直接開這一筆鍵單>'); }
+
+  return postWarehouseChat_(lines.join('\n'));
 }
 
 // ────────────────────────────────────────────── ④ 倉庫核單

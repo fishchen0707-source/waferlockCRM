@@ -82,6 +82,9 @@ const sandbox = {
       const Y = dt.getFullYear(), MM = p(dt.getMonth() + 1), DD = p(dt.getDate());
       const HH = p(dt.getHours()), mm = p(dt.getMinutes());
       return String(f)
+        // 必須在 'yyMMdd' 之前處理：'yyyyMMdd' 字串本身含有子字串 'yyMMdd'
+        // （從第 3 個字元起），先換 6 碼版會把 8 碼版吃掉一半，殘留開頭的 'yy'。
+        .replace('yyyyMMdd', '' + Y + MM + DD)
         .replace('yyMMdd', String(Y).slice(2) + MM + DD)
         .replace('yyyyMMdd_HHmm', '' + Y + MM + DD + '_' + HH + mm)
         .replace('yyyyMMdd-HHmm', '' + Y + MM + DD + '-' + HH + mm)
@@ -3052,6 +3055,190 @@ console.log('\n【30】Chat 事件的兩種模式');
          '🔴 按鈕 function:\'' + n + '\' 必須有同名的頂層函式（外掛模式直接呼叫它）');
     });
   }
+})();
+
+
+// ── 測試 31：截圖下單（Gemini 影像辨識 → 業務確認 → 出貨明細） ──
+// 這一組最重要的一條是「不碰發包表」——經銷商訂單不走發包單是使用者明確確認的前提，
+// 這條路徑如果不小心動到業務發包分頁，就是做錯了整個功能的核心設計。
+console.log('\n【31】截圖下單');
+(() => {
+  const asUser = e => { sandbox.Session.getActiveUser = () => ({ getEmail: () => e }); };
+  const origFetch = sandbox.UrlFetchApp.fetch;
+
+  const SALES_SHEET = '零售-Sammi';
+  const reset = () => {
+    SHEETS = [
+      makeSheet(SALES_SHEET, HEADS[SALES_SHEET], [], 2),
+      makeSheet('出貨明細', G.SHIPMENT_HEADERS, [], 1),
+      makeSheet('人員代碼',
+        ['業務代碼', '業務姓名', '業務email', '類別', '對應助理', '助理email', '發包分頁'],
+        [['LS', '小林', 'ls@waferlock.com', '零售', 'Vivi', 'vivi@waferlock.com', SALES_SHEET]], 1),
+      makeSheet('Chat人員對照', ['email', 'Chat UID', '姓名備註'],
+        [['vivi@waferlock.com', '111222333444555666', 'Vivi']], 1),
+    ];
+    props.DISPATCH_SHEET_NAME = '*';
+    props.DISPATCH_WAREHOUSE_WEBHOOK = 'https://chat.googleapis.com/FAKE';
+    props.GEMINI_API_KEY = 'test-key';
+    CACHE = {};
+  };
+  reset();
+
+  const B64 = Buffer.from('fake-image-bytes').toString('base64');
+
+  // ── 權限：不是業務不能辨識、不能送出
+  asUser('outsider@waferlock.com');
+  {
+    const r = G.recognizeOrderImage(B64, 'image/jpeg');
+    ok(!r.ok, '🔴 非業務不可呼叫 recognizeOrderImage');
+    const s = G.submitQuickOrder('王小姐', [{ model: 'L396', qty: 2, spec: '' }], '');
+    ok(!s.ok, '🔴 非業務不可呼叫 submitQuickOrder');
+  }
+  asUser('ls@waferlock.com');
+
+  // ── MIME 與大小
+  ok(!G.recognizeOrderImage(B64, 'application/pdf').ok, '非圖片型別應被拒');
+  {
+    const big = Buffer.alloc(11 * 1024 * 1024, 1).toString('base64');
+    const r = G.recognizeOrderImage(big, 'image/jpeg');
+    ok(!r.ok && /超過上限/.test(r.message), '超過 10MB 應被拒且訊息明確');
+  }
+
+  // ── 金鑰未設定：明確報錯，不可靜默回空結果
+  {
+    delete props.GEMINI_API_KEY;
+    const r = G.recognizeOrderImage(B64, 'image/jpeg');
+    ok(!r.ok && /GEMINI_API_KEY/.test(r.message),
+       '🔴 金鑰未設定要明確報錯，不可靜默回 {ok:true, items:[]}');
+    props.GEMINI_API_KEY = 'test-key';
+  }
+
+  // ── AI 回傳異常：非 200、格式不合 schema
+  {
+    sandbox.UrlFetchApp.fetch = () => ({ getResponseCode: () => 500, getContentText: () => 'boom' });
+    const r = G.recognizeOrderImage(B64, 'image/jpeg');
+    ok(!r.ok, 'Gemini 回傳非 200 應視為失敗，不可假裝辨識成功');
+
+    sandbox.UrlFetchApp.fetch = () => ({
+      getResponseCode: () => 200,
+      getContentText: () => JSON.stringify({ candidates: [{ content: { parts: [{ text: '不是json' }] } }] })
+    });
+    const r2 = G.recognizeOrderImage(B64, 'image/jpeg');
+    ok(!r2.ok, '🔴 回傳內容不是合法 JSON 時應顯性失敗，不可寫入半筆資料');
+    sandbox.UrlFetchApp.fetch = origFetch;
+  }
+
+  // ── 正常辨識路徑
+  {
+    sandbox.UrlFetchApp.fetch = (u, o) => {
+      ok(/generativelanguage\.googleapis\.com/.test(u), 'Gemini 端點網址正確');
+      ok(/inline_data/.test(o.payload) || /inlineData/.test(o.payload),
+         '請求要帶圖片資料（inline_data）');
+      const body = {
+        customer: '台中品閣鎖店 賴雅婷',
+        items: [
+          { model: '396', qty: 2, spec: '黑' },
+          { model: 'D300', qty: 5, spec: '' }
+        ],
+        note: '',
+        confidence: 'high'
+      };
+      return {
+        getResponseCode: () => 200,
+        getContentText: () => JSON.stringify({
+          candidates: [{ content: { parts: [{ text: JSON.stringify(body) }] } }]
+        })
+      };
+    };
+    const r = G.recognizeOrderImage(B64, 'image/jpeg');
+    ok(r.ok, '正常路徑應辨識成功｜' + r.message);
+    ok(r.customer === '台中品閣鎖店 賴雅婷', '客戶名稱要原樣帶回（含聊天室名稱格式）');
+    ok(r.items.length === 2, '應讀到 2 個品項');
+    ok(r.items[0].model === '396' && r.items[0].qty === 2, '第一個品項內容正確');
+    ok(r.confidence === 'high', 'confidence 應正確帶回');
+    sandbox.UrlFetchApp.fetch = origFetch;
+  }
+
+  // ── 送出：多品項合併、案件號、不寫發包表
+  {
+    const beforeSalesRows = SHEETS.find(s => s._name === SALES_SHEET)._grid.length;
+
+    const sent = [];
+    sandbox.UrlFetchApp.fetch = (u, o) => {
+      sent.push(JSON.parse(o.payload).text);
+      return { getResponseCode: () => 200, getContentText: () => 'ok' };
+    };
+
+    const res = G.submitQuickOrder('台中品閣鎖店 賴雅婷',
+      [{ model: 'L396', qty: 2, spec: '黑' }, { model: 'D300', qty: 5, spec: '' }], '日期近一點的');
+    ok(res.ok, '送出應成功｜' + res.message);
+    ok(/^IW\d{8}\d{4}$/.test(res.caseNo), '🔴 案件號格式應為 IW+8碼日期+4碼流水，實得 ' + res.caseNo);
+
+    const sh = G.openShipmentSheet_();
+    const row = sh.sheet._grid[1];
+    const at = n => String(row[sh.col[n] - 1] || '');
+    ok(at('案件號') === res.caseNo, '案件號應寫入出貨明細');
+    ok(at('客戶') === '台中品閣鎖店 賴雅婷', '客戶應寫入');
+    ok(at('出貨品項').split('\n').length === 2, '兩個品項應合併成兩行');
+    ok(/L396 \*2/.test(at('出貨品項')) && /黑/.test(at('出貨品項')), '品項格式應含型號、數量、規格');
+    ok(/D300 \*5/.test(at('出貨品項')), '第二個品項也要在');
+    ok(at('發包單號') === '', '🔴 發包單號應留空——經銷商訂單不走發包單');
+    ok(at('出貨單號') === '', '出貨單號應留空，等助理鍵 TipTop');
+    ok(at('倉庫核單狀態') === G.WH_PENDING, '倉庫核單狀態應為待核');
+
+    // 🔑 這條是整個功能設計前提的守門員：業務發包分頁列數不可變
+    const afterSalesRows = SHEETS.find(s => s._name === SALES_SHEET)._grid.length;
+    ok(afterSalesRows === beforeSalesRows,
+       '🔴 業務發包分頁列數不可變——經銷商訂單完全不碰發包表');
+
+    ok(sent.length === 1, '應送出一則通知');
+    ok(/<users\/111222333444555666>/.test(sent[0]), '通知要 @提及對應助理（用 me 直接查，不靠 codeOf_ 反解）');
+    ok(new RegExp('dn=' + res.caseNo).test(sent[0]) && /page=ship/.test(sent[0]),
+       '通知要帶指向鍵單頁的深連結');
+
+    sandbox.UrlFetchApp.fetch = origFetch;
+  }
+
+  // ── 待鍵單清單：送出後這一列要出現在助理的待辦
+  {
+    const pend = G.getPendingShipments_();
+    ok(pend.some(p => p['客戶'] === '台中品閣鎖店 賴雅婷'),
+       '送出後應出現在 getPendingShipments_()（助理「業務已下單」清單）');
+  }
+
+  // ── 深連結：dn= 案件號要能找到那一列（findShipmentRowByDispatch_ 相容兩種錨點）
+  {
+    const s = G.openShipmentSheet_();
+    const caseNo = s.sheet.getRange(2, s.col['案件號']).getValue();
+    const row = G.findShipmentRowByDispatch_(s, caseNo, 0);
+    ok(row === 2, '🔴 findShipmentRowByDispatch_ 要能用案件號當錨點找到列（截圖下單沒有發包單號）');
+  }
+
+  // ── 案件號不重號
+  {
+    reset();
+    props.GEMINI_API_KEY = 'test-key';
+    asUser('ls@waferlock.com');
+    sandbox.UrlFetchApp.fetch = () => ({ getResponseCode: () => 200, getContentText: () => 'ok' });
+    const r1 = G.submitQuickOrder('客戶A', [{ model: 'L396', qty: 1, spec: '' }], '');
+    const r2 = G.submitQuickOrder('客戶B', [{ model: 'D300', qty: 1, spec: '' }], '');
+    ok(r1.caseNo !== r2.caseNo, '🔴 同日兩筆案件號不可重複');
+    sandbox.UrlFetchApp.fetch = origFetch;
+  }
+
+  // ── 空品項防呆
+  {
+    reset();
+    asUser('ls@waferlock.com');
+    ok(!G.submitQuickOrder('', [{ model: 'L396', qty: 1, spec: '' }], '').ok, '客戶為必填');
+    ok(!G.submitQuickOrder('客戶A', [], '').ok, '至少需要一個型號');
+    ok(!G.submitQuickOrder('客戶A', [{ model: '', qty: '', spec: '' }], '').ok,
+       '全空的品項列應視同沒有型號');
+  }
+
+  sandbox.UrlFetchApp.fetch = origFetch;
+  asUser('boss@waferlock.com');
+  reset();
 })();
 
 console.log('\n' + (fail ? '❌' : '✅') + ' 通過 ' + pass + '／失敗 ' + fail);
