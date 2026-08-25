@@ -85,6 +85,75 @@ function listMySpaces() {
   return arr;
 }
 
+/**
+ * 問答功能的設定自我檢查。在編輯器選這支執行，看執行記錄。不會改任何資料。
+ *
+ * ⚠ 存在的理由：設定填錯的症狀跟「功能壞掉」**長得一模一樣**——都是小幫手
+ *   只回自我介紹。最常見的是把瀏覽器網址的 room/XXXX 當成空間 ID 貼進來，
+ *   但 API 認的是 spaces/XXXX（這個坑 listMySpaces 的註解已經點名過一次）。
+ *   與其讓人在 Chat 裡反覆試、猜哪裡錯，不如一次把所有前提印出來。
+ */
+function checkChatAskSetup() {
+  var props = PropertiesService.getScriptProperties();
+  var raw = String(props.getProperty(CHATASK_SPACES_PROP) || '').trim();
+
+  Logger.log('── 1. 問答白名單（' + CHATASK_SPACES_PROP + '）──');
+  if (!raw) {
+    Logger.log('❌ 未設定 → 問答功能整個關閉，小幫手只會回自我介紹。');
+  } else {
+    Logger.log('目前值：' + raw);
+    var list = chatAskSpaces_();
+    Logger.log('解析出 ' + list.length + ' 個空間：');
+    for (var i = 0; i < list.length; i++) {
+      var s = list[i], why = '';
+      if (/^https?:/i.test(s)) why = '這是網址不是空間 ID';
+      else if (/^room\//i.test(s)) why = '🔴 這是瀏覽器網址的 room/ 格式，API 認的是 spaces/';
+      else if (!/^spaces\//.test(s)) why = '🔴 格式不對，應該長得像 spaces/AAAAAAAAAAA';
+      Logger.log('  ' + (why ? '❌ ' : '✅ ') + s + (why ? '　← ' + why : ''));
+    }
+  }
+
+  Logger.log('');
+  Logger.log('── 2. 小幫手實際在哪些空間 ──');
+  var arr = [];
+  try {
+    arr = chatApi_('get', 'https://chat.googleapis.com/v1/spaces', null);
+    arr = (arr && arr.spaces) || [];
+  } catch (err) {
+    Logger.log('⚠ 查不到（' + err + '）。多半是 CHAT_APP_SA_KEY 沒設或服務帳戶權限不足。');
+  }
+  if (!arr.length) {
+    Logger.log('⚠ 小幫手不在任何空間，或查詢失敗。');
+  } else {
+    var inList = chatAskSpaces_();
+    for (var j = 0; j < arr.length; j++) {
+      var nm = arr[j].name;
+      var on = inList.indexOf(nm) >= 0;
+      Logger.log('  ' + (on ? '🟢 已開問答' : '⚪ 未開問答') + '　' +
+        (arr[j].displayName || '(私訊)') + '　' + nm);
+    }
+    // 設了但小幫手根本不在那個空間 → 永遠不會被觸發，這是最難自己發現的錯
+    var names = arr.map(function (a) { return a.name; });
+    for (var k = 0; k < inList.length; k++) {
+      if (names.indexOf(inList[k]) < 0) {
+        Logger.log('  ❌ ' + inList[k] +
+          ' 在白名單裡，但小幫手根本不在這個空間 → 永遠不會被觸發');
+      }
+    }
+  }
+
+  Logger.log('');
+  Logger.log('── 3. 其他前提 ──');
+  Logger.log('GEMINI_API_KEY：' + (props.getProperty(GEMINI_KEY_PROP) ? '✅ 已設定'
+    : '❌ 未設定 → 問答無法解析問題'));
+  var uids = {};
+  try { uids = loadChatUids_(); } catch (e) { }
+  var n = 0;
+  for (var u in uids) { if (Object.prototype.hasOwnProperty.call(uids, u)) n++; }
+  Logger.log('Chat人員對照：' + n + ' 人有有效 UID' +
+    (n ? '' : '　← 沒有人的話，問「我的單」一律會說認不出你'));
+}
+
 function testPostClaimCard() {
   var r = postShipClaimCard_({
     orderNo: 'TEST-' + Utilities.formatDate(new Date(), TZ, 'HHmmss'),

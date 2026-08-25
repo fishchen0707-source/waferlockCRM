@@ -3615,5 +3615,206 @@ console.log('\n【33】Chat 小幫手問答');
   reset();
 })();
 
+// 【34】Chat 問答的時間預算與免 AI 快速路徑
+//
+// 這一段全部源自 2026-08-25 的真實逾時事故：Gemini 過載，第一個型號等 37 秒
+// 才回 503、換下一個又 503，Chat 外掛在 38.3 秒被「Exceeded maximum execution time」
+// 砍掉——使用者在 Chat 裡完全沒有反應，連錯誤訊息都看不到。
+console.log('\n【34】Chat 問答：時間預算與免 AI 快速路徑');
+(() => {
+  const asUser = e => { sandbox.Session.getActiveUser = () => ({ getEmail: () => e }); };
+  const origFetch = sandbox.UrlFetchApp.fetch;
+  const SALES_SHEET = '零售-Sammi';
+  const OHEAD = HEADS[SALES_SHEET];
+  const rowOf = (head, obj) => head.map(h => (obj[h] === undefined ? '' : obj[h]));
+
+  const reset = () => {
+    SHEETS = [
+      makeSheet(SALES_SHEET, OHEAD, [rowOf(OHEAD, {
+        '發包申請日期': '2026-08-25', '發包單號': 'LS-260825-01', '客戶': '金宏鎖店',
+        '型號': 'L396', '報價單數量': '10', '發包人員': '小林',
+        '主管KEY英文名押日期': '✅ 已核准'
+      })], 2),
+      makeSheet('出貨明細', G.SHIPMENT_HEADERS, [], 1),
+      makeSheet('人員代碼',
+        ['業務代碼', '業務姓名', '業務email', '類別', '對應助理', '助理email', '發包分頁'],
+        [['LS', '小林', 'ls@waferlock.com', '零售', 'Vivi', 'vivi@waferlock.com', SALES_SHEET]], 1),
+    ];
+    props.DISPATCH_SHEET_NAME = '*';
+    props.GEMINI_API_KEY = 'test-key';
+    props.CHATAPP_ALLOWED_SPACES = 'spaces/AAA';
+    CACHE = {};
+  };
+  reset();
+  asUser('ls@waferlock.com');
+
+  // ══ 免 AI 快速路徑：解得出來就不該碰 Gemini ══
+  {
+    const f = G.parseChatQuestionFast_('幫我查 LS-260825-01');
+    ok(f && f.orderNo === 'LS-260825-01', '發包單號要能用正則解出來');
+    ok(f && f.via === 'fast', '要標記走的是快速路徑，方便日後看比例');
+
+    const c = G.parseChatQuestionFast_('IW202608250001 出貨了嗎');
+    ok(c && c.orderNo === 'IW202608250001', '案件號也要能解');
+
+    const d = G.parseChatQuestionFast_('今天的單');
+    ok(d && d.dateFrom === d.dateTo && /^\d{4}-\d{2}-\d{2}$/.test(d.dateFrom),
+       '「今天的單」要解成今天的日期');
+
+    // 🔴 這條是測試抓出來的實際 bug：「今天天氣如何」也含「今天」
+    ok(G.parseChatQuestionFast_('今天天氣如何') === null,
+       '🔴 日期詞必須搭配訂單字眼，否則「今天天氣如何」會被當成查詢去掃分頁');
+    ok(G.parseChatQuestionFast_('金宏鎖店這個月的單') === null,
+       '模稜兩可的（月份、客戶名）要交給 AI，不可自己猜');
+    ok(G.parseChatQuestionFast_('') === null, '空字串回 null');
+  }
+
+  // ══ 走快速路徑時「一次都不可以打 Gemini」══
+  {
+    reset();
+    let calls = 0;
+    sandbox.UrlFetchApp.fetch = () => { calls++; throw new Error('不該被呼叫'); };
+    const ans = G.answerChatQuestion_('查 LS-260825-01',
+      { mention: '', name: '小林', email: 'ls@waferlock.com' });
+    ok(calls === 0, '🔴 有單號時一次都不可打 Gemini——那正是逾時的來源');
+    ok(/LS-260825-01/.test(ans), '而且要真的查到單（否則上一條是空測試）');
+    sandbox.UrlFetchApp.fetch = origFetch;
+  }
+
+  // ══ Gemini 掛掉時：必須回一句話，不可讓它逾時成零回應 ══
+  {
+    reset();
+    sandbox.UrlFetchApp.fetch = () => ({
+      getResponseCode: () => 503,
+      getContentText: () => '{"error":{"code":503,"message":"high demand"}}'
+    });
+    const ans = G.answerChatQuestion_('金宏鎖店這個月的單如何',
+      { mention: '<users/1>', name: '小林', email: 'ls@waferlock.com' });
+    ok(typeof ans === 'string' && ans.length > 0,
+       '🔴 Gemini 全掛時仍必須回一句話——逾時的話使用者在 Chat 是完全沒反應');
+    ok(/單號/.test(ans),
+       '要告訴使用者「給單號就不需要 AI」，這是當下唯一還能用的路');
+    ok(/^<users\/1>/.test(ans), '失敗訊息也要 @ 發問者');
+    sandbox.UrlFetchApp.fetch = origFetch;
+  }
+
+  // ══ 時間預算：撞上限前要主動停手 ══
+  {
+    reset();
+    let n = 0;
+    // 每次呼叫都「花掉」很久：用真實時間模擬不可行，改成檢查呼叫次數——
+    // 預算 1ms 代表第一次之後就沒有餘裕，不該再試第二個模型。
+    sandbox.UrlFetchApp.fetch = () => {
+      n++;
+      return { getResponseCode: () => 503, getContentText: () => 'busy' };
+    };
+    const r = G.callGeminiJson_([{ text: 'hi' }], {}, 'test', { deadlineMs: 1 });
+    ok(n === 1, '🔴 預算用盡後不可再試下一個模型，實際試了 ' + n + ' 次');
+    ok(r.reason === 'timeout', '預算用盡要回 timeout，好讓呼叫端講出正確的原因');
+
+    // 沒設預算時維持原本行為（截圖下單那邊使用者看著網頁等，多試幾個划算）
+    n = 0;
+    G.callGeminiJson_([{ text: 'hi' }], {}, 'test');
+    ok(n === G.GEMINI_MODELS.length,
+       '沒設預算時應試完整份清單（截圖下單靠這個行為），實際 ' + n);
+    sandbox.UrlFetchApp.fetch = origFetch;
+  }
+
+  sandbox.UrlFetchApp.fetch = origFetch;
+  asUser('boss@waferlock.com');
+  reset();
+})();
+
+// 【35】查無時的「差一點就中」提示
+//
+// 源自 2026-08-25 真實測試：問「8 月金宏的單」回「我找不到」，
+// 但金宏鎖店其實有 3 筆、只是都在 2~3 月。那句回覆技術上正確卻毫無幫助，
+// 連我自己都被誤導去查是不是程式有 bug。使用者只會以為單不存在。
+console.log('\n【35】查無時的「差一點就中」提示');
+(() => {
+  const asUser = e => { sandbox.Session.getActiveUser = () => ({ getEmail: () => e }); };
+  const origFetch = sandbox.UrlFetchApp.fetch;
+  const SHEET = '潘筱凡(金宏鎖店)';
+  const OHEAD = HEADS['零售-Sammi'];
+  const rowOf = obj => OHEAD.map(h => (obj[h] === undefined ? '' : obj[h]));
+
+  const geminiReturns = obj => {
+    sandbox.UrlFetchApp.fetch = () => ({
+      getResponseCode: () => 200,
+      getContentText: () => JSON.stringify({
+        candidates: [{ content: { parts: [{ text: JSON.stringify(obj) }] } }]
+      })
+    });
+  };
+
+  // 客戶欄放的是「終端客戶」，鎖店名只出現在分頁名——這是實測看到的真實結構
+  SHEETS = [
+    makeSheet(SHEET, OHEAD, [
+      rowOf({ '發包申請日期': '2026-02-10', '發包單號': 'PS-260210-01',
+              '客戶': '天崴建設-          張小姐', '型號': 'L372N', '報價單數量': '1' }),
+      rowOf({ '發包申請日期': '2026-03-25', '發包單號': 'PS-260325-01',
+              '客戶': '成都營造-趙敏全', '型號': 'L600', '報價單數量': '1' }),
+    ], 2),
+    makeSheet('出貨明細', G.SHIPMENT_HEADERS, [], 1),
+    makeSheet('人員代碼',
+      ['業務代碼', '業務姓名', '業務email', '類別', '對應助理', '助理email', '發包分頁'],
+      [['PS', '潘筱凡', 'ps@waferlock.com', '零售', 'Vivi', 'vivi@waferlock.com', SHEET]], 1),
+  ];
+  props.DISPATCH_SHEET_NAME = '*';
+  props.GEMINI_API_KEY = 'test-key';
+  props.CHATAPP_ALLOWED_SPACES = 'spaces/AAA';
+  CACHE = {};
+  asUser('ps@waferlock.com');
+
+  // ══ 客戶有單、但不在問的日期範圍 ══
+  {
+    geminiReturns({ intent: 'ship_status', date_from: '2026-08-01', date_to: '2026-08-31',
+      customer: '金宏鎖店', order_no: '', person: '', self: false, confidence: 'high' });
+    const a = G.answerChatQuestion_('查8月金宏鎖店的單', { mention: '', name: '', email: '' });
+
+    ok(/有 2 筆/.test(a),
+       '🔴 客戶有單只是日期不中時，要講出「有幾筆」而不是只說找不到');
+    ok(/都不在你問的日期範圍/.test(a), '要明說是日期不中，不是單不存在');
+    ok(/2026-03-25/.test(a), '要給最近一筆的日期，讓人知道往哪邊找');
+    ok(/把日期拿掉/.test(a), '要給可以立刻照做的下一步');
+  }
+
+  // ══ 真的完全不存在時，維持原本保守的措辭 ══
+  {
+    geminiReturns({ intent: 'ship_status', date_from: '2026-08-01', date_to: '2026-08-31',
+      customer: 'ZZZ完全不存在', order_no: '', person: '', self: false, confidence: 'high' });
+    const b = G.answerChatQuestion_('查8月ZZZ完全不存在', { mention: '', name: '', email: '' });
+    ok(/找不到/.test(b), '完全查無時仍說「我找不到」');
+    ok(!/有 \d+ 筆/.test(b), '🔴 完全查無時不可謊報筆數');
+  }
+
+  // ══ 客戶名比對要同時吃「分頁名」與「客戶欄」 ══
+  {
+    geminiReturns({ intent: 'ship_status', date_from: '', date_to: '',
+      customer: '金宏鎖店', order_no: '', person: '', self: false, confidence: 'high' });
+    const c = G.answerChatQuestion_('查金宏鎖店的單', { mention: '', name: '', email: '' });
+    ok(/PS-260210-01/.test(c),
+       '🔴 鎖店名只在分頁名裡（客戶欄放的是終端客戶），比對必須涵蓋分頁名');
+
+    geminiReturns({ intent: 'ship_status', date_from: '', date_to: '',
+      customer: '成都營造', order_no: '', person: '', self: false, confidence: 'high' });
+    ok(/PS-260325-01/.test(G.answerChatQuestion_('查成都營造', { mention: '', name: '', email: '' })),
+       '用終端客戶名也要查得到');
+  }
+
+  // ══ 顯示：客戶欄的填充空白不可原樣貼進 Chat ══
+  {
+    geminiReturns({ intent: 'ship_status', date_from: '', date_to: '',
+      customer: '天崴建設', order_no: '', person: '', self: false, confidence: 'high' });
+    const d = G.answerChatQuestion_('查天崴建設', { mention: '', name: '', email: '' });
+    ok(/天崴建設- 張小姐/.test(d),
+       '客戶欄的連續空白要壓成單一空白（實測看到「天崴建設-          張小姐」）');
+    ok(!/ {3,}/.test(d), '回覆裡不該出現三個以上連續空白');
+  }
+
+  sandbox.UrlFetchApp.fetch = origFetch;
+  asUser('boss@waferlock.com');
+})();
+
 console.log('\n' + (fail ? '❌' : '✅') + ' 通過 ' + pass + '／失敗 ' + fail);
 process.exit(fail ? 1 : 0);

@@ -3819,6 +3819,60 @@ var CHAT_HELP =
   '我目前**只能查登錄狀態**，不能查貨運進度、不會給金額、也不能改資料。';
 
 /**
+ * 🔑 不打 AI 的快速解析。解得出來就直接用，解不出來才送 Gemini。
+ *
+ * ⚠ **這支的存在是效能與可用性問題，不是最佳化**：
+ *   Chat 的外掛程式有硬性執行時間上限（2026-08-25 實測 38.3 秒被砍），
+ *   而 Gemini 正常回應就要 8.6 秒、過載時第一個型號等 37 秒才回 503。
+ *   第一次上線就因此整支逾時，使用者在 Chat 裡**完全沒有反應**。
+ *
+ *   而實際上最常問的「查 LS-260825-01」根本不需要理解語意——
+ *   單號有固定格式，正則就解得出來，0 秒、不打網路。
+ *   把這類問題擋在 AI 之前，等於把大部分查詢的延遲從 9 秒降到接近 0，
+ *   而且 Gemini 掛掉時這些問題照樣答得出來。
+ *
+ * 只處理**高把握**的情況，模稜兩可的一律交給 AI——這裡猜錯會查到別人的單。
+ *
+ * @return 條件物件，或 null（表示「我解不出來，請交給 AI」）
+ */
+function parseChatQuestionFast_(text) {
+  var t = String(text || '').trim();
+  if (!t) return null;
+
+  // ① 單號：發包單號（XX-YYMMDD-N）、案件號（IW+8碼+4碼）
+  var m = t.match(/[A-Za-z]{2}-\d{6}-\d+/);
+  if (m) {
+    return { intent: 'order_lookup', dateFrom: '', dateTo: '', customer: '',
+             orderNo: m[0], person: '', self: false, confidence: 'high', via: 'fast' };
+  }
+  m = t.match(/\b[A-Za-z]{2}\d{12}\b/);
+  if (m) {
+    return { intent: 'order_lookup', dateFrom: '', dateTo: '', customer: '',
+             orderNo: m[0], person: '', self: false, confidence: 'high', via: 'fast' };
+  }
+
+  // ② 純日期問句（「今天的單」「昨天下的單」）。
+  //    只認今天／昨天這兩個絕對明確的詞——「這週」牽涉週一是哪天、
+  //    「上個月」牽涉月底天數，判斷分歧的成本高於交給 AI。
+  //    ⚠ 日期詞**必須**搭配訂單相關字眼才算數：「今天天氣如何」也含「今天」，
+  //      少了這個條件就會被當成查詢送去掃分頁（測試抓到過）。
+  var today = new Date();
+  var day = null;
+  if (/單|出貨|案件|訂單/.test(t)) {
+    if (/今天|今日/.test(t)) day = today;
+    else if (/昨天|昨日/.test(t)) day = new Date(today.getTime() - 86400000);
+  }
+  if (day) {
+    var d = Utilities.formatDate(day, TZ, 'yyyy-MM-dd');
+    return { intent: 'ship_status', dateFrom: d, dateTo: d, customer: '',
+             orderNo: '', person: '', self: /我(的|下|問)/.test(t),
+             confidence: 'high', via: 'fast' };
+  }
+
+  return null;   // 其餘交給 AI
+}
+
+/**
  * 用 AI 把一句中文問題轉成查詢條件。**這是整條路徑上唯一有 AI 的地方。**
  *
  * ⚠ 今天的日期由程式帶進 prompt，不讓 AI 自己假設——它不知道今天幾號，
@@ -3864,8 +3918,11 @@ function parseChatQuestion_(text) {
     '3. 問到金額、毛利、貨運進度、要求修改資料、或跟出貨查詢無關的閒聊 → intent 設 "unknown"。\n\n' +
     '這句話是：\n' + text;
 
-  var got = callGeminiJson_([{ text: prompt }], schema, 'Chat問答解析');
-  if (!got.ok) return null;
+  // 20 秒預算：Chat 外掛約 38 秒被砍，扣掉查詢與組答案的時間，
+  // 留給解析的只有這麼多。寧可少試一個模型，也不要整支被砍成零回應。
+  var got = callGeminiJson_([{ text: prompt }], schema, 'Chat問答解析',
+    { deadlineMs: 20000 });
+  if (!got.ok) return { failed: got.reason };
 
   var p = got.data || {};
   return {
@@ -3894,6 +3951,7 @@ function parseChatQuestion_(text) {
 function chatQueryOrders_(f) {
   var MAX = 10;
   var out = [], truncated = false;
+  var nearMiss = 0, nearLatest = '';   // 日期以外都符合的筆數／其中最近的一筆
   var idx = buildShipIndex_();
 
   var wantCust = String(f.customer || '').toLowerCase();
@@ -3953,7 +4011,16 @@ function chatQueryOrders_(f) {
           ctx.name.toLowerCase().indexOf(wantCust) < 0) continue;
       if (wantPerson && by.toLowerCase().indexOf(wantPerson) < 0 &&
           ctx.name.toLowerCase().indexOf(wantPerson) < 0) continue;
-      if ((from || to) && !inRange(applyAt)) continue;
+
+      // 🔑 日期以外的條件都過了才記進 nearMiss。
+      //   實測踩過：問「8 月金宏的單」回「我找不到」，但金宏其實有 3 筆、
+      //   只是都在 2~3 月。那句回覆技術上正確卻毫無幫助，害人以為單不存在。
+      //   記下「差一點就中」的筆數與最近日期，查無時就能講出有用的話。
+      if (from || to) {
+        nearMiss++;
+        if (applyAt && applyAt > nearLatest) nearLatest = applyAt;
+        if (!inRange(applyAt)) continue;
+      }
 
       out.push({
         no: no, sheet: ctx.name, customer: cust, at: applyAt,
@@ -3964,7 +4031,91 @@ function chatQueryOrders_(f) {
     }
   }
 
-  return { rows: out, truncated: truncated };
+  return { rows: out, truncated: truncated,
+           nearMiss: nearMiss, nearLatest: nearLatest };
+}
+
+/**
+ * 診斷：把一句問題跑完整條路徑，印出**每個條件各刷掉多少列**。
+ * 在編輯器執行（可改參數），不寫任何資料。
+ *
+ * ⚠ 存在的理由：查不到單時有好幾種原因，而回覆一律是「我找不到」——
+ *   條件解析錯、客戶名比對不到、日期對不上、分頁沒被掃到，症狀完全一樣。
+ *   與其一句一句在 Chat 裡試，不如直接看是哪一關把資料刷光的。
+ */
+function debugChatQuery(text) {
+  text = text || '查 8月 金宏鎖店的單';
+  Logger.log('問題：' + text);
+
+  var fast = parseChatQuestionFast_(text);
+  Logger.log('快速解析（免 AI）：' + (fast ? JSON.stringify(fast) : 'null → 會送 AI'));
+  var f = fast || parseChatQuestion_(text);
+  if (!f || f.failed) { Logger.log('❌ 解析失敗：' + JSON.stringify(f)); return; }
+  Logger.log('最終條件：' + JSON.stringify(f));
+  Logger.log('');
+
+  var wantCust = String(f.customer || '').toLowerCase();
+  var wantNo = String(f.orderNo || '').toLowerCase();
+  var from = f.dateFrom || '', to = f.dateTo || '';
+
+  var env = openSheets_();
+  Logger.log('掃描 ' + env.list.length + ' 個分頁：');
+  var gTotal = 0, gCust = 0, gDate = 0, gBoth = 0;
+  var sampleCust = {}, sampleDate = {};
+
+  for (var k = 0; k < env.list.length; k++) {
+    var ctx = env.list[k];
+    var startRow = ctx.headerRow + 1;
+    var lastRow = ctx.lastRow || ctx.sheet.getLastRow();
+    if (lastRow < startRow) continue;
+    var width = ctx.lastCol || ctx.sheet.getLastColumn();
+    var values = ctx.sheet.getRange(startRow, 1, lastRow - startRow + 1, width).getValues();
+
+    var tot = 0, okCust = 0, okDate = 0, both = 0;
+    for (var r = 0; r < values.length; r++) {
+      var row = values[r];
+      var pick = function (name) {
+        var c = ctx.col[name];
+        if (!c || c > row.length) return '';
+        var v = row[c - 1];
+        return (v instanceof Date) ? fmtDate_(v) : String(v == null ? '' : v).trim();
+      };
+      if (!ORDER_NO_RE.test(pick(COL_ORDER_NO))) continue;
+      tot++;
+      var cust = pick(COL_CUSTOMER), at = pick(COL_APPLY_AT);
+      if (tot <= 3) {
+        sampleCust[ctx.name] = (sampleCust[ctx.name] || []).concat([cust || '(空)']);
+        sampleDate[ctx.name] = (sampleDate[ctx.name] || []).concat([at || '(空)']);
+      }
+      var hitC = !wantCust || cust.toLowerCase().indexOf(wantCust) >= 0 ||
+                 ctx.name.toLowerCase().indexOf(wantCust) >= 0;
+      var d = String(at || '').slice(0, 10);
+      var hitD = (!from && !to) || (!!d && (!from || d >= from) && (!to || d <= to));
+      if (hitC) okCust++;
+      if (hitD) okDate++;
+      if (hitC && hitD) both++;
+    }
+    if (tot) {
+      Logger.log('  ' + ctx.name + '：共 ' + tot + ' 筆　客戶條件過 ' + okCust +
+        '　日期條件過 ' + okDate + '　兩者都過 ' + both);
+      gTotal += tot; gCust += okCust; gDate += okDate; gBoth += both;
+    }
+  }
+
+  Logger.log('');
+  Logger.log('合計：' + gTotal + ' 筆　客戶過 ' + gCust + '　日期過 ' + gDate +
+    '　都過 ' + gBoth);
+  if (gTotal && !gBoth) {
+    if (!gCust) Logger.log('🔴 客戶條件「' + f.customer + '」把全部刷掉了。');
+    if (!gDate) Logger.log('🔴 日期條件「' + from + '～' + to + '」把全部刷掉了。');
+    Logger.log('');
+    Logger.log('各分頁前 3 筆的實際值（看看寫法跟你問的差在哪）：');
+    for (var n in sampleCust) {
+      if (!Object.prototype.hasOwnProperty.call(sampleCust, n)) continue;
+      Logger.log('  ' + n + '　客戶=' + sampleCust[n].join('｜') +
+        '　日期=' + (sampleDate[n] || []).join('｜'));
+    }
+  }
 }
 
 /**
@@ -3983,9 +4134,20 @@ function answerChatQuestion_(text, asker) {
   asker = asker || {};
   var at = asker.mention ? asker.mention + ' ' : '';
 
-  var f = parseChatQuestion_(text);
+  // 先試不打 AI 的快速解析。解得出來就省下 9 秒，而且 Gemini 掛掉照樣能用。
+  var f = parseChatQuestionFast_(text);
   if (!f) {
-    return at + '我現在聽不懂問題（辨識服務暫時打不通），請稍後再試或改用查詢頁。';
+    f = parseChatQuestion_(text);
+    if (!f || f.failed) {
+      // 🔑 一定要回一句話。這裡若讓它逾時，使用者在 Chat 是**完全沒反應**，
+      //    連「壞了」都不知道，只會一直重問——那比一句錯誤訊息糟得多。
+      var why = (f && f.failed === 'timeout')
+        ? 'AI 現在忙不過來'
+        : 'AI 解析暫時打不通';
+      return at + why + '，我沒辦法理解這句話。\n' +
+        '不過**直接給我單號我不需要 AI 就查得到**，例如「查 LS-260825-01」。\n' +
+        '或改用查詢頁。';
+    }
   }
 
   var hasCond = !!(f.customer || f.orderNo || f.person || f.dateFrom || f.self);
@@ -4027,6 +4189,16 @@ function answerChatQuestion_(text, asker) {
 
   var cond = chatCondText_(f);
   if (!res.rows.length) {
+    // 🔑 「其他條件都中、只有日期不中」要講出來，這是最有用的一句話。
+    //   實測踩過：問「8 月金宏的單」回「我找不到」，但金宏其實有 3 筆在 2~3 月。
+    //   那句回覆技術上正確卻害人以為單不存在。
+    if (res.nearMiss) {
+      var who = f.customer || f.person || '這個條件';
+      return at + who + '有 ' + res.nearMiss + ' 筆單，但**都不在你問的日期範圍內**（' +
+        (f.dateFrom || '?') + '～' + (f.dateTo || '?') + '）。\n' +
+        (res.nearLatest ? '最近的一筆是 ' + res.nearLatest + '。\n' : '') +
+        '把日期拿掉再問一次就看得到，例如「查' + who + '的單」。';
+    }
     // 措辭刻意是「我找不到」不是「沒有這張單」——查無可能是日期或客戶名寫法不同，
     // 說成「沒有」會讓人以為單真的不存在而去重下一張。
     return at + '我找不到符合「' + cond + '」的單。\n' +
@@ -4036,7 +4208,9 @@ function answerChatQuestion_(text, asker) {
   var lines = [at + '「' + cond + '」找到 ' + res.rows.length + ' 筆：', ''];
   for (var i = 0; i < res.rows.length; i++) {
     var r = res.rows[i];
-    lines.push('▪ ' + r.no + '　' + (r.customer || '(無客戶)') +
+    // 客戶欄裡常有對齊用的連續空白（實測看到「天崴建設-　　　　張小姐」），
+    // 原樣貼進 Chat 會變成一長串空洞。壓成單一空白只影響顯示，不影響比對。
+    lines.push('▪ ' + r.no + '　' + (String(r.customer || '(無客戶)').replace(/[\s　]+/g, ' ')) +
       (r.at ? '　下單 ' + r.at : ''));
     if (r.model) lines.push('　品項：' + r.model + (r.qty ? ' ×' + r.qty : ''));
 
@@ -4420,19 +4594,39 @@ function writeOrderShipment_(orderNo, kind, form, email, me, stamp) {
  *   （截圖下單要說「改用下單頁」、Chat 問答要說「請用查詢頁」），
  *   在這裡寫死一種，第二個呼叫端就得繞過它。
  */
-function callGeminiJson_(parts, schema, tag) {
+function callGeminiJson_(parts, schema, tag, opts) {
+  opts = opts || {};
   var key = PropertiesService.getScriptProperties().getProperty(GEMINI_KEY_PROP);
   if (!key) {
     Logger.log('Gemini 未設定 ' + GEMINI_KEY_PROP + '｜' + tag);
     return { ok: false, reason: 'nokey', code: 0, body: '' };
   }
 
+  // 時間預算：呼叫端有硬性時限時（Chat 外掛約 38 秒就被砍）用得上。
+  //
+  // ⚠ 這是**實測踩出來的**：2026-08-25 Chat 問答第一次上線，Gemini 剛好過載，
+  //   第一個型號等了 37 秒才回 503、換第二個又 503，然後整支被
+  //   「Exceeded maximum execution time」砍掉——使用者在 Chat 裡**完全沒有反應**，
+  //   連錯誤訊息都看不到。沒設預算時維持原本行為（試完整份清單），
+  //   因為截圖下單那邊使用者看著網頁等，多試幾個是划算的。
+  var started = Date.now();
+  var budget = Number(opts.deadlineMs || 0);
+  var left = function () { return budget ? budget - (Date.now() - started) : Infinity; };
+
   // 依序試 GEMINI_MODELS 清單，第一個打不通就換下一個——404（型號不存在／已下架）
   // 與 503（暫時過載）都算「打不通」，用同一套退路處理：換一個型號通常比乾等或
   // 對同一個過載的型號重試更快解決，而且不需要 Utilities.sleep 拖長使用者等待時間。
-  var resp = null, lastCode = 0, lastBody = '', usedModel = '';
-  for (var m = 0; m < GEMINI_MODELS.length; m++) {
-    var model = GEMINI_MODELS[m];
+  var models = opts.models || GEMINI_MODELS;
+  var resp = null, lastCode = 0, lastBody = '', usedModel = '', ranOut = false;
+  for (var m = 0; m < models.length; m++) {
+    var model = models[m];
+    // 沒把握在預算內跑完就不要開始——開始了卻被砍，使用者是零回應。
+    // 門檻取 12 秒：實測正常回應約 8.6 秒，留一點組答案與回傳的時間。
+    if (m > 0 && left() < 12000) {
+      Logger.log('⏱ 時間預算剩 ' + Math.round(left() / 1000) + ' 秒，不再試下一個模型｜' + tag);
+      ranOut = true;
+      break;
+    }
     var attempt;
     try {
       attempt = UrlFetchApp.fetch(
@@ -4467,11 +4661,13 @@ function callGeminiJson_(parts, schema, tag) {
     Logger.log('Gemini 失敗內容｜' + model + '｜' + lastBody.slice(0, 300));
   }
 
-  if (!resp) return { ok: false, reason: 'http', code: lastCode, body: lastBody };
+  if (!resp) {
+    return { ok: false, reason: ranOut ? 'timeout' : 'http', code: lastCode, body: lastBody };
+  }
 
   // 不是第一個模型才成功 → 留一行警告。連續看到這行代表第一個型號該從清單移除了。
-  if (usedModel !== GEMINI_MODELS[0]) {
-    Logger.log('⚠ 第一個模型（' + GEMINI_MODELS[0] + '）打不通，改用 ' + usedModel + ' 才成功。');
+  if (usedModel !== models[0]) {
+    Logger.log('⚠ 第一個模型（' + models[0] + '）打不通，改用 ' + usedModel + ' 才成功。');
   }
 
   try {
