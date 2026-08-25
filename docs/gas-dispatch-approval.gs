@@ -494,8 +494,48 @@ function renderShipPage_(email, roles) {
   try { pending = getPendingShipments_(); }
   catch (err) { Logger.log('讀取待鍵入清單失敗：' + err); }
 
+  // 倉庫回報有問題、等助理修正的。同樣讀不到不讓整頁掛掉。
+  var issues = [];
+  try { issues = getWarehouseIssues_(); }
+  catch (err2) { Logger.log('讀取倉庫回報問題清單失敗：' + err2); }
+
   return htmlPage_(navBlock_('ship', roles) +
-    shipBlock_(email, rows, roles, { at: at, cached: cached }, pending));
+    shipBlock_(email, rows, roles, { at: at, cached: cached }, pending, issues));
+}
+
+/**
+ * 倉庫回報「有問題」、等助理修正的區塊。
+ *
+ * 🔴 在這一區之前，這些單**在助理的畫面上完全不存在**——待鍵入清單只撈
+ *   「出貨單號為空」的列，而有問題的列早就有單號了。倉庫按下「有問題」之後
+ *   通知是發出去了，但助理打開頁面看不到任何東西，也沒有地方可以把單子送回去。
+ */
+function warehouseIssueBlock_(issues) {
+  if (!issues.length) return '';
+  var cards = '';
+  for (var i = 0; i < issues.length; i++) {
+    var r = issues[i];
+    var id = 'wi' + i;
+    var no = String(r[COL_S_SHIP_NO] || '');
+    cards +=
+      '<div class="card wi" id="' + id + '">' +
+        '<div class="ometa"><b>' + esc_(no) + '</b><span>' +
+          esc_(String(r[COL_S_CUSTOMER] || '')) + '</span></div>' +
+        '<div class="msg fail" style="margin:8px 0">⚠ 倉庫回報：' +
+          esc_(String(r[COL_S_WH_NOTE] || '（未填說明）')) + '</div>' +
+        (r[COL_S_ITEMS] ? '<div class="note">出貨品項：' +
+          esc_(String(r[COL_S_ITEMS])) + '</div>' : '') +
+        '<div class="note">回報人：' + esc_(String(r[COL_S_WH_BY] || '—')) +
+          '　' + esc_(String(r[COL_S_WH_AT] || '')) + '</div>' +
+        '<div class="row" style="margin-top:12px">' +
+          '<button class="ok" onclick="reopen(\'' + jsq_(no) + '\',\'' + id +
+            '\',' + (r.row || 0) + ')">🔄 已修正，送回倉庫重新核</button>' +
+        '</div>' +
+      '</div>';
+  }
+  return '<div class="sec">倉庫回報有問題，等你修正' +
+    '<span>改完試算表資料後，按「送回倉庫」它才會重新出現在倉庫的清單裡</span></div>' +
+    cards;
 }
 
 /**
@@ -1509,7 +1549,11 @@ function warehouseBlock_(email, rows, roles, meta) {
   var footer = '<div class="note">清單資料時間 ' + esc_(meta.at) +
     (meta.cached ? '（快取）' : '') + '　·　核單人取自您的 Google 帳號，無法修改。<br>' +
     '按「已撿料完成」會把完整出貨資訊送到 Chat 備存；' +
-    '「有問題」會通知助理與業務，需填寫問題說明。</div>';
+    '「有問題」會通知助理與業務，需填寫問題說明。<br>' +
+    // 沒有這一句的話，倉庫按下「有問題」只會看到單子從清單消失，
+    // 不知道它去哪了、也不知道還會不會回來（2026-08-25 之前它是真的回不來）。
+    '<b>回報問題後這筆會先從清單移除</b>，交給助理修正；' +
+    '助理改好按「送回倉庫」，它就會帶著你填的問題說明重新出現在這裡。</div>';
 
   var script =
     '<script>' +
@@ -1592,8 +1636,9 @@ function warehouseBlock_(email, rows, roles, meta) {
   return head + cards + footer + script;
 }
 
-function shipBlock_(email, rows, roles, meta, pending) {
+function shipBlock_(email, rows, roles, meta, pending, issues) {
   pending = pending || [];
+  issues = issues || [];
   var head =
     '<div class="hd"><div class="ic">📦</div><div>' +
     '<h1>出貨登錄</h1><p>' + esc_(email) + '</p></div></div>' +
@@ -1624,13 +1669,17 @@ function shipBlock_(email, rows, roles, meta, pending) {
           '沒有發包單的出貨（弱電料件、鎖胚、建案整批）不會出現在這裡，直接填下方表單即可。</div>' +
         items +
       '</div>';
-  } else if (!pending.length) {
+  } else if (!pending.length && !issues.length) {
     list = '<div class="card"><div class="center">目前沒有待出貨的項目 👍<br>' +
       '<span style="font-size:11.5px">沒有發包單的出貨直接填下方表單</span></div></div>';
   }
 
   // 業務已下單的擺在最前面：那是新流程、也是最不費力的（只補三格）
   list = pendingShipBlock_(pending) + list;
+
+  // 倉庫回報有問題的擺在**最上面**：那是唯一有人在等的事——
+  // 倉庫把單子退回來了，在助理處理之前整條線是停住的。
+  list = warehouseIssueBlock_(issues) + list;
 
   var invOpts = '<option value=""></option>';
   for (var v = 0; v < INVOICE_OPTIONS.length; v++) {
@@ -1671,7 +1720,7 @@ function shipBlock_(email, rows, roles, meta, pending) {
     'function fill(i){var r=ROWS[i];g("dispatchNo").value=r.orderNo;' +
       'g("customer").value=r.customer||"";g("project").value=r.project||"";' +
       'g("shipNo").focus();}' +
-    fillItScript_() +
+    fillItScript_() + reopenScript_() +
     copyScript_() + techNoticeScript_() +
     'function send(){' +
       'var b=g("sub");var old=b.textContent;' +
@@ -1727,6 +1776,27 @@ function fillItScript_() {
           'for(var i=0;i<btns.length;i++){btns[i].disabled=false;}' +
           'btns[0].textContent=old;show("連線失敗："+e.message,"fail");})' +
         '.fillShipment(rw,{shipNo:sn,orderId:g(id+"o").value,shipDate:g(id+"d").value});' +
+    '}';
+}
+
+/** 把倉庫退回來的單送回去重核（回傳 JS 原始碼字串，與 fillItScript_ 同一種寫法）。 */
+function reopenScript_() {
+  return 'function reopen(no,id,rw){' +
+      // 二次確認：這個動作會把單子推回倉庫，倉庫那邊會馬上收到通知。
+      // 資料還沒改就按下去的話，倉庫會白跑一趟、然後再退一次。
+      'if(!confirm("確定資料已經修正好了嗎？\\n送回去之後倉庫會立刻收到通知。"))return;' +
+      'var card=g(id);var btns=card.querySelectorAll("button");' +
+      'for(var i=0;i<btns.length;i++){btns[i].disabled=true;}' +
+      'var old=btns[0].textContent;btns[0].textContent="處理中…";' +
+      'google.script.run' +
+        '.withSuccessHandler(function(res){' +
+          'if(res.ok){card.parentNode.removeChild(card);show(res.message,"done");}' +
+          'else{for(var i=0;i<btns.length;i++){btns[i].disabled=false;}' +
+            'btns[0].textContent=old;show(res.message,"fail");}})' +
+        '.withFailureHandler(function(e){' +
+          'for(var i=0;i<btns.length;i++){btns[i].disabled=false;}' +
+          'btns[0].textContent=old;show("連線失敗："+e.message,"fail");})' +
+        '.reopenWarehouse(no,"",rw);' +
     '}';
 }
 
@@ -2601,26 +2671,13 @@ function buildCtx_(sheet) {
   };
 }
 
-/** 自動找出表頭在第幾列：往下掃，第一個含「發包單號」的列就是。找不到回傳 0。 */
-function detectHeaderRow_(sheet) {
-  var lastRow = sheet.getLastRow();
-  var lastCol = sheet.getLastColumn();
-  if (lastRow < 1 || lastCol < 1) return 0;
-
-  var rows = Math.min(MAX_SCAN_HEADER_ROWS, lastRow);
-  return detectHeaderRowIn_(sheet.getRange(1, 1, rows, lastCol).getValues());
-}
-
-/** 表頭文字 → 欄號（1-based）。表頭常有換行與多餘空白，統一正規化後比對。 */
-function headerMap_(sheet, headerRow) {
-  var last = sheet.getLastColumn();
-  return headerMapOf_(sheet.getRange(headerRow, 1, 1, last).getValues()[0]);
-}
-
 /**
- * 以下兩支是純函式版本（吃已經讀好的值，不碰試算表）。
- * 拆出來的原因：buildCtx_ 只想讀一次資料就把表頭列和欄位對照都算出來，
- * 而上面兩支帶 sheet 的版本保留不動，避免影響其他呼叫端。
+ * 以下兩支是純函式（吃已經讀好的值，不碰試算表），讓 buildCtx_ 讀一次資料
+ * 就把表頭列與欄位對照都算出來。
+ *
+ * 2026-08-25：原本還有兩支帶 sheet 參數的舊版（detectHeaderRow_／headerMap_），
+ * 註解寫著「保留不動，避免影響其他呼叫端」——但全 repo（含另外四支 .gs 與
+ * scripts/*.js）查證後**根本沒有那個呼叫端**，已刪除。
  */
 function detectHeaderRowIn_(values) {
   for (var r = 0; r < values.length; r++) {
@@ -3122,6 +3179,44 @@ function getPendingShipments_() {
       if (rec[name] && name !== COL_S_WH_STATUS) any = true;
     }
     if (!any) continue;   // 整列空白（有人手動加了空列）
+    rec.row = i + 2;
+    out.push(rec);
+  }
+  return out;
+}
+
+/**
+ * 倉庫回報「有問題」、還沒被送回去重核的列。
+ *
+ * 🔴 **這支存在的理由是一個真實的資料黑洞**（2026-08-25 追出來的）：
+ *   倉庫按「有問題」之後，那一列就同時從**兩張清單**消失——
+ *   倉庫端被 getWarehouseCached_ 的「已核或有問題都算處理完」過濾掉，
+ *   助理端則因為 getPendingShipments_ 只撈「出貨單號為空」的列而看不到
+ *   （有問題的列早就有出貨單號了）。
+ *   於是通知發出去了，卻**沒有任何畫面看得到這張單**，也沒有函式能把它改回待核。
+ *   訪談紀錄 docs/倉庫訪談清單.md 當初就預言過「單子會憑空消失」，確實成真。
+ */
+function getWarehouseIssues_() {
+  var s = openShipmentSheet_();
+  var last = s.sheet.getLastRow();
+  if (last < 2) return [];
+  var cSt = s.col[COL_S_WH_STATUS];
+  if (!cSt) return [];
+
+  var width = Math.max(s.sheet.getLastColumn(), SHIPMENT_HEADERS.length);
+  var values = s.sheet.getRange(2, 1, last - 1, width).getValues();
+  var out = [];
+
+  for (var i = 0; i < values.length; i++) {
+    var row = values[i];
+    if (String(row[cSt - 1] == null ? '' : row[cSt - 1]).trim() !== WH_ISSUE) continue;
+    var rec = {};
+    for (var h = 0; h < SHIPMENT_HEADERS.length; h++) {
+      var name = SHIPMENT_HEADERS[h];
+      var c = s.col[name];
+      var v = (c && c <= row.length) ? row[c - 1] : '';
+      rec[name] = (v instanceof Date) ? fmtDate_(v) : String(v == null ? '' : v).trim();
+    }
     rec.row = i + 2;
     out.push(rec);
   }
@@ -6186,6 +6281,81 @@ function invalidateWarehouseCache_() {
  */
 function submitWarehouse(shipNo, decision, note, hintRow) {
   return submitWarehouseAs_(currentUserEmail_(), shipNo, decision, note, hintRow);
+}
+
+/** 助理修正完資料後，把單子送回倉庫重新核。 */
+function reopenWarehouse(shipNo, note, hintRow) {
+  return reopenWarehouseAs_(currentUserEmail_(), shipNo, note, hintRow);
+}
+
+/**
+ * 把倉庫回報「有問題」的單改回「待核」，讓它重新出現在倉庫的清單裡。
+ *
+ * 🔴 **補的是一個資料黑洞**：在這支之前，倉庫按下「有問題」的單會同時從
+ *   倉庫清單與助理清單消失，而且**全檔沒有任何函式能把狀態改回待核**——
+ *   助理就算把資料修好了，也只能手動去改試算表（而且沒有人知道要去改）。
+ *
+ * ⚠ **問題說明刻意不清空**：倉庫重新看到這張單時，要知道上次是為什麼被退，
+ *   否則他得從頭再判斷一次。稽核紀錄留的是「誰在什麼時候送回去的」，
+ *   跟「上次的問題是什麼」是兩件事，不能互相取代。
+ *
+ * 權限閘門放在核心函式裡（比照 submitWarehouseAs_），換入口呼叫也受保護。
+ */
+function reopenWarehouseAs_(email, shipNo, note, hintRow) {
+  if (!email) return { ok: false, message: '無法辨識身分，未執行。' };
+  var roles = rolesFor_(email);
+  if (!roles.assistant) {
+    return { ok: false, message: '您（' + email + '）不在助理名單中，無法把單子送回倉庫。' };
+  }
+  shipNo = String(shipNo || '').trim();
+  if (!shipNo) return { ok: false, message: '缺少出貨單號。' };
+
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(20000); }
+  catch (e) { return { ok: false, message: '系統忙碌中，請稍後再試。' }; }
+
+  try {
+    var s = openShipmentSheet_();
+    var target = findShipmentRow_(s, shipNo, hintRow);
+    if (!target) return { ok: false, message: '找不到出貨單號 ' + shipNo + '，可能已被刪除。' };
+
+    // 重讀當下狀態：只有「有問題」的才能送回去。
+    // 已核的送回去等於把倉庫做完的事推翻；待核的本來就在清單上，重送沒有意義。
+    var now = String(s.sheet.getRange(target, s.col[COL_S_WH_STATUS]).getValue() || '').trim();
+    if (now !== WH_ISSUE) {
+      return { ok: false, message: '這筆目前是「' + (now || '（空白）') +
+        '」，不是「' + WH_ISSUE + '」，不需要送回倉庫。（畫面請重新整理）' };
+    }
+
+    s.sheet.getRange(target, s.col[COL_S_WH_STATUS]).setValue(WH_PENDING);
+    // 核單人／時間清掉：那是上一次核單的人留下的，留著會讓人以為現在還是他負責
+    if (s.col[COL_S_WH_BY]) s.sheet.getRange(target, s.col[COL_S_WH_BY]).setValue('');
+    if (s.col[COL_S_WH_AT]) s.sheet.getRange(target, s.col[COL_S_WH_AT]).setValue('');
+    SpreadsheetApp.flush();
+
+    var rec = readShipmentRow_(s, target);
+    rec[COL_S_WH_STATUS] = WH_PENDING;
+    invalidateWarehouseCache_();
+
+    try {
+      auditShip_(s, target, rec, email, '助理', '重新送倉庫核', note || '');
+    } catch (eA) {
+      Logger.log('重新送核稽核寫入失敗（狀態已改成功 ' + shipNo + '）：' + eA);
+    }
+
+    // 複用既有的倉庫通知，不另寫一份訊息組裝
+    try {
+      notifyWarehouse_(rec, target);
+    } catch (e2) {
+      Logger.log('重新送核通知失敗（狀態已改成功）：' + e2);
+    }
+
+    return { ok: true, message: '已把 ' + shipNo + ' 送回倉庫待核，並通知倉庫。' };
+  } catch (err) {
+    return { ok: false, message: '送回倉庫失敗：' + err };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /**

@@ -4082,5 +4082,157 @@ console.log('\n【36】貨運單：上傳、配對、回填');
   reset([]);
 })();
 
+// 【37】倉庫回報「有問題」之後，單子不可以消失
+//
+// 這一段鎖住的是 2026-08-25 追出來的資料黑洞：
+// 倉庫按「有問題」後，那一列同時從倉庫清單（已核或有問題都算處理完）與
+// 助理清單（只撈出貨單號為空的列）消失，而且全檔沒有任何函式能把它改回待核。
+// 通知發出去了，但沒有任何畫面看得到這張單。
+// docs/倉庫訪談清單.md 當初就預言「單子會憑空消失」，確實成真。
+console.log('\n【37】倉庫回報有問題後，單子不可以消失');
+(() => {
+  const asUser = e => { sandbox.Session.getActiveUser = () => ({ getEmail: () => e }); };
+  const SHEAD = G.SHIPMENT_HEADERS;
+  const rowOf = obj => SHEAD.map(h => (obj[h] === undefined ? '' : obj[h]));
+
+  const reset = rows => {
+    SHEETS = [
+      makeSheet('出貨明細', SHEAD, rows || [], 1),
+      makeSheet('人員代碼',
+        ['業務代碼', '業務姓名', '業務email', '類別', '對應助理', '助理email', '發包分頁'],
+        [['LS', '小林', 'ls@waferlock.com', '零售', 'Vivi', 'vivi@waferlock.com', '零售-Sammi']], 1),
+    ];
+    props.DISPATCH_SHEET_NAME = '*';
+    props.DISPATCH_ASSISTANTS = 'vivi@waferlock.com';
+    props.DISPATCH_WAREHOUSE = 'wh@waferlock.com';
+    CACHE = {};
+  };
+
+  const ISSUE_ROW = () => rowOf({
+    '出貨單號': 'W5501-260825001', '客戶': '金宏鎖店', '出貨品項': 'L396 ×10',
+    '倉庫核單狀態': '有問題', '倉庫核單人': 'wh@waferlock.com',
+    '倉庫核單時間': '2026-08-25 14:00', '問題說明': '料號不符，實際是 L372N'
+  });
+
+  // ══ 🔴 助理必須看得到倉庫退回來的單 ══
+  {
+    reset([ISSUE_ROW()]);
+    const pend = G.getPendingShipments_();
+    ok(pend.length === 0,
+       '前提：有問題的列因為已有出貨單號，不會出現在「待鍵入」清單（這是黑洞的一半）');
+
+    const issues = G.getWarehouseIssues_();
+    ok(issues.length === 1,
+       '🔴 助理必須有一份清單看得到倉庫退回來的單，否則通知發了也沒有畫面能處理');
+    ok(issues[0]['問題說明'] === '料號不符，實際是 L372N',
+       '要帶出倉庫填的問題說明，助理才知道要改什麼');
+    ok(issues[0].row === 2, '要帶列號，送回去時才不必重新掃表');
+  }
+
+  // ══ 只撈「有問題」的，不可把已核／待核的也撈進來 ══
+  {
+    reset([
+      ISSUE_ROW(),
+      rowOf({ '出貨單號': 'A', '倉庫核單狀態': '已核' }),
+      rowOf({ '出貨單號': 'B', '倉庫核單狀態': '待核' }),
+      rowOf({ '出貨單號': 'C' }),
+    ]);
+    const issues = G.getWarehouseIssues_();
+    ok(issues.length === 1 && issues[0]['出貨單號'] === 'W5501-260825001',
+       '只撈「有問題」的，已核／待核／空白都不該進來');
+  }
+
+  // ══ 🔴 送回倉庫：狀態要真的改回待核，而且倉庫清單看得到 ══
+  {
+    reset([ISSUE_ROW()]);
+    asUser('vivi@waferlock.com');
+    const r = G.reopenWarehouse('W5501-260825001', '', 2);
+    ok(r.ok, '助理應能把單子送回倉庫｜' + r.message);
+
+    const s = G.openShipmentSheet_();
+    const st = String(s.sheet.getRange(2, s.col[G.normHeader_('倉庫核單狀態')]).getValue());
+    ok(st === '待核', '🔴 狀態要真的改回「待核」，實際「' + st + '」');
+
+    // 🔑 問題說明保留：倉庫重新看到這張單時要知道上次為什麼被退
+    const note = String(s.sheet.getRange(2, s.col[G.normHeader_('問題說明')]).getValue());
+    ok(/料號不符/.test(note),
+       '🔴 問題說明不可清空——倉庫要知道上次為什麼被退，否則得從頭再判斷一次');
+
+    // 核單人／時間要清掉：那是上一次核單的人，留著會讓人以為還是他負責
+    ok(!String(s.sheet.getRange(2, s.col[G.normHeader_('倉庫核單人')]).getValue()).trim(),
+       '核單人要清掉（那是上一次的人）');
+
+    // 🔴 最重要：倉庫的清單真的看得到它了嗎
+    CACHE = {};
+    const wh = G.getWarehouseCached_().rows;
+    ok(wh.some(x => x.shipNo === 'W5501-260825001'),
+       '🔴 送回去之後倉庫清單必須看得到——這才是「單子回來了」的定義');
+
+    // 送回去之後就不該再出現在助理的待修正清單
+    ok(G.getWarehouseIssues_().length === 0, '送回去後不該還留在助理的待修正清單');
+  }
+
+  // ══ 權限與狀態守門 ══
+  {
+    reset([ISSUE_ROW()]);
+    ok(!G.reopenWarehouseAs_('outsider@waferlock.com', 'W5501-260825001', '', 2).ok,
+       '🔴 非助理不可把單子送回倉庫（閘門在核心函式裡）');
+
+    reset([rowOf({ '出貨單號': 'W5501-260825001', '倉庫核單狀態': '已核' })]);
+    const r2 = G.reopenWarehouseAs_('vivi@waferlock.com', 'W5501-260825001', '', 2);
+    ok(!r2.ok && /已核/.test(r2.message),
+       '🔴 已核的不可送回——那等於推翻倉庫做完的事，且要說明原因');
+
+    reset([rowOf({ '出貨單號': 'W5501-260825001', '倉庫核單狀態': '待核' })]);
+    ok(!G.reopenWarehouseAs_('vivi@waferlock.com', 'W5501-260825001', '', 2).ok,
+       '待核的本來就在清單上，重送沒有意義');
+
+    reset([ISSUE_ROW()]);
+    ok(!G.reopenWarehouseAs_('vivi@waferlock.com', '不存在的單號', '', 0).ok,
+       '查無單號要明確失敗');
+  }
+
+  // ══ 稽核要留痕 ══
+  {
+    reset([ISSUE_ROW()]);
+    SHEETS.push(makeSheet('簽核紀錄',
+      ['時間', '操作者', '層級', '發包單號', '動作', '說明', '分頁', '列號'], [], 1));
+    CACHE = {};
+    G.reopenWarehouseAs_('vivi@waferlock.com', 'W5501-260825001', '已改成 L372N', 2);
+    const a = SHEETS.find(x => x.getName() === '簽核紀錄');
+    const rows = a.getRange(2, 1, Math.max(a.getLastRow() - 1, 1), 8).getValues();
+    ok(rows.some(r => /重新送倉庫核/.test(String(r[4]))),
+       '🔴 送回倉庫要留稽核——這是「誰在什麼時候把單子推回去的」唯一紀錄');
+  }
+
+  // ══ 畫面：助理頁要有這一區，倉庫頁要說明按下去會怎樣 ══
+  {
+    reset([ISSUE_ROW()]);
+    const block = G.warehouseIssueBlock_(G.getWarehouseIssues_());
+    ok(/料號不符/.test(block), '待修正卡片要顯示倉庫填的問題說明');
+    ok(/reopen\(/.test(block), '要有送回倉庫的按鈕');
+    ok(G.warehouseIssueBlock_([]) === '', '沒有待修正時不佔版面');
+
+    // 🔑 光測 warehouseIssueBlock_ 本身不夠——函式好好的但沒接進頁面的話，
+    //    助理照樣看不到單子，而測試會過（反向驗證抓到過這個漏洞）。
+    //    所以要測「整頁輸出」裡有沒有它。
+    const spage = G.shipBlock_('vivi@waferlock.com', [], {}, { at: '' }, [],
+      G.getWarehouseIssues_());
+    ok(/料號不符/.test(spage),
+       '🔴 待修正區必須真的接進出貨登錄頁——只有函式存在不算數');
+    ok(/function reopen\(/.test(spage),
+       '🔴 送回倉庫的前端函式也要接進去，否則按鈕按了沒反應');
+
+    const wpage = G.warehouseBlock_('wh@waferlock.com',
+      [{ shipNo: 'X', row: 2, customer: 'A', items: 'B' }], {}, { at: '' });
+    ok(/會先從清單移除/.test(wpage),
+       '🔴 倉庫要知道按「有問題」之後單子去哪了——否則只會看到它消失');
+    ok(/送回倉庫/.test(wpage), '也要知道它還會回來');
+  }
+
+  asUser('boss@waferlock.com');
+  reset([]);
+})();
+
 console.log('\n' + (fail ? '❌' : '✅') + ' 通過 ' + pass + '／失敗 ' + fail);
 process.exit(fail ? 1 : 0);
