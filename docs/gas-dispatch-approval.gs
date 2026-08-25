@@ -235,11 +235,13 @@ var INVOICE_OPTIONS = ['出貨待驗無發票', '電子計算機發票', '二聯
 // 經銷商在 LINE 傳貨的訊息現在是業務截圖丟給助理、助理自己讀圖去 TipTop key 單。
 // 這裡讓業務直接上傳截圖，AI 讀出客戶與品項，業務確認後送出即可，不必逐欄手打。
 //
-// ⚠ 金鑰、端點、請求格式**照抄 supabase/functions/rtc-recording/index.ts 裡
-//   已經在正式環境跑得動的那支**（inline_data + responseSchema），不要照最新的
-//   官方文件重寫——查文件當下看到的端點格式跟這支能跑的版本不一致，以能跑的為準。
+// ⚠ 請求格式（inline_data + responseSchema）照抄 supabase/functions/rtc-recording/index.ts
+//   裡已經在正式環境跑得動的那支，這部分沒問題。但**模型名稱會過期**——
+//   2026-08-25 正式環境實測 gemini-2.0-flash 已下架（HTTP 404 "no longer available"），
+//   Google 的錯誤訊息裡直接指定了替代型號，這裡照那個訊息換過。
+//   下次又 404 的話，看 Logger 印出的失敗內容，錯誤訊息通常會告訴你該換成什麼。
 var GEMINI_KEY_PROP = 'GEMINI_API_KEY';
-var GEMINI_MODEL = 'gemini-2.0-flash';
+var GEMINI_MODEL = 'gemini-3.6-flash';
 var QUICK_IMG_MAX_BYTES = 10 * 1024 * 1024;   // 10 MB，手機截圖遠小於此
 var QUICK_IMG_MIME_OK = {
   'image/jpeg': true,
