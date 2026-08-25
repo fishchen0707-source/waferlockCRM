@@ -238,10 +238,18 @@ var INVOICE_OPTIONS = ['出貨待驗無發票', '電子計算機發票', '二聯
 // ⚠ 請求格式（inline_data + responseSchema）照抄 supabase/functions/rtc-recording/index.ts
 //   裡已經在正式環境跑得動的那支，這部分沒問題。但**模型名稱會過期**——
 //   2026-08-25 正式環境實測 gemini-2.0-flash 已下架（HTTP 404 "no longer available"），
-//   Google 的錯誤訊息裡直接指定了替代型號，這裡照那個訊息換過。
-//   下次又 404 的話，看 Logger 印出的失敗內容，錯誤訊息通常會告訴你該換成什麼。
+//   Google 的錯誤訊息裡直接指定了替代型號 gemini-3.6-flash，換過後又遇到
+//   HTTP 503（該型號當下過載，暫時性的，不是型號不存在）。
+//
+// 所以模型名稱不是常數，是一份**依序嘗試的清單**：第一個打不通（不論 404 型號不存在
+// 還是 503 過載）就自動換下一個，全部都失敗才真的回報辨識失敗。
+//   [0] gemini-3-flash-preview — 純 "gemini-3-flash"（無版本號）查無此正式模型，
+//       這是查得到、最貼近的預覽版
+//   [1] gemini-3.6-flash — 已在正式環境實測過確實存在（Google 錯誤訊息親自指定的型號）
+// 之後若又 404／503，看 Logger 印出的失敗內容，把新的型號加進這份清單最前面即可，
+// 不用整支重寫。
 var GEMINI_KEY_PROP = 'GEMINI_API_KEY';
-var GEMINI_MODEL = 'gemini-3.6-flash';
+var GEMINI_MODELS = ['gemini-3-flash-preview', 'gemini-3.6-flash'];
 var QUICK_IMG_MAX_BYTES = 10 * 1024 * 1024;   // 10 MB，手機截圖遠小於此
 var QUICK_IMG_MIME_OK = {
   'image/jpeg': true,
@@ -4048,38 +4056,56 @@ function recognizeOrderImage(base64, mimeType) {
     required: ['customer', 'items', 'note', 'confidence']
   };
 
-  var resp;
-  try {
-    resp = UrlFetchApp.fetch(
-      'https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL +
-        ':generateContent?key=' + key,
-      {
-        method: 'post',
-        contentType: 'application/json',
-        payload: JSON.stringify({
-          contents: [{ parts: [
-            { text: prompt },
-            { inline_data: { mime_type: mimeType, data: base64 } }
-          ] }],
-          generationConfig: {
-            responseMimeType: 'application/json',
-            responseSchema: schema
-          }
-        }),
-        muteHttpExceptions: true
-      }
-    );
-  } catch (e1) {
-    Logger.log('Gemini 呼叫例外：' + e1);
-    return { ok: false, message: '辨識服務連線失敗，請稍後再試。' };
+  // 依序試 GEMINI_MODELS 清單，第一個打不通就換下一個——404（型號不存在／已下架）
+  // 與 503（暫時過載）都算「打不通」，用同一套退路處理：換一個型號通常比乾等或
+  // 對同一個過載的型號重試更快解決，而且不需要 Utilities.sleep 拖長使用者等待時間。
+  var resp = null, lastCode = 0, lastBody = '', usedModel = '';
+  for (var m = 0; m < GEMINI_MODELS.length; m++) {
+    var model = GEMINI_MODELS[m];
+    var attempt;
+    try {
+      attempt = UrlFetchApp.fetch(
+        'https://generativelanguage.googleapis.com/v1beta/models/' + model +
+          ':generateContent?key=' + key,
+        {
+          method: 'post',
+          contentType: 'application/json',
+          payload: JSON.stringify({
+            contents: [{ parts: [
+              { text: prompt },
+              { inline_data: { mime_type: mimeType, data: base64 } }
+            ] }],
+            generationConfig: {
+              responseMimeType: 'application/json',
+              responseSchema: schema
+            }
+          }),
+          muteHttpExceptions: true
+        }
+      );
+    } catch (e1) {
+      Logger.log('Gemini 呼叫例外｜' + model + '｜' + e1);
+      lastCode = 0; lastBody = String(e1);
+      continue;
+    }
+    var attemptCode = attempt.getResponseCode();
+    Logger.log('Gemini 辨識呼叫｜' + email + '｜' + model + '｜HTTP ' + attemptCode + '｜圖片 ' +
+      Math.round(bytes.length / 1024) + ' KB');
+    if (attemptCode >= 200 && attemptCode < 300) {
+      resp = attempt; usedModel = model;
+      break;
+    }
+    lastCode = attemptCode;
+    lastBody = attempt.getContentText();
+    Logger.log('Gemini 失敗內容｜' + model + '｜' + lastBody.slice(0, 300));
   }
 
-  var code = resp.getResponseCode();
-  Logger.log('Gemini 辨識呼叫｜' + email + '｜HTTP ' + code + '｜圖片 ' +
-    Math.round(bytes.length / 1024) + ' KB');
-  if (code < 200 || code >= 300) {
-    Logger.log('Gemini 失敗內容：' + resp.getContentText().slice(0, 300));
-    return { ok: false, message: '辨識失敗（HTTP ' + code + '），請稍後再試或改用原本的下單頁。' };
+  if (!resp) {
+    return { ok: false, message: '辨識服務目前打不通（HTTP ' + (lastCode || '連線失敗') +
+      '），請稍後再試或改用原本的下單頁。' };
+  }
+  if (usedModel !== GEMINI_MODELS[0]) {
+    Logger.log('⚠ 第一個模型（' + GEMINI_MODELS[0] + '）打不通，改用 ' + usedModel + ' 才成功。');
   }
 
   var parsed;

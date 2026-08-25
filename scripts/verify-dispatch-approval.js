@@ -3159,6 +3159,40 @@ console.log('\n【31】截圖下單');
     sandbox.UrlFetchApp.fetch = origFetch;
   }
 
+  // ── 模型清單容錯：第一個模型打不通（404 或 503）就自動換下一個
+  // 這是 2026-08-25 正式環境真實遇到的情況（先 404 型號下架，換了型號後又 503 過載），
+  // 不是想像出來的邊界案例。
+  {
+    const calledModels = [];
+    sandbox.UrlFetchApp.fetch = (u) => {
+      const m = /\/models\/([^:]+):/.exec(u);
+      calledModels.push(m ? m[1] : '?');
+      if (calledModels.length === 1) {
+        // 第一個模型：模擬 503 過載
+        return { getResponseCode: () => 503, getContentText: () => '{"error":{"message":"overloaded"}}' };
+      }
+      const body = { customer: '客戶A', items: [{ model: 'L901', qty: 1, spec: '' }], note: '', confidence: 'high' };
+      return {
+        getResponseCode: () => 200,
+        getContentText: () => JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(body) }] } }] })
+      };
+    };
+    const r = G.recognizeOrderImage(B64, 'image/jpeg');
+    ok(r.ok, '🔴 第一個模型 503 時，應自動換下一個模型且最終成功｜' + r.message);
+    ok(calledModels.length === 2, '應該打了兩次（第一個失敗、第二個成功），實際 ' + calledModels.length + ' 次');
+    ok(calledModels[0] === G.GEMINI_MODELS[0] && calledModels[1] === G.GEMINI_MODELS[1],
+       '🔴 呼叫順序要照 GEMINI_MODELS 清單走，實際：' + calledModels.join(' → '));
+    sandbox.UrlFetchApp.fetch = origFetch;
+  }
+
+  // ── 模型清單容錯：全部模型都打不通才真的回報失敗
+  {
+    sandbox.UrlFetchApp.fetch = () => ({ getResponseCode: () => 503, getContentText: () => 'still down' });
+    const r = G.recognizeOrderImage(B64, 'image/jpeg');
+    ok(!r.ok, '全部模型都失敗時應明確回報失敗，不可假裝成功');
+    sandbox.UrlFetchApp.fetch = origFetch;
+  }
+
   // ── 送出：多品項合併、案件號、不寫發包表
   {
     const beforeSalesRows = SHEETS.find(s => s._name === SALES_SHEET)._grid.length;
