@@ -4262,6 +4262,43 @@ console.log('\n【37】倉庫回報有問題後，單子不可以消失');
     ok(/料號不符/.test(msg), '要帶出上次倉庫回報的問題，倉庫才知道在看什麼');
   }
 
+  // ══ 🔴 日期不可以變成原始 JS 字串 ══
+  //
+  // 真實通知截圖看到：「登錄：fish.chen@waferlock.com　Wed Aug 12 2026 09:18:00
+  // GMT+0800 (台北標準時間)」。根因是 readShipmentRow_ 用 String(v) 硬轉 Date，
+  // 而那支被 11 個地方共用（通知、稽核、退單…），所以修在源頭。
+  {
+    ok(G.fmtWhen_(new Date(2026, 7, 12, 9, 18)) === '2026-08-12 09:18',
+       '🔴 有時分的要保留時間——砍掉的話同一天的兩筆分不出先後');
+    ok(G.fmtWhen_(new Date(2026, 7, 12)) === '2026-08-12',
+       '純日期只給日期，不要補上 00:00');
+    ok(G.fmtWhen_('2026-08-12 09:18') === '2026-08-12 09:18', '已經是字串就原樣回');
+    ok(G.fmtWhen_('') === '' && G.fmtWhen_(null) === '', '空值不出錯');
+
+    const row = rowOf({ '出貨單號': 'W-DATE', '倉庫核單狀態': '有問題' });
+    reset([row]);
+    const sh = SHEETS.find(x => x.getName() === '出貨明細');
+    sh.getRange(2, SHEAD.indexOf('登錄時間') + 1).setValue(new Date(2026, 7, 12, 9, 18));
+    CACHE = {};
+    const rec = G.readShipmentRow_(G.openShipmentSheet_(), 2);
+    ok(rec['登錄時間'] === '2026-08-12 09:18',
+       '🔴 readShipmentRow_ 讀到 Date 要格式化，實際「' + rec['登錄時間'] + '」');
+    ok(!/GMT|台北標準時間/.test(rec['登錄時間']),
+       '🔴 絕對不可以出現 GMT 那一長串——它會直接貼進 Chat 通知');
+  }
+
+  // ══ 沒有業務可對時，不要說「請確認」 ══
+  {
+    reset([ISSUE_ROW()]);   // 這一列沒有下單業務、也沒有發包單號
+    sent = [];
+    asUser('vivi@waferlock.com');
+    G.reopenWarehouse('W5501-260825001', 'L372N ×10', 2);
+    const msg = JSON.parse(sent[0]).text;
+    ok(/業務：查不到/.test(msg), '查不到業務仍要明講');
+    ok(!/請確認/.test(msg),
+       '🔴 找不到業務時不該接「請確認」——那句是講給業務聽的，沒人可對就是對著空氣說話');
+  }
+
   // ══ 沒改品項也要能送回（可能是外部因素排除了） ══
   {
     reset([ISSUE_ROW()]);

@@ -3097,8 +3097,33 @@ function findByOrderNo_(env, orderNo, hintSheet, hintRow) {
 
 /** 日期欄：試算表回傳的是 Date 物件，直接 String() 會變成一長串英文格式 */
 function fmtDate_(v) {
-  if (v instanceof Date) return Utilities.formatDate(v, TZ, 'yyyy-MM-dd');
+  if (isDate_(v)) return Utilities.formatDate(v, TZ, 'yyyy-MM-dd');
   return String(v == null ? '' : v).trim();
+}
+
+/**
+ * 日期時間欄用的格式化：**有時間就保留時間**，純日期就只給日期。
+ *
+ * ⚠ 不能一律用 fmtDate_（只輸出 yyyy-MM-dd）——出貨明細裡「登錄時間」「倉庫核單時間」
+ *   是有時分的，砍掉時間會讓「同一天的兩筆」分不出先後。
+ * ⚠ 也不能用 String() 硬轉——那會變成
+ *   「Wed Aug 12 2026 09:18:00 GMT+0800 (台北標準時間)」直接出現在 Chat 通知裡。
+ */
+function fmtWhen_(v) {
+  if (!isDate_(v)) return String(v == null ? '' : v).trim();
+  var hasTime = v.getHours() || v.getMinutes() || v.getSeconds();
+  return Utilities.formatDate(v, TZ, hasTime ? 'yyyy-MM-dd HH:mm' : 'yyyy-MM-dd');
+}
+
+/**
+ * 是不是 Date。**刻意不用 `v instanceof Date`**：
+ * `instanceof` 靠原型鏈比對，跨 realm 就會失效（測試用 vm 跑，Date 是另一個 realm 的，
+ * `instanceof` 一律回 false）。正式 GAS 只有一個 realm 碰不到，但那代表
+ * 「測試過的行為」跟「正式跑的行為」不一樣——那比 bug 更難查。
+ * toString 標籤是跨 realm 安全的。
+ */
+function isDate_(v) {
+  return Object.prototype.toString.call(v) === '[object Date]' && !isNaN(v.getTime());
 }
 
 /** 金額欄：加千分位。不用 toLocaleString，避免不同執行環境的地區設定差異 */
@@ -6771,7 +6796,14 @@ function readShipmentRow_(s, row) {
   for (var i = 0; i < SHIPMENT_HEADERS.length; i++) {
     var name = SHIPMENT_HEADERS[i];
     var c = s.col[name];
-    rec[name] = (c && c <= vals.length) ? String(vals[c - 1] == null ? '' : vals[c - 1]).trim() : '';
+    var v = (c && c <= vals.length) ? vals[c - 1] : '';
+    // ⚠ Date 一定要走 fmtDate_，不能用 String() 硬轉——
+    //   String(new Date()) 會變成「Wed Aug 12 2026 09:18:00 GMT+0800 (台北標準時間)」
+    //   那一長串直接出現在 Chat 通知裡（2026-08-25 真實通知截圖看到）。
+    //   這支被 11 個地方共用（通知、稽核、退單…），所以修在這裡一次解決。
+    //   其他讀表的地方（buildShipIndex_、getPendingShipments_）本來就這樣做，
+    //   是這支漏了。
+    rec[name] = fmtWhen_(v);
   }
   return rec;
 }
@@ -6868,7 +6900,10 @@ function notifyShipReopened_(rec, row, change) {
   lines.push('出貨品項：');
   lines.push(rec[COL_S_ITEMS]);
   lines.push('');
-  lines.push(salesLine_(rec, uids) + '　← 你的單被改過，請確認');
+  // 找不到業務時不要加「請確認」——那句是講給業務聽的，
+  // 沒有業務可對的時候接在後面只是一句對著空氣說的話。
+  var sl = salesLine_(rec, uids);
+  lines.push(sl.text + (sl.found ? '　← 你的單被改過，請確認' : ''));
   lines.push('登錄：' + rec[COL_S_BY] + '　' + rec[COL_S_AT]);
 
   var link = deepLink_({ page: 'warehouse', ship: rec[COL_S_SHIP_NO], rw: row || '' });
@@ -6904,10 +6939,10 @@ function salesLine_(rec, uids) {
     for (var code in roster) {
       if (!Object.prototype.hasOwnProperty.call(roster, code)) continue;
       if (roster[code].sales === who && roster[code].salesMail) {
-        return '業務：' + mentionOf_(roster[code].salesMail, who, uids);
+        return { text: '業務：' + mentionOf_(roster[code].salesMail, who, uids), found: true };
       }
     }
-    return '業務：' + who + '（對照表查無 email，無法 @到本人）';
+    return { text: '業務：' + who + '（對照表查無 email，無法 @到本人）', found: true };
   }
 
   // ② 退回原本的做法：從發包單號前綴反解代碼
@@ -6916,14 +6951,17 @@ function salesLine_(rec, uids) {
     var c = codeOf_(dispatchNo);
     var hit = c ? roster[c] : null;
     if (hit && (hit.sales || hit.salesMail)) {
-      return '業務：' + mentionOf_(hit.salesMail, hit.sales || hit.salesMail, uids);
+      return { text: '業務：' + mentionOf_(hit.salesMail, hit.sales || hit.salesMail, uids),
+               found: true };
     }
-    if (c) return '業務：代碼 ' + c + ' 查無對應（請補「人員代碼」對照表）';
+    if (c) {
+      return { text: '業務：代碼 ' + c + ' 查無對應（請補「人員代碼」對照表）', found: false };
+    }
   }
 
   // ③ 兩條路都沒有。**明講而不是靜默略過**——業務不知道自己的單卡住了，
   //    比訊息裡多一行難看的字糟得多。
-  return '業務：查不到（這張單沒有「下單業務」也沒有發包單號）';
+  return { text: '業務：查不到（這張單沒有「下單業務」也沒有發包單號）', found: false };
 }
 
 /**
@@ -6958,7 +6996,7 @@ function notifyShipmentIssue_(rec) {
   lines.push('請 ' + mentionOf_(rec[COL_S_BY], rec[COL_S_BY] || '登錄人', uids) +
     ' 處理（登錄人）');
 
-  lines.push(salesLine_(rec, uids));
+  lines.push(salesLine_(rec, uids).text);
   lines.push('倉庫回報：' + rec[COL_S_WH_BY] + '　' + rec[COL_S_WH_AT]);
 
   var link = deepLink_({ page: 'ship', ship: rec[COL_S_SHIP_NO] });
