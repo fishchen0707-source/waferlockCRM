@@ -1517,7 +1517,16 @@ function warehouseBlock_(email, rows, roles, meta) {
       'm.innerHTML=\'<div class="msg \'+c+\'">\'+t+\'</div>\';window.scrollTo(0,0);}' +
     // 發票上傳。google.script.run 傳不了 File 物件，要先讀成 base64 再送。
     // 檔名／型別／大小都在伺服器端再驗一次——前端擋掉的只是體驗，不是安全。
-    'function upl(no,cardId,rw){' +
+    // 這一段還沒登錄的發票資料嗎？（選了檔案、或打了號碼，但還沒按登錄）
+    'function pendInv(cardId){' +
+      'var inp=document.getElementById("f_"+cardId);' +
+      'var numEl=document.getElementById("n_"+cardId);' +
+      'if(!inp||!numEl)return false;' +
+      'if(inp.getAttribute("data-done")==="1")return false;' +
+      'return !!(inp.files&&inp.files[0])||!!(numEl.value||"").trim();' +
+    '}' +
+    // after：登錄成功後要接著做的事（用來串「先登錄發票、再送出核單」）
+    'function upl(no,cardId,rw,after){' +
       'var inp=document.getElementById("f_"+cardId);' +
       'var numEl=document.getElementById("n_"+cardId);' +
       'var out=document.getElementById("u_"+cardId);' +
@@ -1534,7 +1543,9 @@ function warehouseBlock_(email, rows, roles, meta) {
       'function go(name,type,b64){' +
         'google.script.run' +
           '.withSuccessHandler(function(res){btn.disabled=false;btn.textContent=ob;' +
-            'if(res.ok){out.textContent="✅ "+res.message;out.className="uplmsg ok";}' +
+            'if(res.ok){out.textContent="✅ "+res.message;out.className="uplmsg ok";' +
+              'inp.setAttribute("data-done","1");' +
+              'if(after)after();}' +
             'else{out.textContent=res.message;out.className="uplmsg bad";}})' +
           '.withFailureHandler(function(e){btn.disabled=false;btn.textContent=ob;' +
             'out.textContent="連線失敗："+e.message;out.className="uplmsg bad";})' +
@@ -1549,6 +1560,14 @@ function warehouseBlock_(email, rows, roles, meta) {
       'rd.readAsDataURL(f);' +
     '}' +
     'function wact(no,dec,cardId,rw){' +
+      // 🔑 選了發票卻沒按「登錄」就直接送出，是這個畫面最容易踩的坑：
+      //   兩個動作是分開的按鈕，但使用者的心智模型是「填完按送出」。
+      //   實測踩過——上傳了圖片，Chat 通知卻顯示「未上傳」，因為檔案根本沒送出去。
+      //   所以這裡先幫他登錄，成功了才繼續送核單；登錄失敗就停住，不要留下
+      //   「核單過了但發票沒進去」的狀態（那之後沒有任何地方會提醒要補）。
+      'if(pendInv(cardId)){' +
+        'upl(no,cardId,rw,function(){wact(no,dec,cardId,rw);});' +
+        'return;}' +
       'var note="";' +
       'if(dec==="issue"){note=prompt("問題說明（會通知助理與業務）：")||"";' +
         'if(!note.trim()){return;}}' +
@@ -6617,13 +6636,28 @@ function notifyShipmentArchive_(rec) {
   lines.push('發票號碼：' + (rec[COL_S_INVOICE_NO] || '未登錄'));
   // 發票電子檔連結。助理點這條自己下載自己寄，倉庫不必再印、不必再問要紙本還是電子檔。
   // 沒上傳就明講「未上傳」——留白會讓人以為是自己漏看，然後又跑去問倉庫。
-  lines.push('發票電子檔：' + (rec[COL_S_INVOICE_URL] || '未上傳'));
+  // 組成 Chat 的連結格式 <網址|文字>，點一下就開得起來。
+  // 裸網址雖然多半會自動變連結，但那串 Drive 網址很長，會把整則通知撐開。
+  lines.push('發票電子檔：' + invoiceLink_(rec[COL_S_INVOICE_URL]));
   if (rec[COL_S_NOTE]) lines.push('備註：' + rec[COL_S_NOTE]);
   lines.push('');
   lines.push('登錄：' + rec[COL_S_BY] + '　' + rec[COL_S_AT]);
   lines.push('倉庫核單：' + rec[COL_S_WH_BY] + '　' + rec[COL_S_WH_AT]);
 
   return postWarehouseChat_(lines.join('\n'));
+}
+
+/**
+ * 發票電子檔在 Chat 訊息裡的呈現。
+ *
+ * ⚠ 「未上傳」這三個字很重要，不要改成留白：倉庫核完單之後，
+ *   這則備存通知是唯一會提醒「這張單的發票還沒進系統」的地方。
+ *   留白的話沒有人會發現漏了。
+ */
+function invoiceLink_(url) {
+  url = String(url || '').trim();
+  if (!url) return '未上傳';
+  return '<' + url + '|📄 開啟發票>';
 }
 
 /**

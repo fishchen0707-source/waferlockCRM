@@ -2434,8 +2434,10 @@ console.log('\n【26】發票電子檔上傳');
   r = G.submitWarehouse('W5501-260812001', 'done', '', 2);
   ok(r.ok, '核單應成功｜' + r.message);
   ok(sent.length === 1, '核單應送出一則備存訊息');
-  ok(/發票電子檔：https:\/\/drive\.google\.com\//.test(sent[0]),
-     '🔴 備存訊息要帶發票下載連結——這正是助理不必再找倉庫的原因');
+  // 格式是 Chat 的 <網址|文字>，不是裸網址——那串 Drive 網址很長，會把通知撐開。
+  ok(/發票電子檔：<https:\/\/drive\.google\.com\/[^|]*\|[^>]+>/.test(sent[0]),
+     '🔴 備存訊息要帶可點的發票連結——這正是助理不必再找倉庫的原因');
+  ok(/📄/.test(sent[0]), '連結要有看得懂的文字，不是一長串網址');
 
   reset(); sent = [];
   r = G.submitWarehouse('W5501-260812001', 'done', '', 2);
@@ -4000,6 +4002,33 @@ console.log('\n【36】貨運單：上傳、配對、回填');
     ok(n2 === 0, '🔴 同一份檔案不可被重複收進佇列');
 
     sandbox.DriveApp.getFolderById = origFolder;
+  }
+
+  // ══ 發票：沒上傳時要明講，別留白 ══
+  {
+    ok(G.invoiceLink_('') === '未上傳',
+       '🔴 沒發票時要寫「未上傳」——備存通知是唯一會提醒漏發票的地方，留白沒人會發現');
+    ok(G.invoiceLink_('   ') === '未上傳', '只有空白也算沒上傳');
+    const L = G.invoiceLink_('https://drive.google.com/file/d/ABC/view');
+    ok(/^<https:\/\/drive\.google\.com\/file\/d\/ABC\/view\|/.test(L) && /-->?$|>$/.test(L),
+       '有發票時要組成 Chat 的 <網址|文字> 格式');
+  }
+
+  // ══ 🔑 選了發票卻沒按「登錄」就直接送出：核單頁最容易踩的坑 ══
+  //
+  // 2026-08-25 實測踩到：上傳了圖片、Chat 通知卻顯示「未上傳」，
+  // 因為發票「登錄」與「已撿料完成」是兩顆分開的按鈕，檔案根本沒送出去。
+  {
+    // 要給一列，沒有待核單時 warehouseBlock_ 會提早返回、不含腳本
+    const page = G.warehouseBlock_('wh@waferlock.com',
+      [{ shipNo: 'W5501-1', row: 2, customer: 'A', items: 'X' }], {}, { at: '' });
+    ok(/function pendInv\(/.test(page),
+       '🔴 要能偵測「選了發票但還沒登錄」的狀態');
+    ok(/if\(pendInv\(cardId\)\)\{/.test(page),
+       '🔴 送出核單前要先檢查有沒有沒登錄的發票');
+    ok(/upl\(no,cardId,rw,function\(\)\{wact\(/.test(page),
+       '🔴 要先登錄發票、成功後才接著送核單——不可留下「核單過了但發票沒進去」的狀態');
+    ok(/data-done/.test(page), '登錄成功要留記號，避免重複上傳');
   }
 
   // ══ 人工指定要能真的套用回出貨明細（否則待指定分頁是死路） ══
