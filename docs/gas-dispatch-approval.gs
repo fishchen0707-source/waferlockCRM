@@ -4601,9 +4601,10 @@ function uploadShippingDocAs_(email, fileName, mimeType, base64) {
       ' MB 超過上限 ' + (INVOICE_MAX_BYTES / 1048576) + ' MB。' };
   }
 
-  var folderId = PropertiesService.getScriptProperties().getProperty(SHIPDOC_FOLDER_PROP);
+  var folderId = shipDocFolderId_();
   if (!folderId) {
-    return { ok: false, message: '未設定指令碼屬性 ' + SHIPDOC_FOLDER_PROP + '（貨運單 Drive 資料夾 ID）。' };
+    return { ok: false, message: '未設定指令碼屬性 ' + SHIPDOC_FOLDER_PROP +
+      '（或 SHIPMENT_FOLDER_ID）——不知道要把貨運單存到哪個 Drive 資料夾。' };
   }
 
   var file;
@@ -4652,8 +4653,27 @@ function processShipDocQueue() {
   try { q = openAuxSheet_(SHIPDOC_SHEET, SHIPDOC_HEAD); }
   catch (err) { Logger.log('❌ 開佇列失敗：' + err); return; }
 
+  // 🔑 先把「直接丟進 Drive 資料夾」的檔案收進佇列。
+  //
+  // ⚠ 這條路不是備案，是**主要路徑之一**：倉庫用手機的 Drive app 丟檔比開網頁快，
+  //   而且既有的貨運單管線（gas-shipment-intake.gs）本來就是掃資料夾的，
+  //   使用者理所當然會這樣預期。2026-08-25 實測就是這樣踩到的——
+  //   檔案丟進資料夾了，佇列卻說是空的，看起來像功能壞掉。
+  var found = enqueueFolderShipDocs_(q);
+  if (found) Logger.log('從 Drive 資料夾收進 ' + found + ' 份新檔案。');
+
   var last = q.sheet.getLastRow();
-  if (last < 2) { Logger.log('佇列是空的。'); return; }
+  if (last < 2) {
+    // 訊息要講清楚「所以現在該做什麼」——只說「空的」會讓人以為是壞了。
+    Logger.log('佇列裡沒有任何檔案，Drive 資料夾裡也沒有沒處理過的 PDF。');
+    Logger.log('');
+    Logger.log('兩種放檔案的方式都可以：');
+    Logger.log('  ① 直接把 PDF 丟進 Drive 的貨運單資料夾（手機的 Drive app 也行）');
+    Logger.log('  ② 開網頁 →「🚚 貨運單」頁籤 → 選檔上傳');
+    Logger.log('');
+    Logger.log('設定對不對？執行 checkShipDocSetup()。');
+    return;
+  }
 
   var cStatus = q.col[normHeader_('狀態')];
   var cFile = q.col[normHeader_('檔案ID')];
@@ -4676,6 +4696,323 @@ function processShipDocQueue() {
     return;   // 一次只做一份
   }
   Logger.log('沒有待辨識的檔案。');
+}
+
+/**
+ * 貨運單資料夾 ID。優先用本功能專屬的屬性；沒設就沿用既有貨運單管線那顆。
+ *
+ * ⚠ 沿用 SHIPMENT_FOLDER_ID 是刻意的：使用者本來就把貨運單丟在那個資料夾，
+ *   要求他們為了新功能再開一顆、再改習慣，只會讓「檔案丟了卻沒反應」更常發生。
+ */
+function shipDocFolderId_() {
+  var props = PropertiesService.getScriptProperties();
+  return String(props.getProperty(SHIPDOC_FOLDER_PROP) ||
+                props.getProperty('SHIPMENT_FOLDER_ID') || '').trim();
+}
+
+/**
+ * 掃 Drive 資料夾，把還沒進佇列的 PDF 收進來。回傳新增了幾份。
+ *
+ * 用**檔案 ID** 判斷有沒有處理過，不是檔名——檔名會重複（每天都叫「託運明細」），
+ * 用檔名比對會漏掉真正的新檔案，而症狀是「這份怎麼都不處理」。
+ */
+function enqueueFolderShipDocs_(q) {
+  var folderId = shipDocFolderId_();
+  if (!folderId) return 0;
+
+  var known = {};
+  var last = q.sheet.getLastRow();
+  var cFile = q.col[normHeader_('檔案ID')];
+  if (last >= 2) {
+    var ids = q.sheet.getRange(2, cFile, last - 1, 1).getValues();
+    for (var i = 0; i < ids.length; i++) {
+      var v = String(ids[i][0] || '').trim();
+      if (v) known[v] = true;
+    }
+  }
+
+  var folder;
+  try { folder = DriveApp.getFolderById(folderId); }
+  catch (err) { Logger.log('⚠ 開貨運單資料夾失敗：' + err); return 0; }
+
+  var added = 0;
+  var it = folder.getFiles();
+  while (it.hasNext()) {
+    var f = it.next();
+    if (known[f.getId()]) continue;
+    var mime = f.getMimeType();
+    if (!INVOICE_MIME_OK[mime]) continue;   // 資料夾裡可能有別的東西，只收 PDF／圖片
+
+    var rec = {};
+    rec[normHeader_('上傳時間')] =
+      Utilities.formatDate(f.getDateCreated(), TZ, 'yyyy-MM-dd HH:mm');
+    rec[normHeader_('檔名')] = f.getName();
+    rec[normHeader_('檔案ID')] = f.getId();
+    rec[normHeader_('上傳人')] = '(直接放進資料夾)';
+    rec[normHeader_('狀態')] = SHIPDOC_PENDING;
+    var line = [];
+    for (var h = 0; h < SHIPDOC_HEAD.length; h++) {
+      line.push(rec[normHeader_(SHIPDOC_HEAD[h])] || '');
+    }
+    q.sheet.appendRow(line);
+    added++;
+  }
+  return added;
+}
+
+/**
+ * 【診斷】貨運單功能的設定檢查。編輯器執行，不寫入任何資料。
+ *
+ * ⚠ 「檔案丟了卻沒反應」有好幾種原因（資料夾沒設、設錯一顆、觸發器沒建、
+ *   檔案不是 PDF），但症狀全都一樣。與其一個個猜，不如一次全印出來。
+ */
+function checkShipDocSetup() {
+  var props = PropertiesService.getScriptProperties();
+
+  Logger.log('── 1. 貨運單資料夾 ──');
+  var own = String(props.getProperty(SHIPDOC_FOLDER_PROP) || '').trim();
+  var legacy = String(props.getProperty('SHIPMENT_FOLDER_ID') || '').trim();
+  Logger.log(SHIPDOC_FOLDER_PROP + '：' + (own || '(未設定)'));
+  Logger.log('SHIPMENT_FOLDER_ID：' + (legacy || '(未設定)') + '　← 既有貨運單管線用的');
+  var fid = shipDocFolderId_();
+  if (!fid) {
+    Logger.log('❌ 兩顆都沒設 → 掃不到資料夾，也無法從網頁上傳。');
+  } else {
+    Logger.log('實際會用：' + fid + (own ? '（專屬）' : '（沿用既有那顆）'));
+    try {
+      var folder = DriveApp.getFolderById(fid);
+      Logger.log('✅ 資料夾名稱：' + folder.getName());
+      var it = folder.getFiles(), n = 0, okType = 0, names = [];
+      while (it.hasNext() && n < 50) {
+        var f = it.next(); n++;
+        if (INVOICE_MIME_OK[f.getMimeType()]) { okType++; if (names.length < 5) names.push(f.getName()); }
+      }
+      Logger.log('　 檔案 ' + n + ' 份，其中可處理的（PDF／圖片）' + okType + ' 份');
+      if (names.length) Logger.log('　 例如：' + names.join('、'));
+      if (n && !okType) Logger.log('⚠ 資料夾裡有檔案但沒有一份是 PDF 或圖片。');
+    } catch (err) {
+      Logger.log('❌ 開資料夾失敗（ID 錯或沒權限）：' + err);
+    }
+  }
+
+  Logger.log('');
+  Logger.log('── 2. 佇列 ──');
+  try {
+    var q = openAuxSheet_(SHIPDOC_SHEET, SHIPDOC_HEAD);
+    var last = q.sheet.getLastRow();
+    Logger.log('分頁「' + SHIPDOC_SHEET + '」共 ' + Math.max(last - 1, 0) + ' 列');
+    if (last >= 2) {
+      var cS = q.col[normHeader_('狀態')];
+      var st = q.sheet.getRange(2, cS, last - 1, 1).getValues();
+      var cnt = {};
+      for (var i = 0; i < st.length; i++) {
+        var k = String(st[i][0] || '(空)').trim();
+        cnt[k] = (cnt[k] || 0) + 1;
+      }
+      for (var k2 in cnt) {
+        if (Object.prototype.hasOwnProperty.call(cnt, k2)) Logger.log('　 ' + k2 + '：' + cnt[k2] + ' 筆');
+      }
+    }
+  } catch (err) { Logger.log('❌ 開佇列失敗：' + err); }
+
+  Logger.log('');
+  Logger.log('── 3. 時間觸發器 ──');
+  var trigs = ScriptApp.getProjectTriggers();
+  var hit = 0;
+  for (var t = 0; t < trigs.length; t++) {
+    if (trigs[t].getHandlerFunction() === 'processShipDocQueue') hit++;
+  }
+  Logger.log(hit ? '✅ 已設定 ' + hit + ' 個 processShipDocQueue 觸發器'
+                 : '❌ 沒有 processShipDocQueue 的觸發器 → 檔案永遠不會被自動處理。\n' +
+                   '　 到「觸發條件」新增：函式 processShipDocQueue，時間驅動，每 5 分鐘。');
+
+  Logger.log('');
+  Logger.log('── 4. 其他前提 ──');
+  Logger.log('GEMINI_API_KEY：' + (props.getProperty(GEMINI_KEY_PROP) ? '✅' : '❌ 未設定'));
+  Logger.log('DISPATCH_WAREHOUSE：' + (props.getProperty('DISPATCH_WAREHOUSE') || '(未設定，無人能從網頁上傳)'));
+}
+
+/**
+ * 把「貨運單待指定」裡人工填好的對應關係套用到出貨明細。
+ *
+ * 用法：在待指定分頁的「對應出貨單號」欄填上出貨單號 → 執行這支（或設觸發器）。
+ *
+ * ⚠ 沒有這一支，待指定分頁就是**死路**——人填了對應單號卻沒有任何程式會讀它，
+ *   而且填的人不會知道，只會以為系統壞了。（2026-08-25 補上，原本漏了。）
+ *
+ * ⚠ 找不到那張出貨單、或那一列已經有貨運單號時**不寫入並在分頁上說明原因**，
+ *   不是靜默跳過——人工指定的東西沒生效卻沒說，比自動配對失敗更難察覺。
+ */
+function applyShipWaiting() {
+  var w, s;
+  try {
+    w = openAuxSheet_(SHIPWAIT_SHEET, SHIPWAIT_HEAD);
+    s = openShipmentSheet_();
+  } catch (err) { Logger.log('❌ 開分頁失敗：' + err); return; }
+
+  var last = w.sheet.getLastRow();
+  if (last < 2) { Logger.log('待指定分頁是空的。'); return; }
+
+  var cTarget = w.col[normHeader_('對應出貨單號')];
+  var cState = w.col[normHeader_('處理狀態')];
+  var cTrack = w.col[normHeader_('貨運單號')];
+  var cDate = w.col[normHeader_('貨運日期')];
+
+  // 出貨單號 → 列號（正規化後比對，容忍空白與全形）
+  var idx = {};
+  var sLast = s.sheet.getLastRow();
+  if (sLast >= 2) {
+    var cShipNo = s.col[normHeader_(COL_S_SHIP_NO)];
+    var cHas = s.col[normHeader_(COL_S_TRACK_NO)];
+    var rows = s.sheet.getRange(2, 1, sLast - 1, s.sheet.getLastColumn()).getValues();
+    for (var i = 0; i < rows.length; i++) {
+      var no = normKey_(rows[i][cShipNo - 1]);
+      if (!no) continue;
+      (idx[no] = idx[no] || []).push({
+        row: i + 2, has: String(rows[i][cHas - 1] || '').trim()
+      });
+    }
+  }
+
+  var vals = w.sheet.getRange(2, 1, last - 1, w.sheet.getLastColumn()).getValues();
+  var done = 0, failed = 0;
+
+  for (var k = 0; k < vals.length; k++) {
+    var state = String(vals[k][cState - 1] || '').trim();
+    if (state !== '待指定') continue;
+    var target = String(vals[k][cTarget - 1] || '').trim();
+    if (!target) continue;   // 還沒填，不動它
+
+    var row = k + 2;
+    var key = normKey_(target);
+    var hits = idx[key] || [];
+
+    if (!hits.length) {
+      w.sheet.getRange(row, cState).setValue('❌ 查無此出貨單號');
+      failed++; continue;
+    }
+    if (hits.length > 1) {
+      w.sheet.getRange(row, cState).setValue('❌ 出貨明細有 ' + hits.length + ' 列同單號，無法決定');
+      failed++; continue;
+    }
+    if (hits[0].has) {
+      w.sheet.getRange(row, cState).setValue('❌ 該列已有貨運單號 ' + hits[0].has);
+      failed++; continue;
+    }
+
+    s.sheet.getRange(hits[0].row, s.col[normHeader_(COL_S_TRACK_NO)])
+      .setValue(String(vals[k][cTrack - 1] || '').trim());
+    var d = String(vals[k][cDate - 1] || '').trim();
+    if (d) s.sheet.getRange(hits[0].row, s.col[normHeader_(COL_S_TRACK_AT)]).setValue(d);
+    w.sheet.getRange(row, cState).setValue('✅ 已套用');
+    done++;
+  }
+
+  SpreadsheetApp.flush();
+  if (done) invalidateWarehouseCache_();
+  Logger.log('套用完成：成功 ' + done + ' 筆，失敗 ' + failed + ' 筆。');
+  if (!done && !failed) {
+    Logger.log('（沒有任何一列填了「對應出貨單號」，所以沒東西可套用。）');
+  }
+}
+
+/**
+ * 【診斷】為什麼配對不到？把「待指定」的每一筆拿去跟出貨明細實際的值比對，
+ * 印出雙方的原始寫法與正規化後的樣子。編輯器執行，不寫入任何資料。
+ *
+ * ⚠ 存在的理由：配對不到有好幾種原因（收件人寫法不同、出貨明細根本沒那筆、
+ *   已經有貨運單號被排除），但結果一律是「待指定」，看不出差別。
+ *   猜錯方向去改比對邏輯，可能讓誤配對變多——那比配對不到危險得多。
+ */
+function debugShipMatch() {
+  var s;
+  try { s = openShipmentSheet_(); }
+  catch (err) { Logger.log('❌ 開出貨明細失敗：' + err); return; }
+
+  var last = s.sheet.getLastRow();
+  Logger.log('── 出貨明細現況 ──');
+  Logger.log('資料列數：' + Math.max(last - 1, 0));
+  if (last < 2) {
+    Logger.log('🔴 出貨明細裡一列資料都沒有 → 當然配對不到任何東西。');
+    return;
+  }
+
+  var width = Math.max(s.sheet.getLastColumn(), SHIPMENT_HEADERS.length);
+  var vals = s.sheet.getRange(2, 1, last - 1, width).getValues();
+  var get = function (row, name) {
+    var c = s.col[normHeader_(name)];
+    if (!c || c > row.length) return '';
+    var v = row[c - 1];
+    return (v instanceof Date) ? fmtDate_(v) : String(v == null ? '' : v).trim();
+  };
+
+  var withName = 0, withTrack = 0, samples = [];
+  for (var i = 0; i < vals.length; i++) {
+    var nm = get(vals[i], COL_S_TO_NAME);
+    if (get(vals[i], COL_S_TRACK_NO)) withTrack++;
+    if (nm) {
+      withName++;
+      if (samples.length < 12) {
+        samples.push({ raw: nm, key: normKey_(nm), shipNo: get(vals[i], COL_S_SHIP_NO) });
+      }
+    }
+  }
+  Logger.log('有填「' + COL_S_TO_NAME + '」的：' + withName + ' 列');
+  Logger.log('已經有貨運單號（會被排除在配對外）的：' + withTrack + ' 列');
+  if (!withName) {
+    Logger.log('🔴 沒有任何一列填了收件人 → 只能靠訂單編號或備註配對，');
+    Logger.log('　 而訂單編號實測是空的，所以全部配不到是必然的。');
+    return;
+  }
+  Logger.log('');
+  Logger.log('出貨明細的收件人實際長相（原文 → 正規化）：');
+  for (var j = 0; j < samples.length; j++) {
+    Logger.log('  ' + samples[j].shipNo + '｜' + samples[j].raw + ' → ' + samples[j].key);
+  }
+
+  // 拿「待指定」的收件人來比對
+  Logger.log('');
+  Logger.log('── 待指定 vs 出貨明細 ──');
+  var w;
+  try { w = openAuxSheet_(SHIPWAIT_SHEET, SHIPWAIT_HEAD); }
+  catch (err2) { Logger.log('（沒有待指定分頁）'); return; }
+  var wLast = w.sheet.getLastRow();
+  if (wLast < 2) { Logger.log('（待指定分頁是空的）'); return; }
+
+  var wVals = w.sheet.getRange(2, 1, wLast - 1, w.sheet.getLastColumn()).getValues();
+  var cName = w.col[normHeader_('收件人')];
+  var idx = buildMatchIndex_();
+  var exact = 0, contains = 0, none = 0;
+
+  for (var k = 0; k < Math.min(wVals.length, 12); k++) {
+    var raw = String(wVals[k][cName - 1] || '').trim();
+    var key = normKey_(raw);
+    var hitExact = !!idx.byName[key];
+    // 包含式比對：看看放寬之後會不會有救，以及會不會一次中太多筆
+    var partial = [];
+    for (var n in idx.byName) {
+      if (!Object.prototype.hasOwnProperty.call(idx.byName, n)) continue;
+      if (n === key) continue;
+      if (key && n && (n.indexOf(key) >= 0 || key.indexOf(n) >= 0)) partial.push(n);
+    }
+    if (hitExact) exact++; else if (partial.length) contains++; else none++;
+    Logger.log('  ' + raw + ' → ' + key +
+      '｜完全相符=' + (hitExact ? '✅' : '✗') +
+      '｜包含式候選=' + (partial.length ? partial.join('／') : '無'));
+  }
+
+  Logger.log('');
+  Logger.log('── 判讀 ──');
+  Logger.log('完全相符 ' + exact + '　只有包含式相符 ' + contains + '　完全沒有 ' + none);
+  if (!exact && contains) {
+    Logger.log('👉 寫法有落差（例如「宇泰鎖印 李建男」vs「宇泰鎖印行-李建男」）。');
+    Logger.log('　 改成包含式比對可能有救——但要確認包含式不會一次中好幾筆，');
+    Logger.log('　 一次中多筆就必須維持「不猜」，寧可待指定。');
+  } else if (!exact && !contains) {
+    Logger.log('👉 兩邊的收件人根本是不同的人／公司，');
+    Logger.log('　 多半是這批貨運單對應的出貨單還沒登錄進出貨明細。');
+    Logger.log('　 那樣的話「待指定」就是正確結果，不需要改比對邏輯。');
+  }
 }
 
 /** 辨識一份貨運單並回填。回 {ok, total, matched, pending, message}。 */

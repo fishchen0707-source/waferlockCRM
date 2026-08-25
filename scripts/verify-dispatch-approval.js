@@ -3960,6 +3960,95 @@ console.log('\n【36】貨運單：上傳、配對、回填');
     ok(scriptsParse(page.match(/<script>[\s\S]*?<\/script>/g) || []), '內嵌 JS 語法正確');
   }
 
+  // ══ 🔑 直接丟進 Drive 資料夾也要能處理（不是只有網頁上傳） ══
+  //
+  // 2026-08-25 實測踩到：使用者把 PDF 丟進資料夾，佇列卻說「是空的」，
+  // 看起來像功能壞掉。既有的貨運單管線本來就是掃資料夾的，
+  // 使用者理所當然會這樣預期——這是設計沒對上實際用法，不是使用者用錯。
+  {
+    reset([]);
+    props.DISPATCH_SHIPDOC_FOLDER_ID = 'FOLDER1';
+    const files = [
+      { id: 'F1', name: '託運明細A.pdf', mime: 'application/pdf' },
+      { id: 'F2', name: '不相干.txt', mime: 'text/plain' },
+    ];
+    const origFolder = sandbox.DriveApp.getFolderById;
+    sandbox.DriveApp.getFolderById = () => ({
+      getName: () => '貨運單',
+      getFiles: () => {
+        let i = 0;
+        return {
+          hasNext: () => i < files.length,
+          next: () => {
+            const f = files[i++];
+            return {
+              getId: () => f.id, getName: () => f.name,
+              getMimeType: () => f.mime, getDateCreated: () => new Date(2026, 7, 25)
+            };
+          }
+        };
+      }
+    });
+
+    const q = G.openAuxSheet_('貨運單處理', G.SHIPDOC_HEAD);
+    const n = G.enqueueFolderShipDocs_(q);
+    ok(n === 1, '🔴 資料夾裡的 PDF 要自動進佇列，實際收進 ' + n + ' 份');
+    ok(q.sheet.getLastRow() === 2, '只收 PDF／圖片，.txt 不可收進來');
+
+    // 再掃一次不可重複收（用檔案 ID 判斷，不是檔名）
+    const n2 = G.enqueueFolderShipDocs_(q);
+    ok(n2 === 0, '🔴 同一份檔案不可被重複收進佇列');
+
+    sandbox.DriveApp.getFolderById = origFolder;
+  }
+
+  // ══ 人工指定要能真的套用回出貨明細（否則待指定分頁是死路） ══
+  {
+    reset([
+      rowOf({ '出貨單號': 'W5501-260807001', '貨指寄-收件人': '正程企業' }),
+      rowOf({ '出貨單號': 'W5501-260812099', '貨指寄-收件人': '測試',
+              '貨運單號': '999-999-9999' }),
+    ]);
+    const w = G.openAuxSheet_('貨運單待指定', G.SHIPWAIT_HEAD);
+    const put = o => {
+      const line = G.SHIPWAIT_HEAD.map(h => (o[h] === undefined ? '' : o[h]));
+      w.sheet.appendRow(line);
+    };
+    put({ '貨運單號': '345-827-1434', '貨運日期': '2026-08-25', '收件人': '承淇',
+          '對應出貨單號': 'W5501-260807001', '處理狀態': '待指定' });
+    put({ '貨運單號': '345-903-6206', '收件人': '至洧',
+          '對應出貨單號': '不存在的單號', '處理狀態': '待指定' });
+    put({ '貨運單號': '345-912-0523', '收件人': '北安',
+          '對應出貨單號': 'W5501-260812099', '處理狀態': '待指定' });
+    put({ '貨運單號': '345-999-0000', '收件人': '還沒填的',
+          '對應出貨單號': '', '處理狀態': '待指定' });
+
+    G.applyShipWaiting();
+
+    const s2 = G.openShipmentSheet_();
+    const got = s2.sheet.getRange(2, s2.col[G.normHeader_('貨運單號')]).getValue();
+    ok(String(got) === '345-827-1434',
+       '🔴 人工指定的對應要真的寫回出貨明細（否則待指定分頁是死路）');
+
+    const st = w.sheet.getRange(2, w.col[G.normHeader_('處理狀態')], 4, 1).getValues()
+      .map(r => String(r[0]));
+    ok(/已套用/.test(st[0]), '成功的要標「已套用」');
+    ok(/查無/.test(st[1]),
+       '🔴 查無單號要在分頁上說明原因，不可靜默跳過（人不會知道自己填的沒生效）');
+    ok(/已有貨運單號/.test(st[2]), '🔴 已有貨運單號的不可覆蓋，且要說明原因');
+    ok(st[3] === '待指定', '還沒填對應單號的不可動它');
+  }
+
+  // ══ 資料夾屬性沒設時要沿用既有那顆，不要直接失效 ══
+  {
+    delete props.DISPATCH_SHIPDOC_FOLDER_ID;
+    props.SHIPMENT_FOLDER_ID = 'LEGACY1';
+    ok(G.shipDocFolderId_() === 'LEGACY1',
+       '專屬屬性沒設時要沿用 SHIPMENT_FOLDER_ID（使用者本來就把檔案丟那）');
+    props.DISPATCH_SHIPDOC_FOLDER_ID = 'OWN1';
+    ok(G.shipDocFolderId_() === 'OWN1', '兩顆都有時以專屬的為準');
+  }
+
   asUser('boss@waferlock.com');
   reset([]);
 })();
