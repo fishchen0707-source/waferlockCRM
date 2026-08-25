@@ -3816,7 +3816,7 @@ var CHAT_HELP =
   '・「8/25 金宏鎖店的單出貨了嗎」\n' +
   '・「查 LS-260825-01」（發包單號／出貨單號／案件號都可以）\n' +
   '・「我這週下的單」\n\n' +
-  '我目前**只能查登錄狀態**，不能查貨運進度、不會給金額、也不能改資料。';
+  '我目前*只能查登錄狀態*，不能查貨運進度、不會給金額、也不能改資料。';
 
 /**
  * 🔑 不打 AI 的快速解析。解得出來就直接用，解不出來才送 Gemini。
@@ -4145,7 +4145,7 @@ function answerChatQuestion_(text, asker) {
         ? 'AI 現在忙不過來'
         : 'AI 解析暫時打不通';
       return at + why + '，我沒辦法理解這句話。\n' +
-        '不過**直接給我單號我不需要 AI 就查得到**，例如「查 LS-260825-01」。\n' +
+        '不過*直接給我單號我不需要 AI 就查得到*，例如「查 LS-260825-01」。\n' +
         '或改用查詢頁。';
     }
   }
@@ -4194,7 +4194,7 @@ function answerChatQuestion_(text, asker) {
     //   那句回覆技術上正確卻害人以為單不存在。
     if (res.nearMiss) {
       var who = f.customer || f.person || '這個條件';
-      return at + who + '有 ' + res.nearMiss + ' 筆單，但**都不在你問的日期範圍內**（' +
+      return at + who + '有 ' + res.nearMiss + ' 筆單，但*都不在你問的日期範圍內*（' +
         (f.dateFrom || '?') + '～' + (f.dateTo || '?') + '）。\n' +
         (res.nearLatest ? '最近的一筆是 ' + res.nearLatest + '。\n' : '') +
         '把日期拿掉再問一次就看得到，例如「查' + who + '的單」。';
