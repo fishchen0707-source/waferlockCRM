@@ -3823,5 +3823,146 @@ console.log('\n【35】查無時的「差一點就中」提示');
   asUser('boss@waferlock.com');
 })();
 
+// 【36】貨運單：上傳、配對、回填
+//
+// 2026-08-25 用真實樣本（新竹託運明細260824.pdf，21 筆）驗證過的行為。
+// 那份樣本揭露兩件事，這一段就是在鎖住它們：
+//   ① 訂單編號欄整份都是空的 → 只能靠備註／收件人＋電話配對
+//   ② 同一天有兩筆寄給「金宏鎖店 王啟尚」→ 光靠收件人分不出來，不可以猜
+console.log('\n【36】貨運單：上傳、配對、回填');
+(() => {
+  const asUser = e => { sandbox.Session.getActiveUser = () => ({ getEmail: () => e }); };
+  const SHEAD = G.SHIPMENT_HEADERS;
+  const rowOf = obj => SHEAD.map(h => (obj[h] === undefined ? '' : obj[h]));
+
+  const reset = shipRows => {
+    SHEETS = [
+      makeSheet('出貨明細', SHEAD, shipRows || [], 1),
+      makeSheet('人員代碼',
+        ['業務代碼', '業務姓名', '業務email', '類別', '對應助理', '助理email', '發包分頁'],
+        [['LS', '小林', 'ls@waferlock.com', '零售', 'Vivi', 'vivi@waferlock.com', '零售-Sammi']], 1),
+    ];
+    props.DISPATCH_SHEET_NAME = '*';
+    props.DISPATCH_WAREHOUSE = 'wh@waferlock.com';
+    props.DISPATCH_SHIPDOC_FOLDER_ID = 'FOLDER1';
+    CACHE = {};
+  };
+
+  // ══ 新欄位要進 SHIPMENT_HEADERS（否則 openShipmentSheet_ 不會建） ══
+  ok(SHEAD.indexOf('貨運單號') >= 0 && SHEAD.indexOf('貨運日期') >= 0,
+     '貨運單號／貨運日期要在出貨明細表頭裡');
+
+  // ══ shipmentStage_：貨運單號是唯一能說「已出貨」的依據 ══
+  {
+    const mk = o => { const r = {}; SHEAD.forEach(h => { r[h] = o[h] || ''; }); return r; };
+    const s = G.shipmentStage_(mk({ '貨運單號': '345-827-1434', '貨運日期': '2026-08-25' }));
+    ok(s.code === 'shipped', '有貨運單號＝已出貨');
+    ok(/已出貨/.test(s.label) && /345-827-1434/.test(s.label),
+       '要明講已出貨並附上貨運單號');
+
+    // 🔴 貨運單號要壓過所有登錄狀態：貨都上車了，前面那些就不是重點
+    const s2 = G.shipmentStage_(mk({
+      '貨運單號': '345-827-1434', '倉庫核單狀態': '待核', '出貨日期': ''
+    }));
+    ok(s2.code === 'shipped',
+       '🔴 有貨運單號時要壓過倉庫核單狀態——那是單據審核，不是貨的去向');
+
+    ok(G.shipmentStage_(mk({ '出貨日期': '2026-08-26' })).code === 'date_filled',
+       '沒有貨運單號時維持原本的分層，不可因為新增這階就亂掉');
+  }
+
+  // ══ normKey_：比對要能容忍空白、全形、大小寫 ══
+  {
+    ok(G.normKey_('W5501-260807005') === G.normKey_(' w5501 260807005 '),
+       '🔴 比對要容忍空白與大小寫（matching.py 只做 strip()== 就是踩在這個坑）');
+    ok(G.normKey_('ＡＢＣ１２３') === G.normKey_('ABC123'), '全形要轉半形');
+    ok(G.normKey_('') === '', '空值不出錯');
+  }
+
+  // ══ 🔑 配對：只有唯一命中才算，模稜兩可一律不猜 ══
+  {
+    // 真實情境：同一天兩筆寄給「金宏鎖店 王啟尚」，電話也一樣
+    reset([
+      rowOf({ '出貨單號': 'SO-1', '貨指寄-收件人': '金宏鎖店 王啟尚',
+              '貨指寄-電話': '0913-112661', '出貨備註': '' }),
+      rowOf({ '出貨單號': 'SO-2', '貨指寄-收件人': '金宏鎖店 王啟尚',
+              '貨指寄-電話': '0913-112661', '出貨備註': '燦坤(沙鹿向上店)，韋晴文(L396)' }),
+      rowOf({ '出貨單號': 'SO-3', '貨指寄-收件人': '宇泰鎖印行-李建男',
+              '貨指寄-電話': '0926-797328', '出貨備註': 'MOMO-許嘉程/陳建棠L901' }),
+    ]);
+    const idx = G.buildMatchIndex_();
+
+    // 備註有鑑別度 → 分得出是哪一筆
+    const byNote = G.matchShipRow_(
+      { recipient: '-金宏鎖店 王啟尚', phone: '0913-112661',
+        note: '燦坤(沙鹿向上店)，韋晴文(L396)', order_no: '' }, idx);
+    ok(byNote.row > 0 && byNote.by === '出貨備註',
+       '備註對得上時要能唯一命中（真實樣本的備註鑑別度很高）');
+
+    // 🔴 沒有備註 → 兩筆都符合 → 不可以猜
+    const ambiguous = G.matchShipRow_(
+      { recipient: '-金宏鎖店 王啟尚', phone: '0913-112661', note: '', order_no: '' }, idx);
+    ok(ambiguous.row === 0,
+       '🔴 同一收件人有多筆時絕對不可以猜——猜錯會讓兩張單的貨運單號對調，且看起來完全正常');
+    ok((ambiguous.candidates || []).length === 2,
+       '要回傳候選讓人指定，實際 ' + (ambiguous.candidates || []).length);
+
+    // 收件人＋電話唯一 → 可以配
+    const uniq = G.matchShipRow_(
+      { recipient: '-宇泰鎖印行-李建男', phone: '0926-797328', note: '', order_no: '' }, idx);
+    ok(uniq.row > 0, '收件人唯一時可以配對');
+
+    // 訂單編號優先（倉庫開始填之後就走這條）
+    const byNo = G.matchShipRow_(
+      { recipient: '完全不相干', phone: '', note: '', order_no: 'SO-3' }, idx);
+    ok(byNo.row > 0 && byNo.by === '訂單編號',
+       '有訂單編號時要優先用它，且不受收件人不符影響');
+
+    // 全都對不上 → 不配
+    ok(G.matchShipRow_(
+      { recipient: '沒見過的人', phone: '0000', note: '', order_no: '' }, idx).row === 0,
+      '完全對不上就不配對');
+  }
+
+  // ══ 已經有貨運單號的列不可被覆蓋（重跑同一份檔案要安全） ══
+  {
+    reset([
+      rowOf({ '出貨單號': 'SO-9', '貨指寄-收件人': '一峰鎖店',
+              '貨運單號': '345-894-4145' }),
+    ]);
+    const idx = G.buildMatchIndex_();
+    ok(G.matchShipRow_({ recipient: '一峰鎖店', phone: '', note: '', order_no: 'SO-9' }, idx).row === 0,
+       '🔴 已有貨運單號的列要排除在索引外，否則重跑同一份檔案會覆蓋掉已填的值');
+  }
+
+  // ══ 上傳權限：閘門要在核心函式裡（換入口仍受保護） ══
+  {
+    reset([]);
+    const B64 = Buffer.from('x').toString('base64');
+    const r = G.uploadShippingDocAs_('outsider@waferlock.com', 'a.pdf', 'application/pdf', B64);
+    ok(!r.ok && /倉庫名單/.test(r.message),
+       '🔴 非倉庫人員不可上傳（閘門在核心，不是在薄殼）');
+
+    ok(!G.uploadShippingDocAs_('wh@waferlock.com', 'a.exe', 'application/x-msdownload', B64).ok,
+       '非 PDF／圖片要擋下');
+    ok(!G.uploadShippingDocAs_('wh@waferlock.com', 'a.pdf', 'application/pdf', '').ok,
+       '沒有內容要擋下');
+  }
+
+  // ══ 上傳頁 ══
+  {
+    reset([]);
+    const page = G.shipDocBlock_('wh@waferlock.com');
+    ok(/uploadShippingDoc\(/.test(page), '上傳頁要呼叫 uploadShippingDoc');
+    ok(/id="sdf"/.test(page) && /accept=/.test(page), '要有檔案選取並限制型別');
+    ok(/不會用猜的/.test(page),
+       '要在畫面上講明系統不會猜——這是使用者信任這份資料的前提');
+    ok(scriptsParse(page.match(/<script>[\s\S]*?<\/script>/g) || []), '內嵌 JS 語法正確');
+  }
+
+  asUser('boss@waferlock.com');
+  reset([]);
+})();
+
 console.log('\n' + (fail ? '❌' : '✅') + ' 通過 ' + pass + '／失敗 ' + fail);
 process.exit(fail ? 1 : 0);

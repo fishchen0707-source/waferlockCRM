@@ -206,6 +206,15 @@ var COL_S_WORK_ITEM  = '工項';            // 例「裝外門」
 //   已處理：✅ 已處理 <處理人> <時間>｜<原本的原因>
 var COL_S_RETURN = '退單';
 
+// ── 貨運單（倉庫上傳託運總表後自動回填）────────────────────
+//
+// 🔑 **這兩欄是「出貨了嗎」唯一能誠實回答的依據。**
+//    使用者定義的判準就是「看到貨運單才算出貨」——出貨日期是助理人工回填的、
+//    倉庫核單狀態是單據審核，兩者都不代表貨真的離開倉庫。
+//    只有這裡有值，才可以說「已出貨」。
+var COL_S_TRACK_NO = '貨運單號';
+var COL_S_TRACK_AT = '貨運日期';
+
 var SHIPMENT_HEADERS = [
   COL_S_CASE_NO,
   COL_S_AT, COL_S_SHIP_NO, COL_S_ORDER_ID, COL_S_SHIP_DATE, COL_S_DISPATCH,
@@ -216,7 +225,8 @@ var SHIPMENT_HEADERS = [
   COL_S_SALE_PRICE, COL_S_COST_PRICE,
   COL_S_ORDER_BY, COL_S_BY, COL_S_WH_STATUS, COL_S_WH_BY, COL_S_WH_AT, COL_S_WH_NOTE,
   COL_S_INVOICE_URL, COL_S_INVOICE_NO,
-  COL_S_RETURN
+  COL_S_RETURN,
+  COL_S_TRACK_NO, COL_S_TRACK_AT
 ];
 
 // ── 發票電子檔上傳 ──────────────────────────────────────────
@@ -381,6 +391,17 @@ function doGet(e) {
     // 聚焦單筆：一定放在權限檢查之後，不然帶個 dn 參數就繞過助理名單了。
     if (focusDn) return renderShipOne_(email, roles, focusDn, hintRow);
     return renderShipPage_(email, roles);
+  }
+
+  // 貨運單上傳：獨立入口，不掛在單筆核單下——一份 PDF 含好幾張出貨單
+  // （2026-08-24 真實樣本 21 筆），掛在某一筆下面語意就錯了。
+  if (page === 'shipdoc') {
+    if (!roles.warehouse) {
+      return htmlPage_(navBlock_('shipdoc', roles) +
+        errorBlock_('您沒有倉庫權限',
+          email + ' 不在倉庫名單中（指令碼屬性 DISPATCH_WAREHOUSE）。'));
+    }
+    return htmlPage_(navBlock_('shipdoc', roles) + shipDocBlock_(email));
   }
 
   if (page === 'warehouse') {
@@ -1825,6 +1846,7 @@ function navBlock_(current, roles) {
   if (roles.sub || roles.boss) tabs.push(['approve', '簽核']);
   if (roles.assistant) tabs.push(['ship', '出貨登錄']);
   if (roles.warehouse) tabs.push(['warehouse', '倉庫核單']);
+  if (roles.warehouse) tabs.push(['shipdoc', '貨運單']);
   tabs.push(['query', '查詢']);   // 唯讀，全員可用
   if (roles.boss || roles.sub) tabs.push(['report', '報表']);
   if (tabs.length < 2) return '';
@@ -3784,6 +3806,15 @@ function queryOrders_(q) {
 function shipmentStage_(rec) {
   if (!rec) return { code: 'ordered_only', label: '已下單，但出貨明細還沒有這一筆（助理尚未鍵單）' };
 
+  // 🔑 貨運單號是**唯一可以說「已出貨」的依據**——使用者定義的判準就是「看到貨運單才算」。
+  //    它排在最前面：貨都上車了，前面那些登錄狀態就不是重點了。
+  var track = String(rec[COL_S_TRACK_NO] || '').trim();
+  if (track) {
+    var tAt = String(rec[COL_S_TRACK_AT] || '').trim();
+    return { code: 'shipped',
+             label: '已出貨 🚚 貨運單號 ' + track + (tAt ? '（' + tAt + '）' : '') };
+  }
+
   var wh = String(rec[COL_S_WH_STATUS] || '').trim();
   var shipDate = String(rec[COL_S_SHIP_DATE] || '').trim();
   var shipNo = String(rec[COL_S_SHIP_NO] || '').trim();
@@ -4047,11 +4078,23 @@ function chatQueryOrders_(f) {
 //         多列表格是 AI 最容易漏行、串行的情境
 //    先用真實檔案測過、人工比對正確率，合格才往下做。
 
-/** 貨運單辨識的回應結構。total 是**讓 AI 自己報總列數**，用來偵測它有沒有偷偷截斷。 */
+/**
+ * 貨運單辨識的回應結構。
+ *
+ * `total` 是**讓 AI 自己報總列數**，用來偵測它有沒有偷偷截斷——
+ * 自報 21 筆卻只回 15 筆，這種錯用眼睛很難發現。
+ *
+ * 除了 order_no 之外還要 phone／note／recipient，是因為 2026-08-24 的真實樣本顯示
+ * **訂單編號欄整份都是空的**（與 sql/supabase_shipments.sql:14 的記載一致）。
+ * 那三欄是「倉庫還沒開始填訂單編號」期間唯一能拿來配對的線索：
+ * 收件人與電話對得上出貨明細的「貨指寄-收件人／電話」，
+ * 備註對得上「出貨備註」（真實樣本：「MOMO-許嘉程/陳建棠L901」）。
+ */
 var SHIPDOC_SCHEMA = {
   type: 'OBJECT',
   properties: {
     carrier: { type: 'STRING' },
+    doc_date: { type: 'STRING' },
     total: { type: 'NUMBER' },
     rows: {
       type: 'ARRAY',
@@ -4061,31 +4104,665 @@ var SHIPDOC_SCHEMA = {
           order_no: { type: 'STRING' },
           tracking_no: { type: 'STRING' },
           ship_date: { type: 'STRING' },
-          recipient: { type: 'STRING' }
+          recipient: { type: 'STRING' },
+          phone: { type: 'STRING' },
+          note: { type: 'STRING' }
         },
-        required: ['order_no', 'tracking_no', 'ship_date', 'recipient']
+        required: ['order_no', 'tracking_no', 'ship_date', 'recipient', 'phone', 'note']
       }
     }
   },
-  required: ['carrier', 'total', 'rows']
+  required: ['carrier', 'doc_date', 'total', 'rows']
 };
 
+/**
+ * ⚠ 這個 prompt 是**針對「PDF 轉出來的純文字」**寫的，不是針對 PDF 本身。
+ *   2026-08-25 實測：直接把 290KB 的 PDF 餵給 Gemini，三個模型全部 503（各等 18~32 秒），
+ *   但同一時間純文字請求 2.2 秒就回 200 —— 所以改成先用 Drive 轉文字（3.8 秒）再解析。
+ *
+ * ⚠ 轉出來的文字有**換行造成的欄位黏連**（真實樣本：電話 `0972-809-` 換行後
+ *   跟下一欄的 `11` 黏成 `02811`）。這正是用 LLM 而不是正則的理由——
+ *   版面亂但語意清楚的東西，LLM 比座標式解析穩。
+ */
 var SHIPDOC_PROMPT =
-  '這是一份貨運公司的託運清單（新竹物流或嘉里大榮），**一份文件裡含多筆託運紀錄**。\n' +
-  '請用繁體中文輸出 JSON：\n' +
-  '- carrier：貨運公司名稱，讀不到就留空字串\n' +
-  '- total：你在這份文件裡**總共看到幾筆**託運紀錄（先自己數一遍再填）\n' +
-  '- rows：每一筆一個物件，含：\n' +
-  '  · order_no：該筆的「訂單編號」或「出貨單號」（這是我方的單號，例如 W5501-260807005）。' +
-  '**這一欄常常是空的**，空的就留空字串\n' +
-  '  · tracking_no：託運單號／貨運單號（貨運公司自己的編號）\n' +
-  '  · ship_date：出貨或託運日期，格式 yyyy-MM-dd，讀不到留空字串\n' +
-  '  · recipient：收件人或收件公司\n\n' +
+  '以下是一份貨運公司託運總表（新竹物流或嘉里大榮）的 PDF 轉出來的純文字，' +
+  '**一份文件裡含多筆託運紀錄**，而且可能分成好幾個「客代」區段。\n\n' +
+  '請輸出 JSON：\n' +
+  '- carrier：貨運公司名稱\n' +
+  '- doc_date：這份表的發送日期，格式 yyyy-MM-dd\n' +
+  '- total：整份文件**總共幾筆**託運紀錄。文件結尾通常有「全合計：N 筆」，' +
+  '**以那個數字為準**；沒有的話自己數。\n' +
+  '- rows：每一筆一個物件：\n' +
+  '  · tracking_no：查貨號碼／託運單號（例如 345-827-1434）\n' +
+  '  · order_no：該列「訂單編號」欄的值。**這一欄實務上經常整份都是空的**，' +
+  '空的就留空字串，不要拿備註或其他欄位的值來填\n' +
+  '  · recipient：收貨人代號-名稱（例如「金宏鎖店 王啟尚收」）\n' +
+  '  · phone：收件電話。⚠ 文字是從 PDF 轉出來的，電話**可能被換行切斷並黏到隔壁欄**' +
+  '（例如 `0972-809-` 換行後接 `02811`，其中 `11` 其實是別欄的）。' +
+  '盡量還原成合理的電話號碼，還原不了就留空字串\n' +
+  '  · note：內容品／備註欄的文字（例如「MOMO-許嘉程/陳建棠L901」「案名：…」）\n' +
+  '  · ship_date：該列的指配日期，格式 yyyy-MM-dd，沒有就留空字串\n\n' +
   '規則：\n' +
-  '1. **一筆都不能漏**。漏一筆的後果是那張單永遠查不到貨運單號。\n' +
-  '2. **絕對不要把不同列的資料湊在一起**。如果某一列讀不清楚，' +
-  '該欄留空字串，不要拿隔壁列的值來補。\n' +
-  '3. 讀不出來一律留空字串，不要猜、不要編。';
+  '1. **一筆都不能漏**，rows 的筆數要等於 total。漏一筆＝那張單永遠查不到貨運單號。\n' +
+  '2. **絕對不要把不同列的資料湊在一起**。某欄讀不清楚就留空字串，' +
+  '不要拿隔壁列的值來補——寧可空著讓人補，也不要給一個看起來對的錯值。\n' +
+  '3. 「合計：N 筆」「客戶簽收」「印表日期」這些是表格的頁首頁尾，**不是託運紀錄**，不要當成一筆。\n\n' +
+  '文件內容如下：\n';
+
+// ── 貨運單佇列與配對 ────────────────────────────────────────
+
+var SHIPDOC_FOLDER_PROP = 'DISPATCH_SHIPDOC_FOLDER_ID';
+var SHIPDOC_SHEET = '貨運單處理';
+var SHIPDOC_HEAD = ['上傳時間', '檔名', '檔案ID', '上傳人', '狀態',
+                    '處理時間', '總筆數', '已配對', '待指定', '訊息'];
+var SHIPDOC_PENDING = '待辨識';
+var SHIPDOC_DONE = '已處理';
+var SHIPDOC_FAIL = '失敗';
+
+// 對不到或模稜兩可的託運紀錄放這裡，等人工指定對應哪張出貨單。
+var SHIPWAIT_SHEET = '貨運單待指定';
+var SHIPWAIT_HEAD = ['貨運單號', '貨運日期', '收件人', '電話', '備註',
+                     '來源檔案', '候選出貨單號', '對應出貨單號', '處理狀態'];
+
+/** 開（必要時建立）一個分頁並回傳 {sheet, col}，表頭以文字定位。 */
+function openAuxSheet_(name, head) {
+  var id = PropertiesService.getScriptProperties().getProperty('DISPATCH_SHEET_ID');
+  if (!id) throw new Error('未設定指令碼屬性 DISPATCH_SHEET_ID');
+  var ss = SpreadsheetApp.openById(id);
+  var sheet = ss.getSheetByName(name);
+  if (!sheet) {
+    sheet = ss.insertSheet(name);
+    sheet.appendRow(head);
+    sheet.setFrozenRows(1);
+  }
+  var lastCol = Math.max(sheet.getLastColumn(), 1);
+  var row = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  var col = {};
+  for (var i = 0; i < row.length; i++) {
+    var k = normHeader_(row[i]);
+    if (k && !col[k]) col[k] = i + 1;
+  }
+  // 缺欄補在表尾，不插中間（同 openShipmentSheet_ 的理由：插入會讓既有資料位移）
+  var missing = [];
+  for (var m = 0; m < head.length; m++) {
+    if (col[normHeader_(head[m])] === undefined) missing.push(head[m]);
+  }
+  if (missing.length) {
+    sheet.getRange(1, lastCol + 1, 1, missing.length).setValues([missing]);
+    for (var k2 = 0; k2 < missing.length; k2++) col[normHeader_(missing[k2])] = lastCol + 1 + k2;
+  }
+  return { ss: ss, sheet: sheet, col: col };
+}
+
+/**
+ * 比對用的正規化：去掉所有空白、全形轉半形、英文轉大寫。
+ *
+ * ⚠ 既有的 shipment-worker/matching.py:172-176 只做 `strip()==` 完全比對，沒有容錯——
+ *   格式差一個空白就靜默比不中，而症狀是「這張單永遠沒有貨運單號」。
+ *   不要重蹈那個覆轍。
+ */
+function normKey_(s) {
+  s = String(s == null ? '' : s);
+  // 全形英數與全形空白 → 半形
+  s = s.replace(/[！-～]/g, function (c) {
+    return String.fromCharCode(c.charCodeAt(0) - 0xFEE0);
+  }).replace(/　/g, ' ');
+  return s.replace(/[\s\-_()（）]/g, '').toUpperCase();
+}
+
+/**
+ * 把一筆託運紀錄配對到出貨明細的某一列。
+ *
+ * 🔑 **只回唯一命中**。真實樣本裡同一天有兩筆寄給「金宏鎖店 王啟尚」
+ *   （345-844-9396 與 345-868-9312），光靠收件人分不出來——
+ *   猜錯的話兩張單的貨運單號會對調，而且**看起來完全正常、沒有人會發現**。
+ *   所以模稜兩可一律不猜，回傳候選讓人指定。
+ *
+ * 比對優先序（前面命中就不往下走）：
+ *   ① 訂單編號 → 出貨單號：乾淨的鍵。**但實測整份都是空的**，
+ *      要等倉庫在貨運系統開始填才會生效；程式先寫好，填了就自動生效。
+ *   ② 出貨備註：真實樣本的備註長這樣「MOMO-許嘉程/陳建棠L901」，
+ *      對得上出貨明細的「出貨備註」，鑑別度高。
+ *   ③ 收件人＋電話：最後手段，也最容易撞號。
+ *
+ * @return {row, by} 唯一命中；或 {row:0, by:'', candidates:[出貨單號…]}
+ */
+function matchShipRow_(rec, index) {
+  var on = normKey_(rec.order_no);
+  if (on && index.byShipNo[on] && index.byShipNo[on].length === 1) {
+    return { row: index.byShipNo[on][0], by: '訂單編號' };
+  }
+
+  var note = normKey_(rec.note);
+  if (note && note.length >= 4 && index.byNote[note] && index.byNote[note].length === 1) {
+    return { row: index.byNote[note][0], by: '出貨備註' };
+  }
+
+  var name = normKey_(rec.recipient), phone = normKey_(rec.phone);
+  var hits = [];
+  if (name) {
+    var byName = index.byName[name] || [];
+    for (var i = 0; i < byName.length; i++) {
+      var e = byName[i];
+      // 有電話就必須也對得上；沒電話就只靠名字（鑑別度低，只有唯一時才算數）
+      if (phone && e.phone && normKey_(e.phone) !== phone) continue;
+      hits.push(e);
+    }
+  }
+  if (hits.length === 1) return { row: hits[0].row, by: phone ? '收件人＋電話' : '收件人' };
+
+  var cands = [];
+  for (var j = 0; j < hits.length; j++) cands.push(hits[j].shipNo || ('第' + hits[j].row + '列'));
+  return { row: 0, by: '', candidates: cands };
+}
+
+/** 建出貨明細的配對索引：出貨單號 / 出貨備註 / 收件人 三種鍵。 */
+function buildMatchIndex_() {
+  var s = openShipmentSheet_();
+  var idx = { byShipNo: {}, byNote: {}, byName: {} };
+  var last = s.sheet.getLastRow();
+  if (last < 2) return idx;
+
+  var width = Math.max(s.sheet.getLastColumn(), SHIPMENT_HEADERS.length);
+  var vals = s.sheet.getRange(2, 1, last - 1, width).getValues();
+  var get = function (row, name) {
+    var c = s.col[normHeader_(name)];
+    if (!c || c > row.length) return '';
+    var v = row[c - 1];
+    return (v instanceof Date) ? fmtDate_(v) : String(v == null ? '' : v).trim();
+  };
+
+  for (var i = 0; i < vals.length; i++) {
+    var row = vals[i], rowNo = i + 2;
+    var shipNo = get(row, COL_S_SHIP_NO);
+    // 已經有貨運單號的略過——不覆蓋已填的值，重跑同一份檔案不會改壞東西
+    if (get(row, COL_S_TRACK_NO)) continue;
+
+    var k1 = normKey_(shipNo);
+    if (k1) { (idx.byShipNo[k1] = idx.byShipNo[k1] || []).push(rowNo); }
+
+    var k2 = normKey_(get(row, COL_S_NOTE));
+    if (k2 && k2.length >= 4) { (idx.byNote[k2] = idx.byNote[k2] || []).push(rowNo); }
+
+    var k3 = normKey_(get(row, COL_S_TO_NAME));
+    if (k3) {
+      (idx.byName[k3] = idx.byName[k3] || []).push({
+        row: rowNo, phone: get(row, COL_S_TO_PHONE), shipNo: shipNo
+      });
+    }
+  }
+  return idx;
+}
+
+/**
+ * 取一份貨運單 PDF：有給 fileId 就用它，沒給就抓 SHIPMENT_FOLDER_ID 資料夾裡最新的一份。
+ *
+ * ⚠ 「沒給就自動找」不是方便功能，是**必要的**：Apps Script 編輯器直接執行函式
+ *   時無法傳參數，沒有這個退路，所有診斷工具都得先改程式碼才能跑一次。
+ *
+ * @return DriveApp File，或 null（已把原因印進 Logger）
+ */
+function shipDocFile_(fileId) {
+  try {
+    if (fileId) return DriveApp.getFileById(fileId);
+
+    var folderId = PropertiesService.getScriptProperties()
+      .getProperty('SHIPMENT_FOLDER_ID');
+    if (!folderId) {
+      Logger.log('❌ 沒給 fileId，指令碼屬性 SHIPMENT_FOLDER_ID 也沒設定。');
+      Logger.log('　 要嘛設定該屬性（Drive「貨運單」資料夾 ID），');
+      Logger.log('　 要嘛在程式碼裡改成帶參數呼叫，例如 testPdfToText("檔案ID")。');
+      return null;
+    }
+    var it = DriveApp.getFolderById(folderId).getFilesByType('application/pdf');
+    var newest = null;
+    while (it.hasNext()) {
+      var f = it.next();
+      if (!newest || f.getDateCreated() > newest.getDateCreated()) newest = f;
+    }
+    if (!newest) { Logger.log('❌ 資料夾裡沒有 PDF。'); return null; }
+    return newest;
+  } catch (err) {
+    Logger.log('❌ 開檔失敗：' + err);
+    return null;
+  }
+}
+
+/**
+ * 把 PDF 轉成純文字（靠 Google Drive 的轉檔能力）。
+ *
+ * 做法：Drive API 把 PDF 複製成 Google 文件（這一步會做文字抽取／OCR）
+ *      → 匯出成 text/plain → 刪掉暫存文件。
+ *
+ * ⚠ **為什麼不直接把 PDF 餵給 Gemini**：2026-08-25 實測，290 KB 的新竹託運明細
+ *   讓三個模型全部回 503（各花 18~32 秒），但**同一時間純文字請求 2.2 秒就回 200**。
+ *   所以不是 Gemini 在忙，是它處理不了那個請求。純文字路徑又快又穩，
+ *   先轉成文字再解析比硬塞 PDF 划算得多（實測差距是 10 倍）。
+ *
+ * ⚠ **刻意用 UrlFetchApp 打 Drive REST，不開進階 Drive 服務**：
+ *   開進階服務要改 appsscript.json，而那份檔案同時是 Chat 外掛的 manifest，
+ *   動它可能導致全體使用者要重新授權——風險與收益不成比例。
+ *   這裡用的 OAuth token 來自既有的 drive 權限（uploadInvoice 本來就在用 DriveApp）。
+ *
+ * @return {ok, text, chars} 或 {ok:false, message}
+ */
+function pdfToText_(fileId) {
+  var token = ScriptApp.getOAuthToken();
+  var hdr = { Authorization: 'Bearer ' + token };
+  var tempId = '';
+
+  try {
+    // ① 複製成 Google 文件（轉檔就發生在這一步）
+    var copyResp = UrlFetchApp.fetch(
+      'https://www.googleapis.com/drive/v3/files/' + fileId +
+        '/copy?supportsAllDrives=true',
+      {
+        method: 'post',
+        contentType: 'application/json',
+        headers: hdr,
+        payload: JSON.stringify({
+          name: 'temp-pdf2text-' + Date.now(),
+          mimeType: 'application/vnd.google-apps.document'
+        }),
+        muteHttpExceptions: true
+      });
+    if (copyResp.getResponseCode() >= 300) {
+      return { ok: false, message: 'PDF 轉文件失敗（HTTP ' + copyResp.getResponseCode() +
+        '）：' + copyResp.getContentText().slice(0, 300) };
+    }
+    tempId = JSON.parse(copyResp.getContentText()).id;
+
+    // ② 匯出純文字
+    var expResp = UrlFetchApp.fetch(
+      'https://www.googleapis.com/drive/v3/files/' + tempId +
+        '/export?mimeType=text/plain',
+      { headers: hdr, muteHttpExceptions: true });
+    if (expResp.getResponseCode() >= 300) {
+      return { ok: false, message: '匯出文字失敗（HTTP ' + expResp.getResponseCode() +
+        '）：' + expResp.getContentText().slice(0, 300) };
+    }
+    var text = expResp.getContentText();
+    return { ok: true, text: text, chars: text.length };
+
+  } catch (err) {
+    return { ok: false, message: '轉檔例外：' + err };
+  } finally {
+    // ③ 一定要刪暫存檔，否則每跑一次就在雲端硬碟留一份垃圾
+    if (tempId) {
+      try {
+        UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/files/' + tempId +
+          '?supportsAllDrives=true',
+          { method: 'delete', headers: hdr, muteHttpExceptions: true });
+      } catch (e) {
+        Logger.log('⚠ 暫存文件 ' + tempId + ' 刪除失敗，請手動清理：' + e);
+      }
+    }
+  }
+}
+
+/**
+ * 【階段 0 驗證工具 B】測「PDF → 文字」這條路走不走得通、抽出來的表格好不好讀。
+ *
+ * 不呼叫 Gemini、不寫入任何資料，只把抽出來的文字印出來讓人判斷。
+ * 要看的是：**表格結構有沒有活下來**——欄位還分得出來，還是全部黏成一團。
+ */
+function testPdfToText(fileId) {
+  var file = shipDocFile_(fileId);
+  if (!file) return;
+
+  Logger.log('檔案：' + file.getName() + '　' +
+    Math.round(file.getSize() / 1024) + ' KB');
+  Logger.log('');
+
+  var t0 = Date.now();
+  var r = pdfToText_(file.getId());
+  var secs = Math.round((Date.now() - t0) / 100) / 10;
+
+  if (!r.ok) {
+    Logger.log('❌ ' + r.message + '（耗時 ' + secs + ' 秒）');
+    return;
+  }
+
+  Logger.log('✅ 轉出 ' + r.chars + ' 個字，耗時 ' + secs + ' 秒');
+  Logger.log('');
+  Logger.log('── 前 3000 字（看表格結構有沒有活下來）──');
+  Logger.log(r.text.slice(0, 3000));
+  if (r.chars > 3000) Logger.log('…（還有 ' + (r.chars - 3000) + ' 字）');
+  Logger.log('');
+  Logger.log('── 判讀 ──');
+  if (r.chars < 100) {
+    Logger.log('🔴 幾乎沒抽到文字 → 這份 PDF 可能是掃描影像，需要 OCR 或改走圖片路線。');
+  } else {
+    Logger.log('👉 請看上面的內容：欄位（出貨單號／託運單號／收件人）還分得出來嗎？');
+    Logger.log('　 分得出來 → 下一步把這段文字餵給 Gemini 解析（純文字實測 2.2 秒）');
+    Logger.log('　 黏成一團 → 改走「PDF 轉圖片」或回頭用 shipment-worker/parsers.py');
+  }
+}
+
+/**
+ * 【診斷】Gemini 現在到底能不能用？用**最小的純文字請求**逐一測每個模型。
+ *
+ * ⚠ 存在的理由：2026-08-25 下午測貨運單 PDF，三個模型全部回 503。
+ *   但 503 是「服務忙碌」不是「不支援這種檔案」（後者會回 400 INVALID_ARGUMENT），
+ *   所以那個結果**無法分辨**是「Gemini 整個在忙」還是「它不吃 PDF」。
+ *   這支用最小的文字請求打同一批模型：
+ *     文字成功、PDF 失敗 → 問題出在 PDF（或檔案大小）
+ *     文字也失敗         → Gemini 當下就是不能用，跟 PDF 無關，等一下再測
+ *   不先分清楚就改設計，很可能是在解一個不存在的問題。
+ */
+function testGeminiHealth() {
+  var key = PropertiesService.getScriptProperties().getProperty(GEMINI_KEY_PROP);
+  if (!key) { Logger.log('❌ 未設定 ' + GEMINI_KEY_PROP); return; }
+
+  Logger.log('用最小的純文字請求逐一測 ' + GEMINI_MODELS.length + ' 個模型：');
+  Logger.log('');
+  var anyOk = false;
+
+  for (var i = 0; i < GEMINI_MODELS.length; i++) {
+    var model = GEMINI_MODELS[i];
+    var t0 = Date.now();
+    var resp, code, body = '';
+    try {
+      resp = UrlFetchApp.fetch(
+        'https://generativelanguage.googleapis.com/v1beta/models/' + model +
+          ':generateContent?key=' + key,
+        {
+          method: 'post',
+          contentType: 'application/json',
+          payload: JSON.stringify({
+            contents: [{ parts: [{ text: '回一個字：好' }] }]
+          }),
+          muteHttpExceptions: true
+        });
+      code = resp.getResponseCode();
+      body = resp.getContentText();
+    } catch (err) {
+      code = 0; body = String(err);
+    }
+    var secs = Math.round((Date.now() - t0) / 100) / 10;
+    if (code >= 200 && code < 300) {
+      anyOk = true;
+      Logger.log('  ✅ ' + model + '　HTTP ' + code + '　' + secs + ' 秒');
+    } else {
+      var msg = '';
+      try { msg = (JSON.parse(body).error || {}).message || ''; } catch (e) { msg = body.slice(0, 120); }
+      Logger.log('  ❌ ' + model + '　HTTP ' + code + '　' + secs + ' 秒　' + msg);
+    }
+  }
+
+  Logger.log('');
+  Logger.log('── 判讀 ──');
+  if (anyOk) {
+    Logger.log('✅ Gemini 本身可用（純文字打得通）。');
+    Logger.log('　 那麼貨運單 PDF 失敗就**不是 Gemini 在忙**，問題出在那個請求本身');
+    Logger.log('　 （檔案型別不支援、檔案太大、或處理逾時被回成 503）。');
+    Logger.log('　 下一步：改用圖片試，或把 PDF 縮小／只取第一頁。');
+  } else {
+    Logger.log('🔴 純文字也全部失敗 → Gemini 當下整個不能用，跟 PDF 無關。');
+    Logger.log('　 隔一段時間再跑一次；若持續整天失敗，要查 API 金鑰的配額或帳單狀態。');
+  }
+  Logger.log('');
+  Logger.log('（純文字請求極小，若連它都要等十幾秒才回，本身就是異常訊號。）');
+}
+
+/**
+ * 貨運單上傳畫面。**極簡＋手機優先**：倉庫是站在現場操作，
+ * 一個選檔、一顆送出就夠，多一個欄位都是負擔。
+ */
+function shipDocBlock_(email) {
+  var head =
+    '<div class="hd"><div class="ic">🚚</div><div><h1>貨運單</h1><p>' +
+    esc_(email) + '</p></div></div>' +
+    '<div id="msg"></div>';
+
+  var card =
+    '<div class="card">' +
+      '<div class="ometa"><b>上傳託運總表</b><span>新竹物流／嘉里大榮的 PDF 都可以</span></div>' +
+      '<div class="note" style="margin-bottom:10px">' +
+        '一份檔案裡有好幾張出貨單沒關係，系統會自動拆開，' +
+        '把貨運單號填回對應的出貨明細。</div>' +
+      '<input type="file" id="sdf" accept=".pdf,.jpg,.jpeg,.png">' +
+      '<div class="row" style="margin-top:12px">' +
+        '<button class="ok big" id="sdb" onclick="return false;">📤 上傳</button>' +
+      '</div>' +
+    '</div>';
+
+  var footer = '<div class="note">' +
+    '上傳後系統會在幾分鐘內辨識完成，不必留在這一頁等。<br>' +
+    '對不上的會列進「貨運單待指定」分頁，由人工指定對應哪張出貨單——' +
+    '<b>系統不會用猜的</b>，因為猜錯的貨運單號看起來完全正常。</div>';
+
+  // 沿用發票上傳同一套：google.script.run 傳不了 File 物件，要先讀成 base64 再送
+  var script = '<script>' +
+    '(function(){' +
+    'function g(id){return document.getElementById(id);}' +
+    'function show(t,c){g("msg").innerHTML=\'<div class="msg \'+c+\'">\'+t.replace(/\\n/g,"<br>")+\'</div>\';window.scrollTo(0,0);}' +
+    'g("sdb").onclick=function(){' +
+      'var f=g("sdf").files&&g("sdf").files[0];' +
+      'if(!f){show("請先選擇檔案","fail");return;}' +
+      'var b=g("sdb");var old=b.textContent;b.disabled=true;b.textContent="上傳中…";' +
+      'var rd=new FileReader();' +
+      'rd.onload=function(){' +
+        'var s=String(rd.result);var i=s.indexOf(",");' +
+        'google.script.run' +
+          '.withSuccessHandler(function(res){b.disabled=false;b.textContent=old;' +
+            'if(res.ok){show(res.message,"done");g("sdf").value="";}' +
+            'else{show(res.message,"fail");}})' +
+          '.withFailureHandler(function(e){b.disabled=false;b.textContent=old;' +
+            'show("連線失敗："+e.message,"fail");})' +
+          '.uploadShippingDoc(f.name,f.type,s.slice(i+1));' +
+      '};' +
+      'rd.onerror=function(){b.disabled=false;b.textContent=old;show("檔案讀取失敗","fail");};' +
+      'rd.readAsDataURL(f);' +
+    '};' +
+    '})();' +
+    '</script>';
+
+  return head + card + footer + script;
+}
+
+/**
+ * 倉庫上傳貨運單（託運總表）。**只存檔並排隊，不當場辨識。**
+ *
+ * ⚠ 為什麼不當場辨識：實測整份流程要 38.6 秒（轉文字 3.5 + Gemini 解析 35.1）。
+ *   倉庫在現場用手機，盯著轉圈半分鐘不可接受，切換 app 還可能中斷。
+ *   所以這裡秒回「收到了」，辨識交給時間觸發器（processShipDocQueue）。
+ *
+ * @return {ok, message}
+ */
+function uploadShippingDoc(fileName, mimeType, base64) {
+  var email = currentUserEmail_();
+  if (!email) return { ok: false, message: '無法辨識身分，未上傳。' };
+  return uploadShippingDocAs_(email, fileName, mimeType, base64);
+}
+
+/**
+ * 上傳的核心（身分由呼叫端給）。
+ *
+ * ⚠ 權限閘門放這裡**不是放在薄殼**，比照 submitWarehouseAs_ 的做法：
+ *   將來若從別的入口呼叫（Chat、觸發器），閘門自動跟著走。
+ *   uploadInvoice 就是因為身分綁死 currentUserEmail_() 而無法被別的入口複用。
+ */
+function uploadShippingDocAs_(email, fileName, mimeType, base64) {
+  var roles = rolesFor_(email);
+  if (!roles.warehouse) {
+    return { ok: false, message: '您（' + email + '）不在倉庫名單中（指令碼屬性 DISPATCH_WAREHOUSE），無法上傳貨運單。' };
+  }
+  if (!INVOICE_MIME_OK[mimeType]) {
+    return { ok: false, message: '只接受 PDF 或圖片，收到的是「' + mimeType + '」。' };
+  }
+  if (!base64) return { ok: false, message: '沒有收到檔案內容，請重新選擇。' };
+
+  var bytes;
+  try { bytes = Utilities.base64Decode(base64); }
+  catch (e) { return { ok: false, message: '檔案內容解不開，請重新選擇。' }; }
+  if (bytes.length > INVOICE_MAX_BYTES) {
+    return { ok: false, message: '檔案 ' + Math.round(bytes.length / 1048576) +
+      ' MB 超過上限 ' + (INVOICE_MAX_BYTES / 1048576) + ' MB。' };
+  }
+
+  var folderId = PropertiesService.getScriptProperties().getProperty(SHIPDOC_FOLDER_PROP);
+  if (!folderId) {
+    return { ok: false, message: '未設定指令碼屬性 ' + SHIPDOC_FOLDER_PROP + '（貨運單 Drive 資料夾 ID）。' };
+  }
+
+  var file;
+  try {
+    var folder = DriveApp.getFolderById(folderId);
+    var stamp = Utilities.formatDate(new Date(), TZ, 'yyyyMMdd-HHmm');
+    // 不呼叫 setSharing：權限完全由該資料夾決定（同 uploadInvoice 的原則）
+    file = folder.createFile(Utilities.newBlob(bytes, mimeType,
+      stamp + '_' + (fileName || 'shipping.pdf')));
+  } catch (err) {
+    return { ok: false, message: '存進 Drive 失敗：' + err };
+  }
+
+  try {
+    var q = openAuxSheet_(SHIPDOC_SHEET, SHIPDOC_HEAD);
+    var rec = {};
+    rec[normHeader_('上傳時間')] = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm');
+    rec[normHeader_('檔名')] = file.getName();
+    rec[normHeader_('檔案ID')] = file.getId();
+    rec[normHeader_('上傳人')] = email;
+    rec[normHeader_('狀態')] = SHIPDOC_PENDING;
+    var line = [];
+    for (var h = 0; h < SHIPDOC_HEAD.length; h++) {
+      line.push(rec[normHeader_(SHIPDOC_HEAD[h])] || '');
+    }
+    q.sheet.appendRow(line);
+  } catch (err2) {
+    // 檔案已經存進 Drive 了，排隊失敗要明說——不然使用者以為成功、系統卻永遠不會處理
+    return { ok: false, message: '檔案已存進 Drive，但排隊失敗：' + err2 +
+      '　請告知管理員，檔名 ' + file.getName() };
+  }
+
+  return { ok: true, message: '收到了 ✅ ' + file.getName() +
+    '\n辨識需要約 40 秒，完成後會把貨運單號自動填回出貨明細。你可以直接離開這一頁。' };
+}
+
+/**
+ * 【時間觸發器】處理佇列裡待辨識的貨運單。建議每 5 分鐘跑一次。
+ *
+ * ⚠ 一次只處理一份：單份實測 38.6 秒，GAS 觸發器有執行時間上限，
+ *   一次吃多份會在中途被砍，而且被砍的那份狀態會卡在「待辨識」與「已處理」之間。
+ *   寧可下一輪再處理，也不要處理到一半。
+ */
+function processShipDocQueue() {
+  var q;
+  try { q = openAuxSheet_(SHIPDOC_SHEET, SHIPDOC_HEAD); }
+  catch (err) { Logger.log('❌ 開佇列失敗：' + err); return; }
+
+  var last = q.sheet.getLastRow();
+  if (last < 2) { Logger.log('佇列是空的。'); return; }
+
+  var cStatus = q.col[normHeader_('狀態')];
+  var cFile = q.col[normHeader_('檔案ID')];
+  var vals = q.sheet.getRange(2, 1, last - 1, q.sheet.getLastColumn()).getValues();
+
+  for (var i = 0; i < vals.length; i++) {
+    if (String(vals[i][cStatus - 1] || '').trim() !== SHIPDOC_PENDING) continue;
+    var row = i + 2;
+    var fileId = String(vals[i][cFile - 1] || '').trim();
+    Logger.log('處理第 ' + row + ' 列，檔案 ' + fileId);
+    var r = processOneShipDoc_(fileId);
+    q.sheet.getRange(row, cStatus).setValue(r.ok ? SHIPDOC_DONE : SHIPDOC_FAIL);
+    q.sheet.getRange(row, q.col[normHeader_('處理時間')])
+      .setValue(Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm'));
+    q.sheet.getRange(row, q.col[normHeader_('總筆數')]).setValue(r.total || 0);
+    q.sheet.getRange(row, q.col[normHeader_('已配對')]).setValue(r.matched || 0);
+    q.sheet.getRange(row, q.col[normHeader_('待指定')]).setValue(r.pending || 0);
+    q.sheet.getRange(row, q.col[normHeader_('訊息')]).setValue(r.message || '');
+    Logger.log(r.message);
+    return;   // 一次只做一份
+  }
+  Logger.log('沒有待辨識的檔案。');
+}
+
+/** 辨識一份貨運單並回填。回 {ok, total, matched, pending, message}。 */
+function processOneShipDoc_(fileId) {
+  var txt = pdfToText_(fileId);
+  if (!txt.ok) return { ok: false, message: '轉文字失敗：' + txt.message };
+  if (txt.chars < 100) {
+    return { ok: false, message: '幾乎抽不到文字（' + txt.chars +
+      ' 字），這份可能是掃描影像，需要人工處理。' };
+  }
+
+  var got = callGeminiJson_([{ text: SHIPDOC_PROMPT + txt.text }],
+    SHIPDOC_SCHEMA, '貨運單解析');
+  if (!got.ok) return { ok: false, message: '辨識失敗（' + got.reason + '）' };
+
+  var d = got.data || {};
+  var rows = d.rows || [];
+  if (!rows.length) return { ok: false, message: '辨識結果是空的。' };
+
+  // 文件自述的合計是免費的驗證錨點：對不上就代表漏行，要讓人知道
+  var expect = 0;
+  var m = txt.text.match(/全合計[：:]\s*(\d+)\s*筆/) || txt.text.match(/合計[：:]\s*(\d+)\s*筆/);
+  if (m) expect = Number(m[1]);
+  var warn = (expect && rows.length !== expect)
+    ? '⚠ 文件寫 ' + expect + ' 筆但只辨識出 ' + rows.length + ' 筆，可能漏行。' : '';
+
+  var idx = buildMatchIndex_();
+  var s = openShipmentSheet_();
+  var cTrack = s.col[normHeader_(COL_S_TRACK_NO)];
+  var cTrackAt = s.col[normHeader_(COL_S_TRACK_AT)];
+  var matched = 0, waiting = [];
+
+  for (var i = 0; i < rows.length; i++) {
+    var rec = rows[i] || {};
+    var track = String(rec.tracking_no || '').trim();
+    if (!track) continue;
+    var hit = matchShipRow_(rec, idx);
+    if (hit.row) {
+      s.sheet.getRange(hit.row, cTrack).setValue(track);
+      if (rec.ship_date) s.sheet.getRange(hit.row, cTrackAt).setValue(rec.ship_date);
+      matched++;
+    } else {
+      waiting.push({ rec: rec, cands: hit.candidates || [] });
+    }
+  }
+  SpreadsheetApp.flush();
+  invalidateWarehouseCache_();
+
+  if (waiting.length) writeShipWaiting_(waiting, fileId);
+
+  return {
+    ok: true, total: rows.length, matched: matched, pending: waiting.length,
+    message: warn + '辨識 ' + rows.length + ' 筆，自動配對 ' + matched +
+      ' 筆，待人工指定 ' + waiting.length + ' 筆。'
+  };
+}
+
+/** 對不到的託運紀錄寫進「貨運單待指定」，附上候選讓人挑。 */
+function writeShipWaiting_(list, fileId) {
+  try {
+    var w = openAuxSheet_(SHIPWAIT_SHEET, SHIPWAIT_HEAD);
+    var lines = [];
+    for (var i = 0; i < list.length; i++) {
+      var r = list[i].rec;
+      var o = {};
+      o[normHeader_('貨運單號')] = r.tracking_no || '';
+      o[normHeader_('貨運日期')] = r.ship_date || '';
+      o[normHeader_('收件人')] = r.recipient || '';
+      o[normHeader_('電話')] = r.phone || '';
+      o[normHeader_('備註')] = r.note || '';
+      o[normHeader_('來源檔案')] = fileId;
+      o[normHeader_('候選出貨單號')] = (list[i].cands || []).join('、');
+      o[normHeader_('處理狀態')] = '待指定';
+      var line = [];
+      for (var h = 0; h < SHIPWAIT_HEAD.length; h++) {
+        line.push(o[normHeader_(SHIPWAIT_HEAD[h])] || '');
+      }
+      lines.push(line);
+    }
+    if (lines.length) {
+      w.sheet.getRange(w.sheet.getLastRow() + 1, 1, lines.length, SHIPWAIT_HEAD.length)
+        .setValues(lines);
+    }
+  } catch (err) {
+    Logger.log('⚠ 寫「待指定」失敗（辨識與配對已完成，不影響已寫入的資料）：' + err);
+  }
+}
 
 /**
  * 【階段 0 驗證工具】拿一份真實貨運單 PDF 測 Gemini 認不認得。
@@ -4099,92 +4776,91 @@ var SHIPDOC_PROMPT =
  *   ② 出貨單號與貨運單號有沒有串行（拿兩三列去 PDF 上核對）
  */
 function testShippingDocParse(fileId) {
-  var file;
-  try {
-    if (fileId) {
-      file = DriveApp.getFileById(fileId);
-    } else {
-      var folderId = PropertiesService.getScriptProperties()
-        .getProperty('SHIPMENT_FOLDER_ID');
-      if (!folderId) {
-        Logger.log('❌ 沒給 fileId，指令碼屬性 SHIPMENT_FOLDER_ID 也沒設定。');
-        Logger.log('　 用法：testShippingDocParse("Drive檔案ID")');
-        return;
-      }
-      var it = DriveApp.getFolderById(folderId).getFilesByType('application/pdf');
-      var newest = null;
-      while (it.hasNext()) {
-        var f = it.next();
-        if (!newest || f.getDateCreated() > newest.getDateCreated()) newest = f;
-      }
-      if (!newest) { Logger.log('❌ 資料夾裡沒有 PDF。'); return; }
-      file = newest;
-    }
-  } catch (err) {
-    Logger.log('❌ 開檔失敗：' + err);
-    return;
-  }
+  var file = shipDocFile_(fileId);
+  if (!file) return;
 
-  var blob = file.getBlob();
-  var bytes = blob.getBytes();
-  var mime = blob.getContentType();
-  Logger.log('檔案：' + file.getName());
-  Logger.log('　　　' + mime + '　' + Math.round(bytes.length / 1024) + ' KB');
-  if (bytes.length > INVOICE_MAX_BYTES) {
-    Logger.log('⚠ 超過目前的上傳上限 ' + (INVOICE_MAX_BYTES / 1048576) +
-      ' MB。正式功能要放寬上限或改分頁處理。');
-  }
+  Logger.log('檔案：' + file.getName() + '　' +
+    Math.round(file.getSize() / 1024) + ' KB');
+
+  // ① PDF → 文字（不直接餵 PDF 給 Gemini，理由見 SHIPDOC_PROMPT 的註解）
+  var t0 = Date.now();
+  var txt = pdfToText_(file.getId());
+  if (!txt.ok) { Logger.log('❌ ' + txt.message); return; }
+  var tSecs = Math.round((Date.now() - t0) / 100) / 10;
+  Logger.log('轉文字：' + txt.chars + ' 字，' + tSecs + ' 秒');
+
+  // 文件結尾的「全合計：N 筆」是**免費的驗證錨點**——不必人工數就知道應該有幾筆
+  var expect = 0;
+  var m = txt.text.match(/全合計[：:]\s*(\d+)\s*筆/);
+  if (!m) m = txt.text.match(/合計[：:]\s*(\d+)\s*筆/);
+  if (m) { expect = Number(m[1]); Logger.log('文件自己寫的總筆數：' + expect + ' 筆'); }
   Logger.log('');
 
-  var t0 = Date.now();
-  var got = callGeminiJson_(
-    [{ text: SHIPDOC_PROMPT },
-     { inline_data: { mime_type: mime, data: Utilities.base64Encode(bytes) } }],
-    SHIPDOC_SCHEMA, '貨運單辨識測試');
-  var secs = Math.round((Date.now() - t0) / 100) / 10;
+  // ② 文字 → Gemini 解析
+  var t1 = Date.now();
+  var got = callGeminiJson_([{ text: SHIPDOC_PROMPT + txt.text }],
+    SHIPDOC_SCHEMA, '貨運單解析測試');
+  var gSecs = Math.round((Date.now() - t1) / 100) / 10;
 
   if (!got.ok) {
-    Logger.log('❌ 辨識失敗（' + got.reason + '，HTTP ' + got.code + '）耗時 ' + secs + ' 秒');
-    Logger.log(String(got.body || '').slice(0, 500));
-    if (got.reason === 'http' && /mime|unsupported|invalid/i.test(String(got.body))) {
-      Logger.log('');
-      Logger.log('🔴 看起來是 Gemini 不吃這個檔案型別 → 計畫的假設①不成立，');
-      Logger.log('　 要改走退路：PDF 轉圖片，或回頭用 shipment-worker/parsers.py。');
-    }
+    Logger.log('❌ 解析失敗（' + got.reason + '，HTTP ' + got.code + '）耗時 ' + gSecs + ' 秒');
+    Logger.log(String(got.body || '').slice(0, 400));
     return;
   }
 
   var d = got.data || {};
   var rows = d.rows || [];
-  Logger.log('✅ 辨識成功，用的模型 ' + got.model + '，耗時 ' + secs + ' 秒');
-  Logger.log('貨運公司：' + (d.carrier || '(讀不到)'));
-  Logger.log('AI 自報總筆數：' + d.total + '　實際回傳：' + rows.length + ' 筆');
+  Logger.log('✅ 解析成功｜模型 ' + got.model + '｜' + gSecs + ' 秒' +
+    '（全程 ' + (tSecs + gSecs) + ' 秒）');
+  Logger.log('貨運公司：' + (d.carrier || '(讀不到)') + '　日期：' + (d.doc_date || '(讀不到)'));
+  Logger.log('');
+
+  // ── 三個自動檢查，把「用眼睛很難發現的錯」抓出來 ──
+  Logger.log('── 筆數核對 ──');
+  Logger.log('文件寫的：' + (expect || '(找不到合計)') +
+    '　AI 自報：' + d.total + '　實際回傳：' + rows.length);
+  if (expect && rows.length !== expect) {
+    Logger.log('🔴 實際回傳與文件合計不符 → **漏了 ' + (expect - rows.length) +
+      ' 筆**。漏掉的那幾張單永遠查不到貨運單號，這是不可接受的失敗。');
+  } else if (expect) {
+    Logger.log('✅ 筆數與文件合計一致。');
+  }
   if (Number(d.total) !== rows.length) {
-    Logger.log('🔴 兩個數字對不上 → AI 自己知道有 ' + d.total +
-      ' 筆卻只回了 ' + rows.length + ' 筆，這是**截斷**，正式功能必須處理。');
+    Logger.log('🔴 AI 自報 ' + d.total + ' 筆卻只回 ' + rows.length + ' 筆 → 它自己知道截斷了。');
   }
   Logger.log('');
 
-  var withNo = 0;
+  var withNo = 0, withPhone = 0, withNote = 0, dupTrack = {}, dupCount = 0;
   for (var i = 0; i < rows.length; i++) {
     var r = rows[i] || {};
     if (String(r.order_no || '').trim()) withNo++;
-    Logger.log((i + 1) + '. 出貨單號=' + (r.order_no || '(空)') +
-      '　貨運單號=' + (r.tracking_no || '(空)') +
-      '　日期=' + (r.ship_date || '(空)') +
-      '　收件=' + (r.recipient || '(空)'));
+    if (String(r.phone || '').trim()) withPhone++;
+    if (String(r.note || '').trim()) withNote++;
+    var tk = String(r.tracking_no || '').trim();
+    if (tk) { if (dupTrack[tk]) dupCount++; dupTrack[tk] = true; }
+    Logger.log((i + 1) + '. ' + (r.tracking_no || '(無單號)') +
+      '｜' + (r.recipient || '(無收件人)') +
+      '｜訂單編號=' + (r.order_no || '空') +
+      '｜電話=' + (r.phone || '空') +
+      (r.note ? '｜備註=' + r.note : ''));
   }
 
   Logger.log('');
-  Logger.log('── 判讀 ──');
-  Logger.log('有讀到「出貨單號」的：' + withNo + ' / ' + rows.length + ' 筆');
+  Logger.log('── 可配對性 ──');
+  Logger.log('有「訂單編號」的：' + withNo + ' / ' + rows.length + ' 筆');
+  Logger.log('有電話的：' + withPhone + '　有備註的：' + withNote);
+  if (dupCount) {
+    Logger.log('🔴 有 ' + dupCount + ' 個重複的託運單號 → 多半是 AI 把同一列讀了兩次。');
+  }
   if (!withNo) {
-    Logger.log('⚠ 一筆都沒有出貨單號。這**多半不是 AI 讀錯**——');
-    Logger.log('　 sql/supabase_shipments.sql 記載兩家貨運公司這一欄實際上都沒填。');
-    Logger.log('　 要先請倉庫在貨運系統 key 單時填這一欄，這條鏈才成立。');
+    Logger.log('');
+    Logger.log('⚠ 一筆都沒有訂單編號。這**不是 AI 讀錯**——真實樣本裡那一欄整份都是空的');
+    Logger.log('　（與 sql/supabase_shipments.sql:14 的記載一致）。');
+    Logger.log('　 → 要嘛請倉庫在貨運系統填這一欄（乾淨的配對鍵），');
+    Logger.log('　 → 要嘛先靠「收件人＋電話＋備註」跟出貨明細配對（今天就能用）。');
   }
   Logger.log('');
-  Logger.log('👉 請人工核對：①上面的筆數跟 PDF 上是否一致　②抽兩三列看單號有沒有串行');
+  Logger.log('👉 請人工抽查兩三列：對照 PDF，看收件人與託運單號有沒有串行。');
 }
 
 /**
@@ -4358,6 +5034,7 @@ function answerChatQuestion_(text, asker) {
   }
 
   var lines = [at + '「' + cond + '」找到 ' + res.rows.length + ' 筆：', ''];
+  var anyUnshipped = false;   // 有沒有任何一筆還看不到貨運單號（決定要不要附免責聲明）
   for (var i = 0; i < res.rows.length; i++) {
     var r = res.rows[i];
     // 客戶欄裡常有對齊用的連續空白（實測看到「天崴建設-　　　　張小姐」），
@@ -4368,10 +5045,12 @@ function answerChatQuestion_(text, asker) {
 
     if (!r.ships.length) {
       lines.push('　狀態：' + shipmentStage_(null).label);
+      anyUnshipped = true;
     } else {
       for (var s = 0; s < r.ships.length; s++) {
         var st = shipmentStage_(r.ships[s]);
         lines.push('　狀態：' + st.label);
+        if (st.code !== 'shipped') anyUnshipped = true;
       }
     }
     lines.push('');
@@ -4380,7 +5059,9 @@ function answerChatQuestion_(text, asker) {
   if (res.truncated) {
     lines.push('（只顯示前 10 筆，還有更多請用查詢頁）');
   }
-  lines.push(CHAT_SHIP_DISCLAIMER);
+  // 🔑 全部都看得到貨運單號時**不加免責聲明**——那句話說「這不是實際出貨紀錄」，
+  //    但貨運單號正是實際出貨紀錄，繼續附上去會變成自相矛盾的錯話。
+  if (anyUnshipped) lines.push(CHAT_SHIP_DISCLAIMER);
 
   var link = deepLink_({ page: 'query' });
   if (link) lines.push('<' + link + '|➡ 開查詢頁看完整資料>');
