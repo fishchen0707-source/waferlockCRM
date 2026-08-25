@@ -237,19 +237,27 @@ var INVOICE_OPTIONS = ['出貨待驗無發票', '電子計算機發票', '二聯
 //
 // ⚠ 請求格式（inline_data + responseSchema）照抄 supabase/functions/rtc-recording/index.ts
 //   裡已經在正式環境跑得動的那支，這部分沒問題。但**模型名稱會過期**——
-//   2026-08-25 正式環境實測 gemini-2.0-flash 已下架（HTTP 404 "no longer available"），
-//   Google 的錯誤訊息裡直接指定了替代型號 gemini-3.6-flash，換過後又遇到
-//   HTTP 503（該型號當下過載，暫時性的，不是型號不存在）。
+//   2026-08-25 正式環境實測 gemini-2.0-flash 已下架（HTTP 404 "no longer available"）。
 //
 // 所以模型名稱不是常數，是一份**依序嘗試的清單**：第一個打不通（不論 404 型號不存在
 // 還是 503 過載）就自動換下一個，全部都失敗才真的回報辨識失敗。
-//   [0] gemini-3-flash-preview — 純 "gemini-3-flash"（無版本號）查無此正式模型，
-//       這是查得到、最貼近的預覽版
-//   [1] gemini-3.6-flash — 已在正式環境實測過確實存在（Google 錯誤訊息親自指定的型號）
-// 之後若又 404／503，看 Logger 印出的失敗內容，把新的型號加進這份清單最前面即可，
-// 不用整支重寫。
+//
+// 🔑 清單順序是「已驗證的排前面」，不是「版本號最大的排前面」。
+//   排序這件事有實際成本：2026-08-25 曾把 gemini-3-flash-preview 放第一順位（當時是猜的），
+//   它每次都 503 過載、每次都要退到第二個才成功，**每一次辨識都白等 9 秒**。
+//   而且從辨識結果完全看不出來——結果是對的，只是慢，所以不會有人回報。
+//   排錯順序的代價是這個，不是報錯。
+//   [0] gemini-3.6-flash — **唯一端到端實測過的**（真實 LINE 截圖辨識正確，HTTP 200）
+//   [1] gemini-3.7-flash — 版本較新的穩定版，[0] 過載時的退路（未實測，僅確認存在）
+//   [2] gemini-flash-latest — Google 維護的別名，永遠指向當期 flash。
+//       放最後而不是最前：別名會**無預警換底層模型**，辨識行為可能跟著變，
+//       不適合當主要型號；但它不會像具體版號那樣被下架，是防 404 的最後保險。
+//
+// 之後若又 404／503，**先跑 checkGeminiModels()**（本檔案內，編輯器直接執行）取得
+// 這把金鑰當下真正可用的清單，再照結果改這裡——不要照錯誤訊息或印象猜型號名稱。
+// 上面那 9 秒就是猜出來的。
 var GEMINI_KEY_PROP = 'GEMINI_API_KEY';
-var GEMINI_MODELS = ['gemini-3-flash-preview', 'gemini-3.6-flash'];
+var GEMINI_MODELS = ['gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-flash-latest'];
 var QUICK_IMG_MAX_BYTES = 10 * 1024 * 1024;   // 10 MB，手機截圖遠小於此
 var QUICK_IMG_MIME_OK = {
   'image/jpeg': true,
@@ -6013,6 +6021,91 @@ function checkOrderSetup() {
   }
   Logger.log('登入身分（編輯器手動執行時可能為空，屬正常）：' + currentUserEmail_());
   });
+}
+
+/**
+ * 列出這把 GEMINI_API_KEY 實際可用的模型（截圖下單用）。
+ *
+ * ⚠ 存在的理由是**踩過**：GEMINI_MODELS 清單裡的型號名稱一直是「從錯誤訊息推測」來的，
+ *   結果 gemini-2.0-flash 下架（404）、換 gemini-3.6-flash 又遇 503、
+ *   補的 gemini-3-flash-preview 也是猜的。猜錯的代價不是報錯，是**每次辨識都先白等
+ *   一輪逾時再退到第二個型號**（實測慢了 9 秒），而且從辨識結果完全看不出來。
+ *
+ * ListModels 是 Google 官方端點，回的是這把金鑰當下真正能用的清單——
+ * 是「查證」不是「推測」。之後再遇到 404／503，先跑這支，再照結果改 GEMINI_MODELS。
+ *
+ * 用法：Apps Script 編輯器選這支 → 執行 → 看執行記錄。不會改到任何資料。
+ */
+function checkGeminiModels() {
+  var key = (PropertiesService.getScriptProperties()
+    .getProperty(GEMINI_KEY_PROP) || '').trim();
+  if (!key) {
+    Logger.log('❌ 指令碼屬性 ' + GEMINI_KEY_PROP + ' 未設定，截圖下單無法使用。');
+    return;
+  }
+
+  // 分頁取完整清單：pageSize 給到上限，仍可能有 nextPageToken，不取完會漏掉型號，
+  // 而「漏掉」的症狀跟「不存在」一模一樣，會讓這支診斷本身變成誤導來源。
+  var all = [], token = '', guard = 0;
+  do {
+    var url = 'https://generativelanguage.googleapis.com/v1beta/models?key=' + key +
+      '&pageSize=200' + (token ? '&pageToken=' + encodeURIComponent(token) : '');
+    var resp;
+    try {
+      resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    } catch (err) {
+      Logger.log('❌ 呼叫 ListModels 例外：' + err);
+      return;
+    }
+    var code = resp.getResponseCode();
+    if (code < 200 || code >= 300) {
+      Logger.log('❌ ListModels HTTP ' + code + '：' + resp.getContentText().slice(0, 300));
+      return;
+    }
+    var data = JSON.parse(resp.getContentText());
+    var list = (data && data.models) || [];
+    for (var i = 0; i < list.length; i++) all.push(list[i]);
+    token = (data && data.nextPageToken) || '';
+  } while (token && ++guard < 10);
+
+  // 只有支援 generateContent 的才對我們有意義——截圖辨識就是打這個方法。
+  // 清單裡混著 embedding／TTS 等模型，不濾掉會看不出哪些是真的能用。
+  var usable = {};
+  var flash = [], other = [];
+  for (var j = 0; j < all.length; j++) {
+    var m = all[j];
+    var methods = m.supportedGenerationMethods || [];
+    if (methods.indexOf('generateContent') < 0) continue;
+    var name = String(m.name || '').replace(/^models\//, '');
+    usable[name] = true;
+    if (name.indexOf('flash') >= 0) flash.push(name); else other.push(name);
+  }
+
+  Logger.log('可用模型共 ' + all.length + ' 個，其中支援 generateContent 的 ' +
+    (flash.length + other.length) + ' 個。');
+  Logger.log('── flash 系列（截圖辨識要挑這裡，快又便宜）──');
+  Logger.log(flash.length ? flash.join('\n') : '（無）');
+  Logger.log('── 其他支援 generateContent 的 ──');
+  Logger.log(other.length ? other.join('\n') : '（無）');
+
+  // 逐一驗證目前清單裡的型號是否真的存在，直接指出該改哪一個。
+  Logger.log('── 目前 GEMINI_MODELS 的驗證結果 ──');
+  var bad = [];
+  for (var k = 0; k < GEMINI_MODELS.length; k++) {
+    var want = GEMINI_MODELS[k];
+    if (usable[want]) {
+      Logger.log('  ✅ [' + k + '] ' + want + ' 存在');
+    } else {
+      Logger.log('  ❌ [' + k + '] ' + want + ' 不在可用清單中 → 應從 GEMINI_MODELS 移除或改名');
+      bad.push(want);
+    }
+  }
+  if (bad.length) {
+    Logger.log('⚠ 有 ' + bad.length + ' 個型號查無此名：' + bad.join('、') +
+      '　→ 從上面 flash 清單挑一個換掉（GEMINI_MODELS 在檔案開頭）。');
+  } else {
+    Logger.log('✅ GEMINI_MODELS 裡的型號全部存在。若仍遇 503，那是暫時過載不是名稱錯誤。');
+  }
 }
 
 function checkWarehouseSetup() {
