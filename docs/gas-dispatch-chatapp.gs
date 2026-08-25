@@ -185,14 +185,14 @@ function onMessage(event) {
  * 加進助理群組後，來這裡（或執行記錄）把那串複製出來設定即可。
  */
 function onAddToSpace(event) {
-  var space = (event && event.space && event.space.name) || '(未知)';
+  var space = eventSpace_(event) || '(未知)';
   Logger.log('✅ 派工小幫手已加入空間：' + space +
     '　→ 若這是助理群組，請把這串設進指令碼屬性 ' + CHATAPP_SPACE_PROP);
   return chatText_('大家好，我是派工小幫手 🛠️\n之後主管一簽核，待鍵單的案件會出現在這裡，按「我來處理」就能認領。');
 }
 
 function onRemoveFromSpace(event) {
-  Logger.log('派工小幫手被移出空間：' + ((event && event.space && event.space.name) || '(未知)'));
+  Logger.log('派工小幫手被移出空間：' + (eventSpace_(event) || '(未知)'));
 }
 
 /**
@@ -205,6 +205,54 @@ function onRemoveFromSpace(event) {
  */
 function claimShipment(event) {
   return handleClaimShipment_(event);
+}
+
+/**
+ * 從 Chat 事件取出按鈕參數，兩種模式都吃。
+ *
+ * 這是「認領人顯示 (不明使用者)、標題顯示『案件』而不是單號」的根因——
+ * 兩個症狀同一個原因：外掛程式模式的 event 結構跟傳統 Chat app 不一樣，
+ * 原本只讀傳統的位置，在外掛模式下一律讀到 undefined，於是全部落到預設值。
+ *
+ * 官方對照（developers.google.com/workspace/add-ons/chat/convert）：
+ *   參數：傳統 event.common.parameters → 外掛 event.commonEventObject.parameters
+ *   使用者：傳統 event.user            → 外掛 event.chat.user
+ *   空間：  傳統 event.space           → 外掛 event.chat.buttonClickedPayload.space
+ *
+ * 刻意兩種都讀而不是只改成外掛版：`onCardClick` 還留著以防日後切回傳統模式，
+ * 只支援一種的話，切換當下這裡會再壞一次，而症狀一樣是安靜的預設值。
+ * 外掛優先，因為那是目前實際跑的模式。
+ */
+function eventParams_(event) {
+  if (!event) return {};
+  var addon = event.commonEventObject && event.commonEventObject.parameters;
+  if (addon) return addon;
+  return (event.common && event.common.parameters) || {};
+}
+
+/** 從 Chat 事件取出使用者，兩種模式都吃。理由同 eventParams_。 */
+function eventUser_(event) {
+  if (!event) return {};
+  return (event.chat && event.chat.user) || event.user || {};
+}
+
+/**
+ * 從 Chat 事件取出空間資源名稱（spaces/XXXX），兩種模式都吃。
+ *
+ * 這支比看起來重要：onAddToSpace 印出來的就是要填進指令碼屬性
+ * DISPATCH_ASSISTANT_SPACE 的值。讀錯位置會印成「(未知)」，
+ * 於是「把小幫手加進群組 → 從記錄複製空間 ID」這個設定步驟整個斷掉，
+ * 而且看起來像是 Chat 沒給資料，不像是我們讀錯地方。
+ */
+function eventSpace_(event) {
+  if (!event) return '';
+  var c = event.chat || {};
+  var fromAddon = (c.space && c.space.name) ||
+    (c.buttonClickedPayload && c.buttonClickedPayload.space && c.buttonClickedPayload.space.name) ||
+    (c.messagePayload && c.messagePayload.space && c.messagePayload.space.name) ||
+    (c.addedToSpacePayload && c.addedToSpacePayload.space && c.addedToSpacePayload.space.name);
+  if (fromAddon) return fromAddon;
+  return (event.space && event.space.name) || '';
 }
 
 /**
@@ -222,13 +270,13 @@ function onCardClick(event) {
  * 「我來處理」被按下：
  *   1. 若已被別人認領 → 不覆蓋，回原認領狀態（兩人同時按的競態）
  *   2. 否則記認領（對照表 + 稽核），把卡片改成「🔵 XX 處理中」
- * 認領人身分一律取自 Chat 事件（event.user），不接受前端塞——不限身分不等於可冒名。
+ * 認領人身分一律取自 Chat 事件（eventUser_），不接受前端塞——不限身分不等於可冒名。
  */
 function handleClaimShipment_(event) {
-  var p = (event.common && event.common.parameters) || {};
+  var p = eventParams_(event);
   var orderNo = String(p.orderNo || '').trim();
   var shipNo = String(p.shipNo || '').trim();
-  var user = event.user || {};
+  var user = eventUser_(event);
   var byName = user.displayName || user.email || '(不明使用者)';
   var at = Utilities.formatDate(new Date(), TZ, 'MM/dd HH:mm');
 

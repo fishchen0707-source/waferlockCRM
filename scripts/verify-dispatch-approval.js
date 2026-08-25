@@ -121,6 +121,9 @@ let DRIVE = [];   // 發票上傳測試：記下建了哪些 Drive 檔
 vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(DIR + 'gas-dispatch-approval.gs', 'utf8'), sandbox);
 vm.runInContext(fs.readFileSync(DIR + 'gas-dispatch-notify.gs', 'utf8'), sandbox);
+// Chat app 與簽核同一個 Apps Script 專案，它用的 TZ／deepLink_／COL_ 常數都來自 approval，
+// 所以載進同一個 sandbox 才測得動，也才不會為了它另外複製一份 stub。
+vm.runInContext(fs.readFileSync(DIR + 'gas-dispatch-chatapp.gs', 'utf8'), sandbox);
 const G = sandbox;
 
 let pass = 0, fail = 0;
@@ -2963,6 +2966,92 @@ console.log('【29】退單');
 
   sandbox.UrlFetchApp.fetch = origFetch;
   props.DISPATCH_SHEET_NAME = '*';
+})();
+
+
+// ── 測試 30：Chat 事件的兩種模式（外掛程式 vs 傳統） ──
+// 這一組擋的是「讀錯位置不會報錯，只會安靜落到預設值」這類 bug。
+// 實際發生過：外掛模式下認領人顯示「(不明使用者)」、標題顯示「案件」而不是單號，
+// 兩個症狀同一個根因——event 結構跟傳統 Chat app 不一樣，原本只讀傳統的位置。
+// 官方對照：developers.google.com/workspace/add-ons/chat/convert
+console.log('\n【30】Chat 事件的兩種模式');
+(() => {
+  const PARAMS = { orderNo: 'LS-260805-01', shipNo: 'W5501-1', customer: '王小姐' };
+
+  // 外掛程式模式（目前實際跑的）
+  const addonEvent = {
+    commonEventObject: { parameters: PARAMS },
+    chat: {
+      user: { displayName: 'Vivi Huang', email: 'vivi@waferlock.com' },
+      buttonClickedPayload: { space: { name: 'spaces/AAAA1111' } }
+    }
+  };
+
+  // 傳統 Chat app 模式（保留以防日後切回去）
+  const legacyEvent = {
+    common: { parameters: PARAMS },
+    user: { displayName: 'Vivi Huang', email: 'vivi@waferlock.com' },
+    space: { name: 'spaces/AAAA1111' }
+  };
+
+  // ── 參數
+  ok(G.eventParams_(addonEvent).orderNo === 'LS-260805-01',
+     '🔴 外掛模式要從 commonEventObject.parameters 讀得到單號（讀錯就顯示成「案件」）');
+  ok(G.eventParams_(legacyEvent).orderNo === 'LS-260805-01',
+     '傳統模式要從 common.parameters 讀得到單號');
+  ok(Object.keys(G.eventParams_({})).length === 0, '空事件不可炸，回空物件');
+  ok(Object.keys(G.eventParams_(null)).length === 0, 'null 不可炸');
+
+  // ── 使用者
+  ok(G.eventUser_(addonEvent).displayName === 'Vivi Huang',
+     '🔴 外掛模式要從 chat.user 讀得到人（讀錯就顯示「(不明使用者)」）');
+  ok(G.eventUser_(legacyEvent).displayName === 'Vivi Huang',
+     '傳統模式要從 event.user 讀得到人');
+  ok(!G.eventUser_({}).displayName, '空事件回空物件，不可炸');
+
+  // ── 空間：onAddToSpace 印出來的值是設定 DISPATCH_ASSISTANT_SPACE 的唯一來源，
+  //    讀錯會印成「(未知)」，整個設定步驟就斷了，而且看起來像 Chat 沒給資料
+  ok(G.eventSpace_(addonEvent) === 'spaces/AAAA1111',
+     '🔴 外掛模式要從 chat.buttonClickedPayload.space 讀得到空間');
+  ok(G.eventSpace_(legacyEvent) === 'spaces/AAAA1111',
+     '傳統模式要從 event.space 讀得到空間');
+  ok(G.eventSpace_({ chat: { space: { name: 'spaces/BBBB' } } }) === 'spaces/BBBB',
+     '外掛模式的 chat.space 也要讀得到（不同事件放的位置不同）');
+  ok(G.eventSpace_({ chat: { addedToSpacePayload: { space: { name: 'spaces/CCCC' } } } })
+     === 'spaces/CCCC',
+     '🔴 加入空間事件要讀得到——這正是取得 DISPATCH_ASSISTANT_SPACE 的那一步');
+  ok(G.eventSpace_({}) === '', '空事件回空字串，由呼叫端決定顯示什麼');
+
+  // ── 外掛的回應格式。回錯格式時函式明明成功，Chat 仍顯示「無法處理你的要求」，
+  //    而執行記錄完全正常——這是最難查的一種，所以要鎖住。
+  {
+    const t = G.chatText_('哈囉');
+    ok(t.hostAppDataAction && t.hostAppDataAction.chatDataAction &&
+       t.hostAppDataAction.chatDataAction.createMessageAction,
+       '🔴 文字回應要用外掛格式 hostAppDataAction→chatDataAction→createMessageAction');
+    ok(!t.actionResponse, '不可以是傳統的 actionResponse 格式');
+
+    const u = G.chatUpdateCard_([{ cardId: 'x', card: {} }]);
+    ok(u.hostAppDataAction.chatDataAction.updateMessageAction,
+       '🔴 更新卡片要用 updateMessageAction，不是傳統的 UPDATE_MESSAGE');
+  }
+
+  // ── 按鈕的函式名必須有對應的頂層函式。
+  //    外掛模式是「直接呼叫 action.function 命名的函式」，不是統一進 onCardClick；
+  //    少了頂層函式，Chat 會回 "Script function not found"，而測試不做這條就抓不到。
+  {
+    const src = fs.readFileSync(DIR + 'gas-dispatch-chatapp.gs', 'utf8');
+    const names = new Set();
+    src.split(/function\s*:\s*'/).slice(1).forEach(seg => {
+      const q = seg.indexOf("'");
+      if (q > 0) names.add(seg.slice(0, q));
+    });
+    ok(names.size > 0, '應該找得到卡片按鈕宣告的函式名');
+    [...names].forEach(n => {
+      ok(new RegExp('function\\s+' + n + '\\s*\\(').test(src),
+         '🔴 按鈕 function:\'' + n + '\' 必須有同名的頂層函式（外掛模式直接呼叫它）');
+    });
+  }
 })();
 
 console.log('\n' + (fail ? '❌' : '✅') + ' 通過 ' + pass + '／失敗 ' + fail);
