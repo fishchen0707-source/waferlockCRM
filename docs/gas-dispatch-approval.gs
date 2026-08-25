@@ -523,8 +523,12 @@ function warehouseIssueBlock_(issues) {
           esc_(String(r[COL_S_CUSTOMER] || '')) + '</span></div>' +
         '<div class="msg fail" style="margin:8px 0">⚠ 倉庫回報：' +
           esc_(String(r[COL_S_WH_NOTE] || '（未填說明）')) + '</div>' +
-        (r[COL_S_ITEMS] ? '<div class="note">出貨品項：' +
-          esc_(String(r[COL_S_ITEMS])) + '</div>' : '') +
+        // 🔑 出貨品項可**直接改在這裡**。倉庫回報的問題大多就是這一欄
+        //   （料號不符、沒有料號、數量不對），把它做成唯讀等於叫人另外去開試算表——
+        //   那正是「看得到問題卻不能在當下修正」的老毛病。
+        '<label>出貨品項（倉庫多半是為了這一欄退回來的，可直接修改）</label>' +
+        '<textarea id="' + id + 'i" rows="3">' +
+          esc_(String(r[COL_S_ITEMS] || '')) + '</textarea>' +
         '<div class="note">回報人：' + esc_(String(r[COL_S_WH_BY] || '—')) +
           '　' + esc_(String(r[COL_S_WH_AT] || '')) + '</div>' +
         '<div class="row" style="margin-top:12px">' +
@@ -534,7 +538,7 @@ function warehouseIssueBlock_(issues) {
       '</div>';
   }
   return '<div class="sec">倉庫回報有問題，等你修正' +
-    '<span>改完試算表資料後，按「送回倉庫」它才會重新出現在倉庫的清單裡</span></div>' +
+    '<span>可直接改出貨品項；送出後倉庫會重新看到這筆，業務也會收到改動通知</span></div>' +
     cards;
 }
 
@@ -1796,7 +1800,7 @@ function reopenScript_() {
         '.withFailureHandler(function(e){' +
           'for(var i=0;i<btns.length;i++){btns[i].disabled=false;}' +
           'btns[0].textContent=old;show("連線失敗："+e.message,"fail");})' +
-        '.reopenWarehouse(no,"",rw);' +
+        '.reopenWarehouse(no,g(id+"i")?g(id+"i").value:"",rw);' +
     '}';
 }
 
@@ -6283,9 +6287,9 @@ function submitWarehouse(shipNo, decision, note, hintRow) {
   return submitWarehouseAs_(currentUserEmail_(), shipNo, decision, note, hintRow);
 }
 
-/** 助理修正完資料後，把單子送回倉庫重新核。 */
-function reopenWarehouse(shipNo, note, hintRow) {
-  return reopenWarehouseAs_(currentUserEmail_(), shipNo, note, hintRow);
+/** 助理修正完資料後，把單子送回倉庫重新核。items 是修改後的出貨品項。 */
+function reopenWarehouse(shipNo, items, hintRow) {
+  return reopenWarehouseAs_(currentUserEmail_(), shipNo, items, hintRow);
 }
 
 /**
@@ -6301,7 +6305,7 @@ function reopenWarehouse(shipNo, note, hintRow) {
  *
  * 權限閘門放在核心函式裡（比照 submitWarehouseAs_），換入口呼叫也受保護。
  */
-function reopenWarehouseAs_(email, shipNo, note, hintRow) {
+function reopenWarehouseAs_(email, shipNo, items, hintRow) {
   if (!email) return { ok: false, message: '無法辨識身分，未執行。' };
   var roles = rolesFor_(email);
   if (!roles.assistant) {
@@ -6327,6 +6331,19 @@ function reopenWarehouseAs_(email, shipNo, note, hintRow) {
         '」，不是「' + WH_ISSUE + '」，不需要送回倉庫。（畫面請重新整理）' };
     }
 
+    // 出貨品項有改就寫回去，並記下前後值。
+    //
+    // ⚠ 既有原則是「業務填的資料不讓助理改」（見 pendingShipBlock_ 的註解），
+    //   但那條原則的**理由**是「改了業務不會知道」。倉庫退回來的單如果不能在
+    //   這裡修，整條線就卡住——所以正確的解法不是禁止修改，是**讓業務知道**：
+    //   前後值寫進稽核，並在通知裡明講改了什麼、@到業務本人。
+    var oldItems = String(readShipmentRow_(s, target)[COL_S_ITEMS] || '').trim();
+    var newItems = String(items == null ? '' : items).trim();
+    var changed = !!(newItems && newItems !== oldItems);
+    if (changed && s.col[COL_S_ITEMS]) {
+      s.sheet.getRange(target, s.col[COL_S_ITEMS]).setValue(newItems);
+    }
+
     s.sheet.getRange(target, s.col[COL_S_WH_STATUS]).setValue(WH_PENDING);
     // 核單人／時間清掉：那是上一次核單的人留下的，留著會讓人以為現在還是他負責
     if (s.col[COL_S_WH_BY]) s.sheet.getRange(target, s.col[COL_S_WH_BY]).setValue('');
@@ -6337,20 +6354,23 @@ function reopenWarehouseAs_(email, shipNo, note, hintRow) {
     rec[COL_S_WH_STATUS] = WH_PENDING;
     invalidateWarehouseCache_();
 
+    var auditNote = changed
+      ? '出貨品項：「' + oldItems + '」→「' + newItems + '」'
+      : '未改動品項';
     try {
-      auditShip_(s, target, rec, email, '助理', '重新送倉庫核', note || '');
+      auditShip_(s, target, rec, email, '助理', '重新送倉庫核', auditNote);
     } catch (eA) {
       Logger.log('重新送核稽核寫入失敗（狀態已改成功 ' + shipNo + '）：' + eA);
     }
 
-    // 複用既有的倉庫通知，不另寫一份訊息組裝
     try {
-      notifyWarehouse_(rec, target);
+      notifyShipReopened_(rec, target, changed ? { from: oldItems, to: newItems } : null);
     } catch (e2) {
       Logger.log('重新送核通知失敗（狀態已改成功）：' + e2);
     }
 
-    return { ok: true, message: '已把 ' + shipNo + ' 送回倉庫待核，並通知倉庫。' };
+    return { ok: true, message: '已把 ' + shipNo + ' 送回倉庫待核' +
+      (changed ? '（品項已更新，已通知業務）' : '') + '。' };
   } catch (err) {
     return { ok: false, message: '送回倉庫失敗：' + err };
   } finally {
@@ -6814,6 +6834,48 @@ function notifyShipmentArchive_(rec) {
   lines.push('登錄：' + rec[COL_S_BY] + '　' + rec[COL_S_AT]);
   lines.push('倉庫核單：' + rec[COL_S_WH_BY] + '　' + rec[COL_S_WH_AT]);
 
+  return postWarehouseChat_(lines.join('\n'));
+}
+
+/**
+ * 助理修正完、把單子送回倉庫時的通知。
+ *
+ * ⚠ **刻意不複用 `notifyWarehouse_`**：那支的標題是「新出貨單待核」，
+ *   但這是一張**退回來又修好的單**。用同一則訊息會讓倉庫分不出
+ *   「這是新的」還是「這是我剛退回去的那張」——後者他要對照上次的問題再看一次。
+ *
+ * ⚠ **改了什麼一定要寫出來、而且要 @到業務**：既有原則是「業務的資料不讓助理改，
+ *   因為改了業務不會知道」。這裡允許改，那就必須補上「讓業務知道」這一半，
+ *   否則等於把那條原則的保護拆掉卻沒有補回來。
+ */
+function notifyShipReopened_(rec, row, change) {
+  var uids = loadChatUids_();
+  var lines = ['*🔄 退回的單已修正，重新送核*', ''];
+  lines.push('出貨單號：' + rec[COL_S_SHIP_NO]);
+  if (rec[COL_S_CUSTOMER]) lines.push('客戶：' + rec[COL_S_CUSTOMER]);
+  lines.push('');
+  if (rec[COL_S_WH_NOTE]) {
+    lines.push('上次倉庫回報：' + rec[COL_S_WH_NOTE]);
+  }
+  if (change) {
+    lines.push('已修正 — 出貨品項：');
+    lines.push('　原：' + (change.from || '（空白）'));
+    lines.push('　新：' + change.to);
+  } else {
+    lines.push('（助理未改動品項，可能是其他欄位或外部因素已排除）');
+  }
+  lines.push('');
+  lines.push('出貨品項：');
+  lines.push(rec[COL_S_ITEMS]);
+  lines.push('');
+  lines.push(salesLine_(rec, uids) + '　← 你的單被改過，請確認');
+  lines.push('登錄：' + rec[COL_S_BY] + '　' + rec[COL_S_AT]);
+
+  var link = deepLink_({ page: 'warehouse', ship: rec[COL_S_SHIP_NO], rw: row || '' });
+  if (link) {
+    lines.push('');
+    lines.push('<' + link + '|➡ 開這一筆重新核單>');
+  }
   return postWarehouseChat_(lines.join('\n'));
 }
 

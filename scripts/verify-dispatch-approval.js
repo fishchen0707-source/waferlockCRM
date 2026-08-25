@@ -4111,6 +4111,13 @@ console.log('\n【37】倉庫回報有問題後，單子不可以消失');
   const SHEAD = G.SHIPMENT_HEADERS;
   const rowOf = obj => SHEAD.map(h => (obj[h] === undefined ? '' : obj[h]));
 
+  const origFetch = sandbox.UrlFetchApp.fetch;
+  let sent = [];
+  sandbox.UrlFetchApp.fetch = (u, o) => {
+    sent.push(String((o && o.payload) || ''));
+    return { getResponseCode: () => 200, getContentText: () => 'ok' };
+  };
+
   const reset = rows => {
     SHEETS = [
       makeSheet('出貨明細', SHEAD, rows || [], 1),
@@ -4121,7 +4128,9 @@ console.log('\n【37】倉庫回報有問題後，單子不可以消失');
     props.DISPATCH_SHEET_NAME = '*';
     props.DISPATCH_ASSISTANTS = 'vivi@waferlock.com';
     props.DISPATCH_WAREHOUSE = 'wh@waferlock.com';
+    props.DISPATCH_WAREHOUSE_WEBHOOK = 'https://example.test/hook';
     CACHE = {};
+    sent = [];
   };
 
   const ISSUE_ROW = () => rowOf({
@@ -4208,6 +4217,62 @@ console.log('\n【37】倉庫回報有問題後，單子不可以消失');
        '查無單號要明確失敗');
   }
 
+  // ══ 🔴 要能在「當下」修正，不是叫人去開試算表 ══
+  //
+  // 使用者實測後的原話：「沒有任何地方可以修正」。第一版只做到「單子回得來」，
+  // 卻沒做到「能在這裡修」——那正是他一開始舉的老毛病（看得到問題卻不能當下處理）。
+  {
+    reset([ISSUE_ROW()]);
+    const block = G.warehouseIssueBlock_(G.getWarehouseIssues_());
+    ok(/<textarea id="wi0i"/.test(block),
+       '🔴 出貨品項要能直接改在卡片上（倉庫多半就是為了這一欄退回來的）');
+    ok(/L396 ×10/.test(block), 'textarea 要帶入現有的品項值');
+
+    asUser('vivi@waferlock.com');
+    const r = G.reopenWarehouse('W5501-260825001', 'L372N ×10', 2);
+    ok(r.ok, '帶著修正的品項送回應成功｜' + r.message);
+
+    const s = G.openShipmentSheet_();
+    const it = String(s.sheet.getRange(2, s.col[G.normHeader_('出貨品項')]).getValue());
+    ok(it === 'L372N ×10', '🔴 修改後的品項要真的寫回出貨明細，實際「' + it + '」');
+    ok(/已通知業務/.test(r.message), '改了要讓助理知道業務會被通知');
+  }
+
+  // ══ 🔑 改了業務的資料，業務必須知道 ══
+  //
+  // 既有原則是「業務填的資料不讓助理改，因為改了業務不會知道」。
+  // 這裡允許改了，就必須補上「讓業務知道」那一半，否則等於把保護拆掉沒補回來。
+  {
+    reset([ISSUE_ROW()]);
+    const row = SHEETS.find(x => x.getName() === '出貨明細');
+    row.getRange(2, G.SHIPMENT_HEADERS.indexOf('下單業務') + 1).setValue('小林');
+    CACHE = {};
+    sent = [];
+    asUser('vivi@waferlock.com');
+    G.reopenWarehouse('W5501-260825001', 'L372N ×10', 2);
+
+    ok(sent.length === 1, '送回倉庫要發一則通知');
+    const msg = JSON.parse(sent[0]).text;
+    ok(/重新送核/.test(msg),
+       '🔴 標題要講明這是「退回來又修好的單」，不可跟「新出貨單待核」混在一起');
+    ok(/L396 ×10/.test(msg) && /L372N ×10/.test(msg),
+       '🔴 改了什麼要前後值都寫出來，否則倉庫不知道到底改了沒');
+    ok(/小林/.test(msg), '🔴 要點名業務——他的資料被改了');
+    ok(/請確認/.test(msg), '要明講請業務確認');
+    ok(/料號不符/.test(msg), '要帶出上次倉庫回報的問題，倉庫才知道在看什麼');
+  }
+
+  // ══ 沒改品項也要能送回（可能是外部因素排除了） ══
+  {
+    reset([ISSUE_ROW()]);
+    sent = [];
+    asUser('vivi@waferlock.com');
+    const r = G.reopenWarehouse('W5501-260825001', 'L396 ×10', 2);
+    ok(r.ok && !/已通知業務/.test(r.message), '品項沒變時不該說「已通知業務」');
+    ok(/未改動品項/.test(JSON.parse(sent[0]).text),
+       '沒改品項要明講，倉庫才不會以為東西改好了');
+  }
+
   // ══ 稽核要留痕 ══
   {
     reset([ISSUE_ROW()]);
@@ -4246,6 +4311,7 @@ console.log('\n【37】倉庫回報有問題後，單子不可以消失');
     ok(/送回倉庫/.test(wpage), '也要知道它還會回來');
   }
 
+  sandbox.UrlFetchApp.fetch = origFetch;
   asUser('boss@waferlock.com');
   reset([]);
 })();
