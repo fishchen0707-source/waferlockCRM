@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>派工出貨系統 操作手冊</title>
+<style>
+  :root{
+    --navy:#0F2744; --navy2:#1E3A5F; --blue:#2563EB; --line:#E2E8F0;
+    --g100:#F1F5F9; --g400:#94A3B8; --g600:#475569; --g800:#1E293B;
+    --ok:#15803D; --warn:#B45309; --err:#DC2626;
+    --sidebar:280px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:-apple-system,"Segoe UI","PingFang TC","Microsoft JhengHei",sans-serif;color:var(--g800);line-height:1.7;background:#fff}
+  /* 側欄目錄 */
+  .sidebar{position:fixed;top:0;left:0;width:var(--sidebar);height:100vh;overflow-y:auto;background:var(--navy);color:#fff;padding:22px 0}
+  .sidebar .brand{padding:0 22px 16px;border-bottom:1px solid rgba(255,255,255,.12);margin-bottom:12px}
+  .sidebar .brand b{font-size:17px;letter-spacing:.5px}
+  .sidebar .brand span{display:block;font-size:11px;color:#9DB2CE;margin-top:3px}
+  .sidebar a{display:block;color:#C7D5E8;text-decoration:none;padding:7px 22px;font-size:13.5px;border-left:3px solid transparent}
+  .sidebar a:hover{background:rgba(255,255,255,.06);color:#fff}
+  .sidebar a.grp{color:#7E93B0;font-size:11px;font-weight:700;letter-spacing:1px;margin-top:14px;padding-bottom:2px;cursor:default}
+  .sidebar a.sub{padding-left:34px;font-size:12.5px;color:#9DB2CE}
+  /* 主內容 */
+  main{margin-left:var(--sidebar);max-width:900px;padding:44px 48px 120px}
+  h1{font-size:30px;color:var(--navy);margin-bottom:6px}
+  .lead{color:var(--g600);font-size:15px;margin-bottom:28px}
+  h2{font-size:23px;color:var(--navy);margin:52px 0 4px;padding-top:18px;border-top:2px solid var(--line)}
+  h2 .tag{font-size:12px;font-weight:600;color:#fff;background:var(--blue);padding:2px 9px;border-radius:20px;vertical-align:middle;margin-left:8px}
+  h3{font-size:18px;color:var(--navy2);margin:32px 0 10px}
+  p{margin:10px 0}
+  ol,ul{margin:10px 0 10px 22px}
+  li{margin:6px 0}
+  code{background:var(--g100);padding:1px 6px;border-radius:4px;font-size:.9em;font-family:"Consolas",monospace;color:#B4266E}
+  .fig{margin:18px 0 26px;border:1px solid var(--line);border-radius:10px;overflow:hidden;box-shadow:0 2px 10px rgba(15,39,68,.07)}
+  .fig img{width:100%;display:block}
+  .fig .cap{background:var(--g100);padding:8px 14px;font-size:12.5px;color:var(--g600);border-top:1px solid var(--line)}
+  .steps{counter-reset:s;list-style:none;margin-left:0}
+  .steps>li{counter-increment:s;position:relative;padding:4px 0 4px 40px;margin:8px 0}
+  .steps>li::before{content:counter(s);position:absolute;left:0;top:3px;width:26px;height:26px;background:var(--blue);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700}
+  .num{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;background:var(--err);color:#fff;border-radius:50%;font-size:12px;font-weight:700;margin:0 2px;vertical-align:middle}
+  .note{border-left:4px solid var(--blue);background:#EFF5FF;padding:12px 16px;border-radius:0 8px 8px 0;margin:16px 0;font-size:14px}
+  .warn{border-left:4px solid var(--err);background:#FEF2F2;padding:12px 16px;border-radius:0 8px 8px 0;margin:16px 0;font-size:14px}
+  .warn b{color:var(--err)}
+  table{border-collapse:collapse;width:100%;margin:16px 0;font-size:13.5px}
+  th,td{border:1px solid var(--line);padding:8px 12px;text-align:left}
+  th{background:var(--navy);color:#fff;font-weight:600}
+  tr:nth-child(even) td{background:#F8FAFC}
+  .pill{display:inline-block;padding:1px 9px;border-radius:20px;font-size:12px;font-weight:600}
+  .pill.crm{background:#DBEAFE;color:#1D4ED8}
+  .pill.line{background:#DCFCE7;color:#15803D}
+  .pill.tech{background:#FEF3C7;color:#B45309}
+  @media(max-width:820px){
+    .sidebar{position:static;width:100%;height:auto}
+    main{margin-left:0;padding:24px 18px 80px}
+    .sidebar a.sub{display:none}
+  }
+  /* 這本手冊多出來的幾個樣式，其餘全部沿用 index.html，
+     兩本手冊看起來要是同一套東西 */
+  .who{display:inline-block;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:700;margin-right:6px}
+  .who.sales{background:#DBEAFE;color:#1D4ED8}
+  .who.asst{background:#DCFCE7;color:#15803D}
+  .who.boss{background:#FEF3C7;color:#B45309}
+  .who.wh{background:#F3E8FF;color:#7E22CE}
+  .fig.narrow{max-width:440px}
+  .kbd{display:inline-block;background:#fff;border:1px solid var(--line);border-bottom-width:2px;
+       border-radius:5px;padding:1px 7px;font-size:12.5px;font-family:Consolas,monospace}
+  .path{background:var(--navy);color:#CFE0F5;padding:9px 14px;border-radius:8px;font-size:13px;
+        font-family:Consolas,"Microsoft JhengHei",monospace;margin:12px 0;overflow-x:auto;white-space:nowrap}
+  .path b{color:#fff}
+</style>
+</head>
+<body>
+
+<nav class="sidebar">
+  <div class="brand"><b>派工出貨系統</b><span>四角色操作手冊 v1 · 2026-08-26</span></div>
+  <a class="grp">開始之前</a>
+  <a href="#intro">怎麼進系統、你會看到什麼</a>
+  <a class="grp">業務</a>
+  <a href="#s-order" class="sub">下單（三種單別）</a>
+  <a href="#s-quick" class="sub">截圖下單</a>
+  <a href="#s-query" class="sub">查自己的單</a>
+  <a class="grp">助理</a>
+  <a href="#a-claim" class="sub">從 Chat 認領</a>
+  <a href="#a-fill" class="sub">補 TipTop 單號</a>
+  <a href="#a-legacy" class="sub">舊流程：自己填整張</a>
+  <a class="grp">主管</a>
+  <a href="#b-approve" class="sub">簽核（核准與退回）</a>
+  <a href="#b-dash" class="sub">儀表板與報表</a>
+  <a class="grp">倉庫</a>
+  <a href="#w-check" class="sub">核單與發票</a>
+  <a href="#w-issue" class="sub">回報有問題</a>
+  <a href="#w-doc" class="sub">貨運單上傳</a>
+  <a class="grp">全貌</a>
+  <a href="#flow">一整條流程走一遍</a>
+  <a href="#faq">常見問題與錯誤訊息</a>
+</nav>
+
+<main>
+
+<h1>派工出貨系統 操作手冊</h1>
+<p class="lead">從業務下單到倉庫出貨，四個角色接力。這本手冊按角色分章——先找到你自己那一章，把它讀完就能開始用。<br>
+最後兩章是給想弄懂全貌的人：<b>一整條流程走一遍</b>看自己那一步影響誰，<b>常見問題</b>是實際會跳出來的錯誤訊息。</p>
+
+<h2 id="intro">開始之前：怎麼進系統、你會看到什麼</h2>
+
+<p>系統沒有帳號密碼，<b>用你的公司 Google 帳號自動辨識身分</b>。用私人 Gmail 開會顯示沒有權限。</p>
+
+<div class="path"><b>網址</b>　script.google.com/a/macros/waferlock.com/s/…/exec　（請向資訊人員索取完整網址並加入書籤）</div>
+
+<h3>最上面那排頁籤，每個人看到的不一樣</h3>
+
+<p>你看得到哪幾個頁籤，取決於你被登記在哪份名單裡：</p>
+
+<table>
+<tr><th>角色</th><th>你需要用到的頁籤</th><th>登記在哪</th></tr>
+<tr><td><span class="who sales">業務</span></td><td>下單、查詢</td><td>路由對照表的「業務信箱」欄</td></tr>
+<tr><td><span class="who asst">助理</span></td><td>首頁、出貨登錄、查詢</td><td>指令碼屬性 <code>DISPATCH_ASSISTANTS</code></td></tr>
+<tr><td><span class="who boss">主管</span></td><td>首頁、簽核、查詢、報表</td><td><code>DISPATCH_SUB_APPROVERS</code>／<code>DISPATCH_BOSS_APPROVERS</code></td></tr>
+<tr><td><span class="who wh">倉庫</span></td><td>首頁、倉庫核單、貨運單、查詢</td><td><code>DISPATCH_WAREHOUSE</code></td></tr>
+</table>
+
+<div class="warn"><b>這本手冊的截圖會出現全部 8 個頁籤。</b>
+截圖是用一個看得到所有頁籤的帳號拍的，而且<b>目前部分名單還沒設定</b>——名單是空的時候系統會退回「不擋任何人」，
+所以你現在可能也看得到八個。<b>照你上表那一列做就好，其他頁籤不用管。</b>
+倉庫核單頁最上面若出現黃色的「⚠ 尚未設定 DISPATCH_WAREHOUSE」，講的就是這件事，不是你操作錯誤。</div>
+
+<div class="note"><b>業務請直接把下單頁加書籤。</b>
+直接開總網址的話，系統會照「簽核 → 出貨登錄 → 倉庫核單」的順序找你能進的頁，
+<b>這個順序裡沒有下單頁</b>，所以純業務身分開總網址會看到「您沒有簽核權限」。
+把網址結尾加上 <code>?page=order</code> 存成書籤就不會遇到。</div>
+
+<h3>Chat 通知會自己找上你</h3>
+
+<p>你不必一直守著這個網頁。該你做的事會用 Google Chat 通知你，訊息裡都有一個藍色連結，
+<b>點下去就直接開到那一筆</b>，不用自己再去清單裡找。</p>
+
+<table>
+<tr><th>聊天室</th><th>誰要看</th><th>會收到什麼</th></tr>
+<tr><td>助理出貨群組</td><td>助理、業務</td><td>核准後的認領卡片、倉庫回報有問題、退單申請</td></tr>
+<tr><td>倉庫出貨群組</td><td>倉庫</td><td>待撿料出貨、核單後的備存訊息</td></tr>
+<tr><td>派工小幫手（應用程式）</td><td>所有人</td><td>可以直接問它問題，例如「查金宏鎖店的單」</td></tr>
+</table>
+
+
+<h2 id="s-order">業務：下單<span class="tag">業務</span></h2>
+
+<p>下單頁把三種下單方式放在同一頁，用最上面那排按鈕切換。<b>單別要先選</b>——它決定下面出現哪些欄位、以及這張單要不要經過主管簽核。</p>
+
+<table>
+<tr><th>單別</th><th>什麼時候用</th><th>要簽核嗎</th></tr>
+<tr><td>發包安裝</td><td>要派師傅去裝的</td><td>要，送出後進主管簽核佇列</td></tr>
+<tr><td>料件出貨</td><td>只出料、不派工</td><td>不用</td></tr>
+<tr><td>📷 截圖下單</td><td>經銷商在 LINE 上丟訂單截圖給你</td><td>不用</td></tr>
+</table>
+
+<div class="fig">
+  <img src="img/raw/31-gas-order-install.png" alt="下單頁 發包安裝">
+  <div class="cap">下單頁選「發包安裝」後的完整表單。上面那排是單別按鈕，選了才會展開下面的欄位。</div>
+</div>
+
+<div class="fig">
+  <img src="img/raw/32-gas-order-parts.png" alt="料件出貨">
+  <div class="cap">切到「料件出貨」的樣子：<b>沒有承包商欄位</b>，因為料件出貨不派工。單別選錯就會看到不該填的欄位。</div>
+</div>
+
+<h3>怎麼填</h3>
+
+<ol class="steps">
+<li>點最上面的頁籤 <span class="kbd">下單</span>。</li>
+<li>在「單別」那排點 <span class="kbd">發包安裝</span>（或 <span class="kbd">料件出貨</span>）。下面的欄位這時才會出現。</li>
+<li><b>發包資訊</b>：<b>客戶</b>、<b>型號</b>、<b>報價單數量</b> 三個是必填；發包安裝還一定要填 <b>承包商</b>。
+    案名與承包商是下拉選單，清單裡沒有的就選最後一項「其他」，旁邊會冒出文字框讓你自己打。</li>
+<li><b>出貨項目</b>：從 TipTop 整段複製貼上，一行一項，含料號與數量。<b>這一格填了，助理就不用重打</b>——這是整條流程最省力的一格。</li>
+<li><b>送貨資料</b>：貨要送到哪。<span class="who sales">注意</span>這裡常常是鎖店，不是客人家。</li>
+<li><b>客人資料</b>：最終消費者。客人姓名／電話／地址加上工項與施工時段，會組成給師傅的通知。</li>
+<li>按綠色的 <span class="kbd">📝 建立發包單</span>。</li>
+</ol>
+
+<div class="fig">
+  <img src="img/raw/40-gas-order-filled.png" alt="填好的下單表單">
+  <div class="cap">填好的樣子（這裡用【驗收測試】資料示範）。發包單號不用填，送出後系統自動編號。</div>
+</div>
+
+<div class="fig narrow">
+  <img src="img/raw/41-gas-order-done.png" alt="下單成功訊息">
+  <div class="cap">送出成功會顯示「已建立 FC-260826-01（發包安裝），已送主管簽核。」並清空表單。</div>
+</div>
+
+<div class="warn"><b>看到「未寫入：某某欄位」的橘字提醒不要忽略。</b>
+那表示你的業務分頁沒有那一欄，<b>你填的內容沒有被存下來</b>。系統不會偷偷吞掉，但也不會幫你補——
+需要那個欄位的話，請資訊人員在你的分頁加上。</div>
+
+<div class="note"><b>送出後不必守著。</b>主管核准後，Chat 的「助理出貨群組」會自動出現一張卡片給助理接手。你不用去催。</div>
+
+
+<h2 id="s-quick">業務：截圖下單<span class="tag">業務</span></h2>
+
+<p>經銷商在 LINE 丟訂單截圖給你的時候用這個，<b>不用把截圖上的字一個一個打進表單</b>。</p>
+
+<div class="fig">
+  <img src="img/raw/33-gas-order-quick.png" alt="截圖下單">
+  <div class="cap">在下單頁點「📷 截圖下單」切換過來。</div>
+</div>
+
+<ol class="steps">
+<li>點 <span class="kbd">📷 截圖下單</span>。</li>
+<li>按 <span class="kbd">選擇檔案</span> 選那張截圖。沒選就按辨識會跳「請先選擇圖片」。</li>
+<li>按 <span class="kbd">🔍 辨識</span>，等系統把截圖讀成欄位。</li>
+<li><b>逐項核對</b>。讀不到的欄位會留空，自己補上；讀錯的直接改。</li>
+<li>一張截圖有多筆訂單時，按 <span class="kbd">＋ 新增品項</span> 補上其他筆。</li>
+<li>確認無誤後按 <span class="kbd">📦 送出</span>。</li>
+</ol>
+
+<div class="warn"><b>辨識結果一定要自己看過再送。</b>
+系統讀的是圖片上的字，模糊、遮住、手寫都可能讀錯。<b>送出後就進正式流程了</b>，
+錯的資料會一路傳到倉庫。核對這一步不能跳。</div>
+
+<div class="note">截圖下單走的是<b>另一條路</b>：它發的是案件號、不寫發包單號、而且一律免簽核，直接進助理的鍵單清單。</div>
+
+
+<h2 id="s-query">業務：查自己的單<span class="tag">業務</span></h2>
+
+<div class="fig">
+  <img src="img/raw/38-gas-query.png" alt="查詢頁">
+  <div class="cap">查詢頁。一個框查全部，不用先選要查什麼。</div>
+</div>
+
+<p>發包單號、出貨單號、客戶、案名、客人姓名、電話、通路訂單編號——<b>任一個關鍵字都能查</b>。</p>
+
+<div class="fig">
+  <img src="img/raw/50-gas-query-result.png" alt="查詢結果">
+  <div class="cap">查出來是一張完整歷程卡：下單 → 簽核 → 出貨 → 倉庫核單，每一步是誰、什麼時候做的都在上面。</div>
+</div>
+
+<ul>
+<li><b>「⏳ 待核」</b>還在主管那邊。</li>
+<li><b>「出貨 ⏳ 尚未出貨」</b>助理還沒鍵 TipTop 單號。</li>
+<li><b>「倉庫 已核」</b>倉庫已經撿完料。</li>
+<li>要取消已經送出的單，按卡片上的 <span class="kbd">🔄 申請退單</span>，助理會收到通知。</li>
+</ul>
+
+<div class="note">卡片下方的 <span class="kbd">📋 複製師傅通知</span> 會把<b>不含金額</b>的施工資訊複製起來，直接貼進師傅的 LINE 群組就好。</div>
+
+
+<h2 id="a-claim">助理：從 Chat 認領<span class="tag">助理</span></h2>
+
+<p>主管核准後，<b>「助理出貨群組」會自動出現一張卡片</b>。這是你的工作來源，不必自己去清單裡撈。</p>
+
+<div class="fig narrow">
+  <img src="img/raw/60-chat-claim-open.png" alt="待認領的卡片">
+  <div class="cap">剛出現的卡片：狀態是「⏳ 待認領」。</div>
+</div>
+
+<ol class="steps">
+<li>看到卡片後，<b>先按 <span class="kbd">✋ 我來處理</span></b>。這一步是給其他助理看的，避免兩個人同時做同一筆。</li>
+<li>卡片會變成「🔵 你的名字 處理中」，並附上時間。</li>
+<li>再按 <span class="kbd">➡ 開這一筆鍵單</span>，會直接跳到那一筆的鍵單畫面。</li>
+</ol>
+
+<div class="fig narrow">
+  <img src="img/raw/61-chat-claim-taken.png" alt="已認領的卡片">
+  <div class="cap">按下去之後：狀態變「🔵 Fish Chen 處理中 08/26 13:48」，「我來處理」按鈕消失。</div>
+</div>
+
+<div class="note"><b>忘了按「我來處理」也不會壞。</b>只是別人不知道你在做，可能會重複。養成先按的習慣。</div>
+
+
+<h2 id="a-fill">助理：補 TipTop 單號<span class="tag">助理</span></h2>
+
+<p>業務已經下過單的，<b>資料都是現成的，你只要補三格</b>。</p>
+
+<div class="fig">
+  <img src="img/raw/44-gas-ship-one.png" alt="單筆鍵單畫面">
+  <div class="cap">從 Chat 卡片點進來的單筆畫面。上半部灰色區是業務填的，不能改也不用改。</div>
+</div>
+
+<ol class="steps">
+<li>先在 <b>TipTop</b> 把這筆單開好，拿到出貨單號與訂單編號。</li>
+<li>回到這個畫面，把 <b>出貨單號</b>（必填，格式 <code>W5501-…</code>）填進第一格。</li>
+<li><b>訂單編號</b>（<code>W5301-…</code>）填第二格。</li>
+<li><b>出貨日期</b> 填第三格，格式 <code>2026/08/26</code>。</li>
+<li>按 <span class="kbd">📦 鍵入並通知倉庫</span>。</li>
+</ol>
+
+<div class="fig">
+  <img src="img/raw/45-gas-ship-filled.png" alt="填好單號">
+  <div class="cap">三格填好的樣子。上面的出貨項目是業務貼的，直接拿去 TipTop 用，不必重打。</div>
+</div>
+
+<div class="fig">
+  <img src="img/raw/46-gas-ship-done.png" alt="鍵單完成">
+  <div class="cap">送出後會出現「已鍵入 …，已通知倉庫撿料」，下面還附了一段<b>師傅通知</b>。</div>
+</div>
+
+<div class="note"><b>那段師傅通知按一下就複製。</b>
+按 <span class="kbd">📋 複製師傅通知</span>，直接貼到師傅的 LINE 群組。內容<b>刻意不含金額</b>，可以放心貼。</div>
+
+<div class="warn"><b>出貨單號送出後就不能改了。</b>
+按下去的同時倉庫就收到通知了。填錯的話請倉庫按「⚠ 有問題」退回來，或直接找資訊人員。</div>
+
+
+<h2 id="a-legacy">助理：舊流程——自己填整張<span class="tag">助理</span></h2>
+
+<p>兩種情況要走這裡：<b>業務還沒用下單頁</b>（單子只有發包、沒有出貨資料），或是<b>根本沒有發包單</b>的出貨（弱電料件、鎖胚、建案整批）。</p>
+
+<div class="fig">
+  <img src="img/raw/35-gas-ship.png" alt="出貨登錄頁全貌">
+  <div class="cap">出貨登錄頁由上而下三段：① 業務已下單只要補單號　② 已核准待出貨（舊流程）　③ 最下面的完整表單。</div>
+</div>
+
+<ol class="steps">
+<li><b>有發包單的</b>：在中間「已核准待出貨（舊流程）」清單裡點那一筆，客戶與案名會自動帶進下面的表單。</li>
+<li><b>沒有發包單的</b>：略過清單，直接填最下面的表單，發包單號那格留空。</li>
+<li>必填是 <b>出貨單號</b> 與 <b>出貨品項</b>。品項從 TipTop 整段複製貼上即可。</li>
+<li>填貨指寄的收件人／電話／地址，選發票別。</li>
+<li>按 <span class="kbd">📦 登錄並通知倉庫</span>。</li>
+</ol>
+
+<div class="note">最上面若出現紅色的「倉庫回報有問題」區塊，<b>那是最優先的</b>——在你處理完之前，那筆貨是停住的。
+改好之後按「送回倉庫」，它會帶著倉庫寫的問題說明重新出現在倉庫的清單裡。</div>
+
+
+<h2 id="b-approve">主管：簽核<span class="tag">主管</span></h2>
+
+<p>業務送出「發包安裝」後會進你的簽核佇列，Chat 也會通知你。</p>
+
+<div class="fig">
+  <img src="img/raw/34-gas-approve.png" alt="簽核清單">
+  <div class="cap">簽核頁。每張卡片列出承包商、客戶、型號與承包總價，下面兩顆按鈕。</div>
+</div>
+
+<div class="fig">
+  <img src="img/raw/42-gas-approve-one.png" alt="單筆簽核">
+  <div class="cap">從 Chat 通知點進來會直接停在那一筆，不必在清單裡找。</div>
+</div>
+
+<ol class="steps">
+<li>看承包商與承包總價是否合理。</li>
+<li>沒問題按 <span class="kbd">✅ 核准</span>；有問題按 <span class="kbd">❌ 退回</span>。</li>
+<li>退回要<b>填原因</b>，那句話會原封不動送回給業務——寫清楚可以少一次來回。</li>
+</ol>
+
+<div class="fig narrow">
+  <img src="img/raw/43-gas-approve-done.png" alt="核准後">
+  <div class="cap">處理完會顯示「這一筆已完成，可以關掉這個頁面了 👍」。</div>
+</div>
+
+<div class="note"><b>簽核者身分取自你的 Google 帳號，不能改。</b>每一筆核准／退回都寫進試算表的「簽核紀錄」分頁。
+清單底下若寫「另有 N 筆待副主管核准」，那些不在你的權限範圍，不用管。</div>
+
+<div class="warn"><b>清單有最多 15 分鐘的快取。</b>
+業務剛開的單可能還沒出現在你的清單裡，但<b>你自己剛簽的一定會立刻反映</b>。看不到新單先等一下，不是壞了。</div>
+
+
+<h2 id="b-dash">主管：儀表板與報表<span class="tag">主管</span></h2>
+
+<div class="fig">
+  <img src="img/raw/30-gas-home.png" alt="首頁儀表板">
+  <div class="cap">首頁：待副主管／待主管／待出貨／待核單各幾筆，以及最舊的一筆等了幾天。</div>
+</div>
+
+<p>「最舊 N 天」是用來抓卡住的單的。數字異常大就表示有東西卡在那一關沒人動。</p>
+
+<div class="fig">
+  <img src="img/raw/39-gas-report.png" alt="報表">
+  <div class="cap">報表頁：待辦積壓、出貨趨勢、各業務、各承包商，最下面是需要人工處理的資料不一致。</div>
+</div>
+
+<div class="warn"><b>報表只有主管看得到，因為它會顯示毛利。</b>
+毛利一旦露出來就等於把進價反推出來了，所以是整頁限制，不是遮欄位。</div>
+
+<div class="note"><b>最下面那塊「疑似同一承包商的不同寫法」要有人處理。</b>
+同一家承包商被寫成兩種寫法，統計就會被拆成兩筆。系統<b>刻意不自動合併</b>——合併錯了會讓工資對到錯的人。
+請在「選單」分頁統一寫法，再把試算表裡的舊值改成一致。</div>
+
+
+<h2 id="w-check">倉庫：核單與發票<span class="tag">倉庫</span></h2>
+
+<p>助理鍵完 TipTop 單號後，「倉庫出貨群組」會收到一則<b>待撿料出貨</b>。</p>
+
+<div class="fig narrow">
+  <img src="img/raw/62-chat-warehouse-pick.png" alt="待撿料出貨通知">
+  <div class="cap">Chat 通知。出貨單號、客戶、出貨項目、貨指寄、發票別都在上面，最下面藍字「直接開這一筆核單」點下去就到。</div>
+</div>
+
+<div class="fig">
+  <img src="img/raw/36-gas-warehouse.png" alt="倉庫核單清單">
+  <div class="cap">倉庫核單頁的完整清單，等著撿的都在這裡。也可以不從 Chat 進來，直接開這一頁往下做。</div>
+</div>
+
+<div class="fig">
+  <img src="img/raw/47-gas-warehouse-one.png" alt="倉庫核單畫面">
+  <div class="cap">核單畫面。上半是要撿的東西，中間是發票登錄，最下面兩顆按鈕。</div>
+</div>
+
+<ol class="steps">
+<li>照「出貨項目」的料號與數量撿料。</li>
+<li>有發票的話，把號碼填進 <b>發票號碼</b>（格式 <code>AB-12345678</code>），或用 <b>發票電子檔</b> 選檔案上傳，<b>兩個都填也可以</b>。</li>
+<li>按 <span class="kbd">⬆ 登錄</span>。會出現「已登錄發票號碼 …，核單時會一起送出」。</li>
+<li>撿完料按 <span class="kbd">✅ 已撿料完成</span>。</li>
+</ol>
+
+<div class="fig">
+  <img src="img/raw/48-gas-warehouse-invoice.png" alt="發票登錄後">
+  <div class="cap">發票登錄成功的樣子。這一步<b>可以跳過</b>——沒有發票就直接按已撿料完成。</div>
+</div>
+
+<div class="fig narrow">
+  <img src="img/raw/63-chat-warehouse-archive.png" alt="核單備存訊息">
+  <div class="cap">按下已撿料完成後，Chat 會收到一則完整的備存訊息，含登錄人與核單人的時間戳。</div>
+</div>
+
+<div class="fig narrow">
+  <img src="img/raw/49-gas-warehouse-done.png" alt="核單完成">
+  <div class="cap">核完之後再開同一筆會顯示「這一筆已經處理過了（已核）👍」，並列出是誰、什麼時候核的。</div>
+</div>
+
+<div class="note"><b>發票要在按「已撿料完成」之前登錄。</b>備存訊息是核單那一刻產生的，
+先按完成再登錄發票，那則備存訊息裡就不會有發票資料了。</div>
+
+
+<h2 id="w-issue">倉庫：回報有問題<span class="tag">倉庫</span></h2>
+
+<p>料號對不上、數量不對、地址明顯有誤——<b>不要自己猜著出</b>，按 <span class="kbd">⚠ 有問題</span>。</p>
+
+<ol class="steps">
+<li>按 <span class="kbd">⚠ 有問題</span>。</li>
+<li><b>填問題說明</b>（必填）。寫具體一點，助理是照這句話去改的。</li>
+<li>送出後這筆會<b>先從你的清單消失</b>，交給助理處理。</li>
+<li>助理改好按「送回倉庫」，它會<b>帶著你寫的問題說明重新出現</b>在你的清單裡，你可以確認是不是真的改對了。</li>
+</ol>
+
+<div class="warn"><b>「有問題」會同時通知助理與業務。</b>不是丟到黑洞裡，會有人接。</div>
+
+
+<h2 id="w-doc">倉庫：貨運單上傳<span class="tag">倉庫</span></h2>
+
+<div class="fig">
+  <img src="img/raw/37-gas-shipdoc.png" alt="貨運單頁">
+  <div class="cap">貨運單頁。新竹物流、嘉里大榮的 PDF 都可以。</div>
+</div>
+
+<ol class="steps">
+<li>點頁籤 <span class="kbd">貨運單</span>。</li>
+<li>按 <span class="kbd">📤 上傳</span> 選 PDF。<b>一份檔案裡有好幾張出貨單沒關係</b>，系統會自動拆開。</li>
+<li>上傳完就可以離開，<b>不必留在這一頁等</b>，辨識要幾分鐘。</li>
+</ol>
+
+<div class="note"><b>對不上的不會亂猜。</b>配不到出貨單的會列進「貨運單待指定」分頁，由人工指定。
+系統刻意不用猜的——猜錯的貨運單號看起來完全正常，之後查不出來。</div>
+
+
+<h2 id="flow">一整條流程走一遍</h2>
+
+<p>這一章不是操作步驟，是給你看<b>自己那一步影響誰</b>。下面是一筆單從頭到尾實際走過的樣子。</p>
+
+<table>
+<tr><th>#</th><th>誰</th><th>做什麼</th><th>做完之後會發生什麼</th></tr>
+<tr><td>1</td><td><span class="who sales">業務</span></td><td>下單頁選「發包安裝」，填完送出</td><td>系統編號（例 <code>FC-260826-01</code>），進主管簽核佇列</td></tr>
+<tr><td>2</td><td><span class="who boss">主管</span></td><td>簽核頁按「核准」</td><td>助理出貨群組出現一張<b>認領卡片</b></td></tr>
+<tr><td>3</td><td><span class="who asst">助理</span></td><td>Chat 按「我來處理」</td><td>卡片變「處理中」，其他助理知道有人接了</td></tr>
+<tr><td>4</td><td><span class="who asst">助理</span></td><td>去 TipTop 開單，回來補三格單號</td><td>倉庫出貨群組收到「待撿料出貨」；同時產生師傅通知</td></tr>
+<tr><td>5</td><td><span class="who wh">倉庫</span></td><td>登錄發票、按「已撿料完成」</td><td>Chat 收到完整<b>備存訊息</b>，這筆結束</td></tr>
+<tr><td>6</td><td>任何人</td><td>查詢頁輸入單號</td><td>看到整條歷程：誰在什麼時候做了什麼</td></tr>
+</table>
+
+<div class="fig">
+  <img src="img/raw/50-gas-query-result.png" alt="完整歷程">
+  <div class="cap">走完之後在查詢頁看到的樣子——上面六步全部在這一張卡片上。</div>
+</div>
+
+<div class="note"><b>兩件事值得記住：</b><br>
+① <b>業務在出貨項目那一格貼的東西，助理直接拿去用</b>。業務多花十秒貼完整，助理就少打十五個欄位。<br>
+② <b>每一步都有 Chat 通知</b>，所以不需要有人「去問進度」。要查就自己開查詢頁，比問人快。</div>
+
+
+<h2 id="faq">常見問題與錯誤訊息</h2>
+
+<h3>看到這些訊息代表什麼</h3>
+
+<table>
+<tr><th>訊息</th><th>意思</th><th>怎麼辦</th></tr>
+<tr><td>您沒有下單權限</td><td>你不在路由對照表的業務信箱欄裡</td><td>請資訊人員把你加進對照表，並填你要寫入哪個分頁</td></tr>
+<tr><td>您沒有簽核權限</td><td>你不是副主管／主管，<b>或你只是開錯頁</b></td><td>業務請改用 <code>?page=order</code>；確實該有權限的請找資訊人員</td></tr>
+<tr><td>您沒有出貨登錄權限</td><td>你不在助理名單 <code>DISPATCH_ASSISTANTS</code></td><td>找資訊人員加入名單</td></tr>
+<tr><td>您沒有倉庫核單權限</td><td>你不在倉庫名單 <code>DISPATCH_WAREHOUSE</code></td><td>找資訊人員加入名單</td></tr>
+<tr><td>報表僅限主管檢視</td><td>報表含毛利，整頁限制</td><td>需要數字請找主管</td></tr>
+<tr><td>請先選擇單別</td><td>下單頁還沒點上面那排按鈕</td><td>先點「發包安裝」或「料件出貨」</td></tr>
+<tr><td>客戶／型號／報價單數量 為必填</td><td>少填了必填欄</td><td>補上再送</td></tr>
+<tr><td>發包安裝必須填承包商</td><td>選了發包安裝卻沒選承包商</td><td>下拉選單裡沒有就選「其他」自己打</td></tr>
+<tr><td>出貨單號為必填</td><td>鍵單時沒填 <code>W5501-…</code></td><td>先去 TipTop 開單拿號碼</td></tr>
+<tr><td>出貨品項為必填</td><td>舊流程表單少了品項</td><td>從 TipTop 整段複製貼上</td></tr>
+<tr><td>這一筆已經處理過了 👍</td><td>別人已經先做完了</td><td>不用做，關掉即可</td></tr>
+<tr><td>可能已經有人鍵過單號了，或這筆已被刪除</td><td>你手上的連結過期了</td><td>回完整清單重新找一次</td></tr>
+<tr><td>⚠ 尚未設定 DISPATCH_WAREHOUSE</td><td>倉庫名單還沒設，目前不擋任何人</td><td>不是你的操作問題，請資訊人員補設定</td></tr>
+</table>
+
+<h3>常被問到的</h3>
+
+<p><b>Q：我送出的單多久會出現在主管那邊？</b><br>
+清單有最多 15 分鐘快取，所以主管可能不會馬上看到。但主管自己剛簽的一定立刻反映。</p>
+
+<p><b>Q：填錯了怎麼辦？</b><br>
+還沒送出就直接改。已經送出的：業務用查詢頁的「🔄 申請退單」；已經鍵單的請倉庫按「⚠ 有問題」退回來給助理改。</p>
+
+<p><b>Q：為什麼我看得到八個頁籤，手冊說我只有兩個？</b><br>
+因為部分角色名單還沒設定，名單是空的時候系統會退回「不擋任何人」。照你那一章做就好。</p>
+
+<p><b>Q：Chat 通知裡的連結點不開？</b><br>
+確認你是用公司 Google 帳號登入的瀏覽器開。用私人 Gmail 開會顯示沒有權限。</p>
+
+<p><b>Q：一張截圖裡有好幾筆訂單怎麼辦？</b><br>
+辨識完後按「＋ 新增品項」逐筆補上，不要分成好幾次上傳同一張。</p>
+
+<div class="warn"><b>這本手冊裡的所有截圖，客戶姓名、電話、地址、承包商與金額都已經換成【範例】資料。</b>
+畫面版面與按鈕位置是實機的，<b>資料不是真的</b>。你在系統裡看到的會是真實客戶資料，請比照公司個資規範處理。</div>
+
+<p style="margin-top:44px;color:var(--g400);font-size:12.5px;border-top:1px solid var(--line);padding-top:16px">
+派工出貨系統操作手冊 v1　·　2026-08-26　·　截圖取自正式環境，示範單號 FC-260826-01（測試單）<br>
+系統有更動時，請一併更新本手冊與 <code>教育訓練與流程/shoot_gas.py</code> 重拍截圖。
+</p>
+
+</main>
+</body>
+</html>
