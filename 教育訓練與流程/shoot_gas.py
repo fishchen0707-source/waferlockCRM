@@ -319,6 +319,74 @@ DEIDENT_JS = r"""
     n++;
   });
 
+  // ⑥ 欄位提示字（placeholder）裡寫死的真實客戶、承包商、電話與地址。
+  //    這些是**程式碼裡的常數**，不是資料——代表每個進得了那一頁的人都看得到。
+  //    下單頁一頁就有六個（客人姓名、客人電話、收件公司、電話、地址、出貨備註）。
+  //    ⚠ 這一條當初只寫了兩個名字就以為做完了，實際上要逐頁把提示字抓出來看才知道有幾個。
+  var PH_MAP = [
+    [/宇泰鎖印\s*李建男|李建男/g, '範例鎖行 王小明'],
+    [/大內高手鎖業有限公司|大內高手/g, '範例鎖業有限公司'],
+    [/孫明恩/g, '王小明'],
+    [/0953-644733/g, '0911-111111'],
+    [/02-29266999/g, '02-1234-5678'],
+    [/新北市中和區橋和路122號13樓之2/g, '新竹縣竹北市範例路 1 號'],
+    [/MOMO\s*26080229339090-001-001-001/g, 'MOMO 範例訂單-0001']
+  ];
+  Array.prototype.forEach.call(document.querySelectorAll('[placeholder]'), function (el) {
+    var t = el.placeholder, before = t;
+    PH_MAP.forEach(function (r) { t = t.replace(r[0], r[1]); });
+    if (t !== before) { el.placeholder = t; n++; }
+  });
+
+  // ⑦ 報表：整份承包商名單就是供應商全表，加上金額能反推毛利與進價，
+  //    兩樣都不該印在一份要發給四個部門的手冊上。
+  //    做法是換名字＋只留前 8 筆示意，讓讀者看得懂這張圖在排什麼就夠了。
+  Array.prototype.forEach.call(document.querySelectorAll('.card'), function (card) {
+    var t = card.querySelector('.ometa b');
+    var title = t ? (t.textContent || '').trim() : '';
+    var rows = card.querySelectorAll('.brow');
+    if (title === '各承包商') {
+      Array.prototype.forEach.call(rows, function (row, i) {
+        var lab = row.querySelector('.blab');
+        if (lab) lab.textContent = '【範例】承包商 ' + String.fromCharCode(65 + (i % 26));
+        if (i >= 8) row.style.display = 'none';
+        n++;
+      });
+      if (rows.length > 8) {
+        var d = document.createElement('div');
+        d.className = 'note';
+        d.textContent = '（手冊只保留前 8 筆示意，實際會列出全部承包商）';
+        card.appendChild(d);
+      }
+    }
+    Array.prototype.forEach.call(card.querySelectorAll('.bval'), function (el) {
+      var before = el.innerHTML;
+      // ⚠ 毛利寫成「毛利 133,400」，沒有 NT$ 前綴——只比對 NT$ 會整個漏掉，
+      //   而毛利正是最不能外流的數字（一露出來就等於把進價反推出來）
+      el.innerHTML = before
+        .replace(/NT\$\s*[\d,]+/g, 'NT$ 123,456')
+        .replace(/毛利\s*[\d,]+/g, '毛利 12,345');
+      if (el.innerHTML !== before) n++;
+    });
+  });
+
+  // ⑤ 舊流程快選清單：<div class="pick"><b>單號</b>　客戶（案名）<div class="sub">分頁｜承包商｜型號</div></div>
+  //    這一條是首批漏掉的——整排真實客戶與承包商就掛在畫面中段
+  Array.prototype.forEach.call(document.querySelectorAll('.pick'), function (el) {
+    var b = el.querySelector('b'), sub = el.querySelector('.sub');
+    if (!b) return;
+    while (b.nextSibling) el.removeChild(b.nextSibling);
+    el.appendChild(document.createTextNode('　' + cust() + '（範例通路）'));
+    if (sub) {
+      // 分頁（電商-Vivi 這種）是內部業務代號，不是個資，留著；只換承包商那一段
+      var parts = (sub.textContent || '').split('｜');
+      if (parts.length >= 2) parts[1] = worker();
+      sub.textContent = parts.join('｜');
+      el.appendChild(sub);
+    }
+    n++;
+  });
+
   // ⑥ 欄位提示字裡寫死的真實承包商與人名（程式碼裡的常數，不是資料）
   Array.prototype.forEach.call(document.querySelectorAll('input[placeholder]'), function (el) {
     var t = el.placeholder;
@@ -438,12 +506,150 @@ def do_pages(page, only=None, deident=True):
             print(f"  - {n}")
 
 
+
+# ── 主線：建一筆測試單，把四個角色接力的畫面拍下來 ──────────────
+# ⚠ 這會在**正式環境**寫入一筆真的發包單，並發 Chat 通知給真的主管與助理。
+#    使用者已同意（「可以，建測試單就好」）。所有欄位都用【驗收測試】開頭、
+#    備註寫明「請勿處理」，讓收到通知的人一眼知道不用理它。
+#    單號會記進版本紀錄，方便日後清理。
+TEST_ORDER = {
+    "customer":  "【驗收測試】客戶A",
+    "model":     "L901",
+    "qty":       "1",
+    "price":     "3000",
+    "note":      "【驗收測試】教育訓練手冊截圖用，請勿處理",
+    "items":     "L901GEA10001AA-01 X1",
+    "toName":    "【驗收測試】範例鎖業有限公司",
+    "toPhone":   "02-1234-5678",
+    "toAddr":    "新竹縣竹北市範例路 1 號",
+    "shipNote":  "【驗收測試】請勿出貨",
+    "channelNo": "範例訂單-0001",
+    "custName":  "【驗收測試】王小明",
+    "custPhone": "0911-111111",
+    "custAddr":  "新竹縣竹北市範例路 1 號",
+    "workItem":  "裝外門",
+    "workTime":  "平日1-4",
+    "salePrice": "3000",
+    # 進價刻意不填：那是最敏感的數字，截圖裡不需要它也看得懂流程
+}
+
+
+def do_order(page, submit=False):
+    """填一筆測試單。預設**只填不送**——送出是不可逆的，要另外加 --submit。"""
+    frame = open_page(page, "page=order", wait_text="下單")
+    frame.click("#k0")            # 發包安裝
+    page.wait_for_timeout(1500)
+
+    for k, v in TEST_ORDER.items():
+        try:
+            frame.fill("#" + k, v)
+        except Exception as e:
+            print(f"  ⚠ 填不進 {k}：{str(e)[:60]}")
+
+    # 承包商與案名是下拉，選「其他」才會冒出文字框——不能直接打字進去。
+    # 選真的承包商會讓這筆測試單掛在別人頭上，所以一律走「其他」。
+    for sel, txt, val in (("#worker", "#workerX", "【驗收測試】承包商"),
+                          ("#project", "#projectX", "【驗收測試】通路")):
+        try:
+            frame.select_option(sel, "其他")
+            page.wait_for_timeout(400)
+            frame.fill(txt, val)
+        except Exception as e:
+            print(f"  ⚠ {sel} 選不到「其他」：{str(e)[:60]}")
+    try:
+        frame.select_option("#invoice", "二聯")
+    except Exception as e:
+        print(f"  ⚠ 發票別選不到：{str(e)[:60]}")
+
+    prep(page, frame)
+    snap_frame(page, frame, "40-gas-order-filled")
+    page.set_viewport_size({"width": 1440, "height": 900})
+
+    if not submit:
+        print("\n只填不送。確認 40-gas-order-filled.png 沒問題後，加 --submit 再跑一次。")
+        return
+
+    frame.click("#sub")
+    waited = 0
+    while waited < 90000:
+        msg = (frame.inner_text("#msg") or "").strip()
+        if msg and "處理中" not in msg:
+            break
+        page.wait_for_timeout(2000)
+        waited += 2000
+    print("\n送出結果：")
+    print("  " + ((frame.inner_text("#msg") or "").strip().replace("\n", "\n  ") or "（沒有訊息）"))
+    prep(page, frame)
+    snap_frame(page, frame, "41-gas-order-done")
+    page.set_viewport_size({"width": 1440, "height": 900})
+
+
+
+# ── Chat 截圖 ────────────────────────────────────────────
+# ⚠ Chat 空間裡混著真實訂單的通知（客戶名、地址、電話都在裡面）。
+#    所以**不拍整個視窗**，只把「我們自己那筆測試單」的那一則訊息裁出來。
+#    做法是用單號把訊息氣泡找出來、量它的座標，再用 clip 只拍那一塊。
+CHAT_URL = "https://chat.google.com/"
+
+FIND_BUBBLE_JS = """
+(key) => {
+  var best = null, bestArea = Infinity;
+  var all = document.querySelectorAll('div,section,article');
+  for (var i = 0; i < all.length; i++) {
+    var el = all[i];
+    if ((el.textContent || '').indexOf(key) < 0) continue;
+    var r = el.getBoundingClientRect();
+    // 門檻放到 220：卡片本身約 280px 寬，設 300 會挑到外層的整列訊息，
+    // 裁出來就會夾到上一則訊息的尾巴（2026-08-26 首次拍到的就是那樣）
+    if (r.width < 220 || r.height < 120) continue;
+    var area = r.width * r.height;
+    if (area < bestArea) { bestArea = area; best = r; }
+  }
+  if (!best) return null;
+  return { x: Math.max(0, best.left - 8), y: Math.max(0, best.top - 8),
+           width: best.width + 16, height: best.height + 16 };
+}
+"""
+
+
+def open_chat(page, space):
+    page.goto(CHAT_URL, wait_until="load")
+    page.wait_for_timeout(14000)
+    fr = page.frames[0]
+    # 「您不會在這部裝置上收到通知」的提示框會蓋住畫面右上角，先關掉
+    for label in ("停用", "關閉"):
+        try:
+            fr.click(f"text={label}", timeout=2500)
+            page.wait_for_timeout(800)
+            break
+        except Exception:
+            pass
+    fr.click(f"text={space}", timeout=20000)
+    page.wait_for_timeout(9000)
+    return fr
+
+
+def snap_bubble(page, frame, key, name):
+    """只拍含 key 的那一則訊息。找不到就明講，不要拍整頁——
+    整頁會把上面別人的真實訂單通知一起拍進去。"""
+    rect = frame.evaluate(FIND_BUBBLE_JS, key)
+    if not rect:
+        print(f"  ✗ 找不到含「{key}」的訊息，這張沒拍（不改拍整頁，會夾帶真實訂單）")
+        return False
+    path = os.path.join(OUT, name + ".png")
+    page.screenshot(path=path, clip=rect)
+    print(f"  {name}.png ({os.path.getsize(path) // 1024} KB)")
+    return True
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--login", action="store_true", help="第一次使用：手動登入 Google")
     ap.add_argument("--check", action="store_true", help="驗證登入與存檔")
     ap.add_argument("--diag", action="store_true", help="卡住時印出實際的 frame 與內容")
     ap.add_argument("--only", help="只重拍指定的那一張（填檔名，如 34-gas-approve）")
+    ap.add_argument("--order", action="store_true", help="填一筆【驗收測試】的發包安裝單（預設只填不送）")
+    ap.add_argument("--submit", action="store_true", help="搭配 --order：真的按下送出（會寫入正式環境並發 Chat）")
     ap.add_argument("--raw", action="store_true",
                     help="不做去識別化（只在自己要核對真實資料時用，產出不可放進手冊）")
     args = ap.parse_args()
@@ -463,6 +669,8 @@ def main():
                 do_diag(page)
             elif args.check:
                 do_check(page)
+            elif args.order:
+                do_order(page, submit=args.submit)
             else:
                 do_pages(page, args.only, deident=not args.raw)
         finally:
