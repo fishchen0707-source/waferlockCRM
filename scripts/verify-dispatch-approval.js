@@ -4359,5 +4359,61 @@ console.log('\n【37】倉庫回報有問題後，單子不可以消失');
   reset([]);
 })();
 
+
+// ── 測試 38：倉庫核單清單的日期不可以是 GMT 原始字串 ──
+// 2026-08-25 實機截圖發現：倉庫核單卡片顯示
+//   「Wed Aug 12 2026 09:18:00 GMT+0800 (台北標準時間)」
+// 同日稍早修過一次日期問題，但那次只涵蓋 readShipmentRow_，
+// 倉庫清單走的是 getWarehousePending_ 的 pick()，漏掉了。
+//
+// 🔑 這一段必須餵**真的 Date 物件**才測得到。既有測試都餵字串，
+//    所以三十幾個區段、一千多條斷言全都沒抓到這個 bug。
+console.log('\n【38】倉庫核單清單的日期格式');
+(function () {
+  props.DISPATCH_SHEET_NAME = '*';
+  props.DISPATCH_WAREHOUSE = 'wh@waferlock.com';
+  const asUser = e => { sandbox.Session.getActiveUser = () => ({ getEmail: () => e }); };
+  asUser('wh@waferlock.com');
+
+  const SH = G.SHIPMENT_HEADERS;
+  const at = n => SH.indexOf(n);
+  const row = SH.map(() => '');
+  row[at('登錄時間')] = new Date(2026, 7, 12, 9, 18, 0);   // ← 真的 Date，不是字串
+  row[at('出貨單號')] = 'W5501-DATE01';
+  row[at('客戶')] = '【驗收測試】客戶A';
+  row[at('出貨品項')] = 'L901 *1';
+  row[at('倉庫核單狀態')] = '待核';
+
+  SHEETS = [makeSheet('出貨明細', SH, [row], 1)];
+  CACHE = {};
+
+  const rows = G.getWarehousePending_();
+  ok(rows.length === 1, '應撈到那一筆待核單');
+  const got = String(rows[0].at);
+
+  ok(!/GMT/.test(got),
+     '🔴 登錄時間不可以是 GMT 原始字串，實際：' + got);
+  ok(/^2026-08-12/.test(got),
+     '🔴 登錄時間應格式化成 yyyy-MM-dd，實際：' + got);
+  ok(got === '2026-08-12 09:18',
+     '有時分就要一起顯示（沿用 fmtWhen_ 的規則），實際：' + got);
+
+  // 畫面上也要是格式化後的字串
+  const html = G.warehouseBlock_('wh@waferlock.com', rows,
+    { warehouse: true, warehouseUnrestricted: false }, { at: '', cached: false });
+  ok(html.indexOf('GMT') < 0, '🔴 倉庫核單頁的 HTML 裡不可以出現 GMT 字串');
+  ok(html.indexOf('2026-08-12 09:18') >= 0, '畫面應顯示格式化後的登錄時間');
+
+  // 沒有時分的純日期不要補上 00:00（fmtWhen_ 既有行為，一併鎖住）
+  const row2 = SH.map(() => '');
+  row2[at('登錄時間')] = new Date(2026, 7, 12);
+  row2[at('出貨單號')] = 'W5501-DATE02';
+  row2[at('倉庫核單狀態')] = '待核';
+  SHEETS = [makeSheet('出貨明細', SH, [row2], 1)];
+  CACHE = {};
+  const only = String(G.getWarehousePending_()[0].at);
+  ok(only === '2026-08-12', '純日期不補時分，實際：' + only);
+})();
+
 console.log('\n' + (fail ? '❌' : '✅') + ' 通過 ' + pass + '／失敗 ' + fail);
 process.exit(fail ? 1 : 0);

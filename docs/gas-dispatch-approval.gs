@@ -6234,10 +6234,15 @@ function getWarehousePending_() {
   var out = [];
 
   var row = null;
+  // 走 fmtWhen_ 而不是直接 String()：日期欄從試算表讀回來是 Date 物件，
+  // String(Date) 會變成「Wed Aug 12 2026 09:18:00 GMT+0800 (台北標準時間)」
+  // 直接印在倉庫核單卡片上。2026-08-25 實機截圖才發現——單元測試抓不到，
+  // 因為 vm sandbox 的 Date 是另一個 realm，測試餵進來的是字串不是 Date。
   function pick(name) {
     var c = s.col[name];
     if (!c || c > row.length) return '';
     var v = row[c - 1];
+    if (isDate_(v)) return fmtWhen_(v);
     return String(v == null ? '' : v).trim();
   }
 
