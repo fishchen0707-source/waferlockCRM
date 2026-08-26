@@ -1433,7 +1433,9 @@ function renderShipOne_(email, roles, dispatchNo, hintRow) {
     '<div class="hd"><div class="ic">📦</div><div><h1>出貨登錄</h1><p>' +
     esc_(email) + '</p></div></div>' +
     '<div id="msg"></div><div id="notice"></div>' +
-    '<div class="sec">業務已下單，等鍵 TipTop<span>資料是業務填的，只要補單號</span></div>' +
+    // 標題不在這裡寫——pendingShipBlock_ 自己就會產生一個帶筆數的區塊標題。
+    // 這裡再寫一個會變成畫面上出現兩個「業務已下單，等鍵 TipTop」，
+    // 而且上面那個沒有筆數、看起來像是一個空區塊。（2026-08-25 實機驗證發現）
     pendingShipBlock_([rec]) +
     backToListNote_('ship', '出貨登錄') +
     shipOneScript_());

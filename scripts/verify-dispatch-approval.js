@@ -2768,6 +2768,12 @@ console.log('【28】按鈕可用性與 Chat UID 格式');
   {
     const html = G.doGet({ parameter: { page: 'ship', dn: 'FC-260810-01' } })._h;
     ok(/等鍵 TipTop/.test(html), '深連結 dn= 應開到出貨登錄單筆頁');
+    // 區塊標題只能有一個。pendingShipBlock_ 自己會產生帶筆數的標題，
+    // 呼叫端若再寫一個，畫面上會出現兩個「業務已下單，等鍵 TipTop」，
+    // 而且上面那個沒筆數、看起來像空區塊。（2026-08-25 實機驗證抓到）
+    ok((html.match(/業務已下單，等鍵 TipTop/g) || []).length === 1,
+       '🔴 單筆頁的「業務已下單，等鍵 TipTop」標題只能出現一次，實際 ' +
+       (html.match(/業務已下單，等鍵 TipTop/g) || []).length + ' 次');
     ok(/測試客戶/.test(html), '單筆頁要顯示那一筆的內容');
     ok(html.indexOf('function fillIt(') >= 0,
        '🔴 單筆頁必須含 fillIt 定義——少了它按鈕按下去毫無反應，且伺服器完全收不到請求');
