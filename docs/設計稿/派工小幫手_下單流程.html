@@ -1,0 +1,102 @@
+<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="UTF-8"><style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Microsoft JhengHei","PingFang TC",-apple-system,sans-serif;background:#EEF1F5;color:#1E293B;padding:34px 30px;width:940px}
+.hd{margin-bottom:24px}
+.hd h1{font-size:23px;font-weight:600;color:#0F2744}
+.hd p{font-size:13.5px;color:#64748B;margin-top:5px;line-height:1.7}
+.step{display:flex;gap:16px;margin-bottom:12px}
+.rail{width:118px;flex-shrink:0;padding-top:3px}
+.rail b{display:inline-block;background:#0F2744;color:#fff;font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px}
+.rail p{font-size:12px;color:#64748B;margin-top:6px;line-height:1.6}
+.body{flex:1;min-width:0}
+.chat{background:#8FA9C4;border-radius:12px;padding:15px 16px}
+.me{display:flex;justify-content:flex-end;margin-bottom:7px}
+.me div{max-width:76%;background:#9BE86A;border-radius:13px;padding:8px 13px;font-size:14px;line-height:1.65}
+.tm{font-size:11px;color:#F1F5F9;align-self:flex-end;margin:0 7px 2px 0}
+.bot{display:flex;gap:9px;align-items:flex-start}
+.av{width:33px;height:33px;border-radius:50%;background:#0F2744;color:#fff;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600}
+.card{background:#fff;border-radius:12px;flex:1;min-width:0;overflow:hidden;border:1px solid #DBE3EC}
+.cb{padding:13px 15px}
+.ct{font-size:15px;font-weight:600;margin-bottom:10px}
+table{width:100%;font-size:13px;line-height:1.85}
+td:first-child{color:#64748B;width:78px;vertical-align:top}
+.sep{border-top:1px solid #E8EDF3;margin:11px 0 9px}
+.lb{font-size:12px;color:#64748B;margin-bottom:8px}
+.opt{border:1px solid #E2E8F0;border-radius:8px;padding:9px 11px;margin-bottom:7px}
+.opt.on{border:1.6px solid #2563EB;background:#F5F9FF}
+.pn{font-family:Consolas,monospace;font-size:12.5px}
+.cnt{font-size:12px;color:#2563EB;float:right}
+.cnt.g{color:#94A3B8}
+.sub{font-size:12px;color:#64748B;margin-top:4px;line-height:1.6}
+.ask{font-size:13px;margin-top:12px}
+.btns{display:flex;border-top:1px solid #E8EDF3}
+.btns div{flex:1;text-align:center;padding:10px;font-size:14px;color:#64748B}
+.btns .p{color:#2563EB;font-weight:600}
+.btns div+div{border-left:1px solid #E8EDF3}
+.items{background:#F8FAFC;border:1px solid #E8EDF3;border-radius:8px;padding:10px 12px;font-family:Consolas,monospace;font-size:12px;line-height:1.85;white-space:pre-wrap}
+.why{background:#FFF8E8;border-left:3px solid #D9A441;padding:8px 11px;font-size:12px;color:#7A5A12;line-height:1.65;margin-top:8px;border-radius:0 6px 6px 0}
+.done{background:#EAF7EE;border-left:3px solid #16A34A;padding:9px 12px;font-size:13px;color:#14532D;line-height:1.7;border-radius:0 6px 6px 0}
+.foot{margin-top:20px;padding-top:13px;border-top:1px solid #D7DEE7;font-size:11.5px;color:#7C8A9C;line-height:1.75}
+</style></head><body>
+<div class="hd"><h1>派工小幫手 — 業務用白話下單</h1>
+<p>業務照平常在群組講話的方式講，小幫手在旁邊聽，整理成可確認的料號與出貨項目。<br>
+圖中所有料號、次數、零件編號皆取自 2017–2026 真實出貨紀錄，非示意。</p></div>
+
+<div class="step"><div class="rail"><b>1</b><p>業務在群組裡<br>照平常講話</p></div><div class="body">
+<div class="chat">
+<div class="me"><div>旗山那個案子 L376 要出了</div></div>
+<div class="me"><div>客戶指定消光黑</div></div>
+<div class="me"><div>門是左內開的，門厚量過 60</div></div>
+<div class="me"><span class="tm">下午 2:41</span><div>另外幫我送一顆感應扣</div></div>
+</div></div></div>
+
+<div class="step"><div class="rail"><b>2</b><p>小幫手篩出<br>真的出過的料號</p></div><div class="body">
+<div class="bot"><div class="av">派工</div><div class="card"><div class="cb">
+<div class="ct">新增出貨品項</div>
+<table>
+<tr><td>型號</td><td>L376</td></tr>
+<tr><td>聽到的條件</td><td>消光黑 ｜ 左內 ｜ 門厚 60mm</td></tr>
+<tr><td>另外附上</td><td>感應扣 x1</td></tr>
+</table>
+<div class="sep"></div>
+<div class="lb">從你們出過的 271 種 L376 篩：消光黑 → 181 種，左內 → 100 種，門厚60 → <b>14 種</b></div>
+<div class="opt on"><span class="cnt">出過 85 次</span><span class="pn">L376-1C11C1-A0311B-A1CA1-2X30A</span>
+<div class="sub">方舌連動·左內 ｜ 鎖仁 3 支鑰匙 ｜ 內銷包裝 ｜ 總門厚 53-61mm</div></div>
+<div class="opt"><span class="cnt g">出過 51 次</span><span class="pn">L376-1C11C1-C0311B-A1CA1-2X31A</span>
+<div class="sub">改成方舌不連動、內鎖旋鈕上鎖</div></div>
+<div class="opt"><span class="cnt g">出過 29 次</span><span class="pn">L376-1C17C1-A0311B-A1CA1-2X30A</span>
+<div class="sub">改成電池盒組 RTC on board</div></div>
+<div class="ask">由 Vivi 提出，選第一個嗎？</div>
+</div><div class="btns"><div class="p">確認</div><div>改一下</div><div>取消</div></div></div></div>
+</div></div>
+
+<div class="step"><div class="rail"><b>3</b><p>業務按確認</p></div><div class="body">
+<div class="chat"><div class="me"><span class="tm">下午 2:42</span><div>第一個，門厚沒問題</div></div></div>
+</div></div>
+
+<div class="step"><div class="rail"><b>4</b><p>小幫手產出<br>完整出貨項目</p></div><div class="body">
+<div class="bot"><div class="av">派工</div><div class="card"><div class="cb">
+<div class="ct">出貨項目已備好</div>
+<div class="items">L376單機
+L376-1C11C1-A0311B-A1CA1-2X30A
+
+水滴型感應扣：TGM54PA6S00050-W        x1
+空轉式門外四角棒8*81L：40920800009G-V01  x1
+空轉式門內四角棒8*65L：40920800313A-V02  x1</div>
+<div class="why">兩根四角棒是照你們的習慣加的：主件前後門厚都是 <b>1</b>（19–29.5mm），歷史上這種單有 50 次附門厚 2 的外四角棒、47 次附門厚 2 的內四角棒。不需要的話按「改一下」。</div>
+<div class="ask">要建立出貨單嗎？</div>
+</div><div class="btns"><div class="p">建立出貨單</div><div>改一下</div><div>只複製料號</div></div></div></div>
+</div></div>
+
+<div class="step"><div class="rail"><b>5</b><p>接上現有流程</p></div><div class="body">
+<div class="bot"><div class="av">派工</div><div class="card"><div class="cb">
+<div class="done">已建立 <b>FC-260826-07</b>，已送主管簽核。<br>
+核准後「助理出貨群組」會出現認領卡片，助理只要補 TipTop 單號。</div>
+</div></div></div>
+</div></div>
+
+<div class="foot">
+資料來源：106 款下單規格表（1507 個參數段、7213 個選項）＋ L376 基礎 BOM ＋ Skype 出貨群組 2017-04 至 2026-08 共 115,953 則訊息。<br>
+候選料號一律取自歷史實際出貨，因此必定已存在於 TIPTOP，不需另外建檔。加配規則由 400 筆歷史單推得，上線前需業務確認。
+</div>
+</body></html>
