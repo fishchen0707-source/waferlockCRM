@@ -1,0 +1,50 @@
+# GitHub Pages 部署
+#
+# ── 為什麼需要這個檔 ─────────────────────────────────────
+# 這個 repo 曾經被改成私有，Pages 因此被停用（免費方案的私有 repo 不能開 Pages）。
+# 後來改回公開時，**Pages 不會自動跟著還原**——repo 的 has_pages 仍然是 false，
+# 站台整個不存在，任何網址都回「There isn't a GitHub Pages site here」。
+#
+# 用 workflow 而不是在網頁介面按，是因為 configure-pages 的 enablement: true
+# 會在 Pages 未啟用時自動啟用，不必依賴有人記得去 Settings 點那一下。
+#
+# ⚠️ 這會把 repo 的內容公開到網路上。改成私有之後這支 workflow 會失敗
+#    （免費方案私有 repo 無法部署 Pages），那是預期行為，不是壞掉。
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:        # 允許在 Actions 頁面手動觸發，不必空推一次 commit
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false   # 不取消進行中的部署，避免站台中途變成半套
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true    # 🔑 關鍵：Pages 沒開就自動開起來
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .            # 整個 repo 當靜態站，沿用原本「push 即部署」的慣例
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -38,7 +38,11 @@
 
 - 主檔：`waferlock_crm.html`（單一 HTML，React 18 CDN + Babel Standalone，無建置工具）
 - 後端：Supabase（URL/anon key 硬編碼於前端；RLS 目前全開，僅前端閘門）
-- 部署：push 到 `main` → GitHub Pages 自動部署正式環境
+- 部署：push 到 `main` → GitHub Actions（`.github/workflows/pages.yml`）部署 GitHub Pages
+  - ⚠️ **Pages 只在 repo 為「公開」時有效**。免費方案的私有 repo 不能開 Pages；
+    2026-08 曾因 repo 改私有導致整站 404，改回公開後 `has_pages` 仍是 `false`，
+    **要靠這支 workflow 的 `enablement: true` 才會重新啟用**。
+  - 🔴 `waferlock_crm.html` 硬編碼 Supabase anon key，**repo 公開時該金鑰即對外公開**（RLS 全開＝等同資料庫開放）。
 - 本機預覽：`啟動伺服器.bat`（python http.server 8765）
 
 ## 改動規範（沿用既有編程契約）
