@@ -57,6 +57,20 @@ var CHATCARD_SHEET = 'Chat卡片對照';                   // 案件↔訊息ID 
 // 沿用 postShipClaimCard_ 的「沒設就不動作」慣例：預設關閉，開燈是明確的動作。
 var CHATASK_SPACES_PROP = 'CHATAPP_ALLOWED_SPACES';
 
+// 允許「白話下單」（篩料號）的空間，格式同上，逗號分隔的 spaces/XXXX。
+//
+// ⚠ **刻意不與 CHATAPP_ALLOWED_SPACES 共用**，理由同上面那條註解已經寫過的：
+//   問答是「誰能查到所有單」，白話下單是「誰能拿到料號建議」，兩份名單本來就不會一樣。
+//   而且下單這件事只在業務群組有意義，貼到助理／倉庫群組只是噪音。
+//
+// 🔑 **意圖分流的安全邊界也是它**：這支小幫手原本整支 onMessage 都是問答，
+//   多接一個意圖就多一種誤判。限制在專屬空間，那個空間裡本來就只講下單，
+//   誤判率最低——擴大到業務日常群組之前要先觀察一陣子。
+//
+// 未設定 → 白話下單整個關閉，onMessage 行為與現在完全相同。
+// 沿用「沒設就不動作」慣例：預設關閉，開燈是明確的動作。
+var CHATORDER_SPACES_PROP = 'CHATAPP_ORDER_SPACES';
+
 // ────────────────────────────────────────────── 設定用測試工具（在編輯器手動執行）
 
 /**
@@ -152,6 +166,80 @@ function checkChatAskSetup() {
   for (var u in uids) { if (Object.prototype.hasOwnProperty.call(uids, u)) n++; }
   Logger.log('Chat人員對照：' + n + ' 人有有效 UID' +
     (n ? '' : '　← 沒有人的話，問「我的單」一律會說認不出你'));
+}
+
+/**
+ * 白話下單的設定自我檢查。在編輯器選這支執行，看執行記錄。不會改任何資料。
+ *
+ * ⚠ 存在的理由同 checkChatAskSetup：**設定沒做完的症狀是「小幫手不理你」**，
+ *   跟功能壞掉長得一模一樣。這裡把所有前提一次印出來，不必在 Chat 裡反覆試。
+ *   最常見的兩種錯：把 room/XXXX 當空間 ID、以及「歷史料號」分頁還沒匯入。
+ */
+function checkChatOrderSetup() {
+  var props = PropertiesService.getScriptProperties();
+  var raw = String(props.getProperty(CHATORDER_SPACES_PROP) || '').trim();
+
+  Logger.log('── 1. 白話下單白名單（' + CHATORDER_SPACES_PROP + '）──');
+  if (!raw) {
+    Logger.log('❌ 未設定 → 白話下單整個關閉（問答不受影響，行為與加這個功能之前相同）。');
+  } else {
+    Logger.log('目前值：' + raw);
+    var list = chatOrderSpaces_();
+    for (var i = 0; i < list.length; i++) {
+      var s = list[i], why = '';
+      if (/^https?:/i.test(s)) why = '這是網址不是空間 ID';
+      else if (/^room\//i.test(s)) why = '🔴 這是瀏覽器網址的 room/ 格式，API 認的是 spaces/';
+      else if (!/^spaces\//.test(s)) why = '🔴 格式不對，應該長得像 spaces/AAAAAAAAAAA';
+      Logger.log('  ' + (why ? '❌ ' : '✅ ') + s + (why ? '　← ' + why : ''));
+    }
+  }
+
+  Logger.log('');
+  Logger.log('── 2. 歷史料號分頁（' + PARTNO_SHEET + '）──');
+  var idx = null;
+  try {
+    idx = loadPartNoIndex_();
+  } catch (err) {
+    Logger.log('🔴 讀取失敗：' + err);
+  }
+  if (!idx) {
+    Logger.log('❌ 分頁不存在、或只有表頭沒有資料列。');
+    Logger.log('   → 跑 `python scripts/analyze-shipment-history.py L376` 產出');
+    Logger.log('     docs/歷史料號_L376.csv，再把內容貼進試算表的「' + PARTNO_SHEET + '」分頁。');
+    Logger.log('   → 在這之前，白話下單會直接交回問答處理（不會壞頁，但也不會有反應）。');
+  } else {
+    var models = Object.keys(idx.byModel).sort();
+    Logger.log('✅ 參數段（' + idx.segNames.length + ' 個）：' + idx.segNames.join('、'));
+    Logger.log('✅ 已匯入 ' + models.length + ' 款：');
+    for (var m = 0; m < models.length; m++) {
+      Logger.log('     ' + models[m] + '　' + idx.byModel[models[m]].rows.length + ' 種料號');
+    }
+    Logger.log('   ⚠ 這是快照，不會自己更新。沒匯入的型號業務問了會收到「不支援」而不是錯誤。');
+  }
+
+  Logger.log('');
+  Logger.log('── 3. 其他前提 ──');
+  Logger.log('GEMINI_API_KEY：' + (props.getProperty(GEMINI_KEY_PROP) ? '✅ 已設定'
+    : '❌ 未設定 → 白話解析不會動（但直接給完整料號仍查得到）'));
+
+  // 設了白名單但小幫手不在那個空間 → 永遠不會被觸發，最難自己發現的錯
+  if (raw) {
+    var arr = [];
+    try {
+      arr = chatApi_('get', 'https://chat.googleapis.com/v1/spaces', null);
+      arr = (arr && arr.spaces) || [];
+    } catch (e2) {
+      Logger.log('⚠ 查不到小幫手在哪些空間（' + e2 + '）');
+    }
+    var names = arr.map(function (a) { return a.name; });
+    var want = chatOrderSpaces_();
+    for (var k = 0; k < want.length; k++) {
+      if (names.length && names.indexOf(want[k]) < 0) {
+        Logger.log('❌ ' + want[k] +
+          ' 在白名單裡，但小幫手根本不在這個空間 → 永遠不會被觸發');
+      }
+    }
+  }
 }
 
 function testPostClaimCard() {
@@ -252,6 +340,12 @@ function chatUpdateCard_(cardsV2) {
     message: { cardsV2: cardsV2 } } } } };
 }
 
+/** 回一張新卡片（外掛格式）。與 chatUpdateCard_ 的差別只在 create/update。 */
+function chatCreateCard_(cardsV2) {
+  return { hostAppDataAction: { chatDataAction: { createMessageAction: {
+    message: { cardsV2: cardsV2 } } } } };
+}
+
 // ────────────────────────────────────────────── 進入點
 
 /** 沒開問答、或聽不懂時的自我介紹。 */
@@ -268,10 +362,22 @@ var CHATAPP_INTRO = '我是派工小幫手 🛠️\n我會在主管簽核後，�
  */
 function onMessage(event) {
   var space = eventSpace_(event);
-  if (!chatAskAllowed_(space)) return chatText_(CHATAPP_INTRO);
-
   var text = eventMessageText_(event);
   if (!text) return chatText_(CHATAPP_INTRO);
+
+  // 白話下單（篩料號）。只在專屬空間生效，且**認不出是下單就回 null 往下走問答**——
+  // 這支原本整支都是問答，多接一個意圖就多一種誤判，寧可放過也不要搶答。
+  if (chatOrderAllowed_(space)) {
+    try {
+      var ord = tryPartNoSuggestion_(text);
+      if (ord) return ord;
+    } catch (err) {
+      // 下單壞掉不能連累問答——這個空間可能兩種都在用
+      Logger.log('❌ 白話下單失敗，改走問答：' + err);
+    }
+  }
+
+  if (!chatAskAllowed_(space)) return chatText_(CHATAPP_INTRO);
 
   var user = eventUser_(event);
   var asker = {
@@ -381,6 +487,189 @@ function chatAskAllowed_(space) {
     if (list[i] === space) return true;
   }
   return false;
+}
+
+// ────────────────────────────────────────────── 白話下單（篩料號）
+
+/** 允許白話下單的空間清單。未設定＝功能關閉。 */
+function chatOrderSpaces_() {
+  var raw = '';
+  try {
+    raw = String(PropertiesService.getScriptProperties()
+      .getProperty(CHATORDER_SPACES_PROP) || '').trim();
+  } catch (err) {
+    return [];
+  }
+  if (!raw) return [];
+  return raw.split(/[,\s]+/).map(function (s) { return s.trim(); })
+    .filter(function (s) { return !!s; });
+}
+
+/** 這個空間可以用白話下單嗎？未設定屬性一律 false（預設關閉）。 */
+function chatOrderAllowed_(space) {
+  space = String(space || '').trim();
+  if (!space) return false;
+  var list = chatOrderSpaces_();
+  for (var i = 0; i < list.length; i++) {
+    if (list[i] === space) return true;
+  }
+  return false;
+}
+
+/**
+ * 這句話像在「問」而不是在「下單」嗎？
+ *
+ * ⚠ 存在的理由：「L376 那張單出貨了嗎」含型號，但那是問答不是下單。
+ *   分流搶錯的話，業務問進度卻收到一張料號卡片——比不回答更糟。
+ *   **寧可誤判成問答**：問答本來就是這支的預設行為，退回去不會壞事。
+ */
+function looksLikeChatQuestion_(text) {
+  return /[?？]|嗎|查一下|查詢|查一查|出貨了|到哪|狀態|進度|幫我查/.test(String(text || ''));
+}
+
+/**
+ * 試著把一句話當成下單來解析。
+ * 回卡片回應，或 **null 表示「這句不是在下單」**（呼叫端會往下走問答）。
+ */
+function tryPartNoSuggestion_(text) {
+  if (looksLikeChatQuestion_(text)) return null;
+
+  var res = suggestPartNos_(text);
+
+  // 句子裡沒有我們有資料的型號 → 這句多半根本不是在下單，交回問答
+  if (!res.ok && res.reason === 'no_model') return null;
+
+  // 分頁還沒匯入：這是設定沒做完，不是使用者的錯。
+  // 但也不能因此讓這個空間的問答整個壞掉——記 log、交回問答，
+  // 由 checkChatOrderSetup() 負責讓人發現。
+  if (!res.ok && res.reason === 'no_sheet') {
+    Logger.log('⚠ 白話下單：找不到「' + PARTNO_SHEET + '」分頁或分頁是空的，本則改走問答。');
+    return null;
+  }
+
+  return partNoCard_(res);
+}
+
+/**
+ * 把 suggestPartNos_ 的結果變成 Chat 卡片。
+ *
+ * ⚠ 卡片內文用 HTML（<b>/<br>），**不是** Chat 純文字訊息的單星號粗體——
+ *   兩種格式不能混（純文字訊息那條規則有測試鎖著，見版本紀錄 2026-08-25）。
+ */
+function partNoCard_(res) {
+  var widgets = [];
+
+  if (!res.ok) {
+    var msg;
+    if (res.reason === 'unknown_partno') {
+      // 沒出過不等於錯——可能真的是新規格。講清楚是哪一種情況，讓她自己判斷。
+      msg = '<b>' + esc_(res.partNo) + '</b> 這個料號在 ' + esc_(res.model) +
+        ' 的 ' + res.total + ' 種歷史出貨裡<b>沒有出現過</b>。<br><br>' +
+        '可能是新規格（那就要先確認 TIPTOP 建檔了沒），也可能是打錯一碼。' +
+        '要我幫你篩的話，直接講條件就好，例如「消光黑、左內、門厚 60」。';
+    } else if (res.reason === 'no_condition') {
+      msg = '我聽得出來是 <b>' + esc_(res.model) + '</b>，但沒抓到任何規格條件。<br>' +
+        '講顏色、開門方向、門厚這類條件我才篩得動，例如：<br>' +
+        '「' + esc_(res.model) + ' 消光黑，左內開，門厚量過 60」';
+    } else if (res.reason === 'no_match') {
+      // 🔑 講出是「哪一個條件」篩光的。只回「找不到」會讓人以為東西不存在。
+      var k = res.killedBy;
+      msg = '<b>' + esc_(res.model) + '</b> 出過 ' + res.total + ' 種料號，但你給的條件湊起來一種都沒有。<br><br>';
+      if (k) {
+        msg += '篩到<b>【' + esc_(k.segment) + '】' + esc_(k.value) + '</b> 之前還有 ' +
+          k.before + ' 種，加上它就變 0——<b>是這個條件把它篩光的</b>。<br>' +
+          '你們沒出過這個組合，要不要確認一下這項？';
+      } else {
+        msg += '把最後一個條件拿掉再問一次看看。';
+      }
+    } else if (res.reason === 'ai_failed') {
+      msg = (res.detail === 'timeout')
+        ? 'AI 現在忙不過來，沒辦法解析你的描述。<br>' +
+          '不過<b>你直接給我完整料號我不需要 AI 也查得到</b>，我可以幫你確認它出過沒有。'
+        : 'AI 解析暫時打不通（' + esc_(String(res.detail || '')) + '），請稍後再試。<br>' +
+          '急的話直接給我完整料號，我不需要 AI 也查得到。';
+    } else {
+      msg = '我沒辦法處理這一句，請換個講法試試。';
+    }
+    return chatCreateCard_([{
+      cardId: 'partno-fail',
+      card: { header: { title: '找不到候選料號' }, sections: [{ widgets: [
+        { textParagraph: { text: msg } }
+      ] }] }
+    }]);
+  }
+
+  // ── 成功：收斂過程 + 候選清單 ──
+  if (res.via === 'direct') {
+    widgets.push({ textParagraph: { text:
+      '這個料號在 ' + esc_(res.model) + ' 的歷史出貨裡<b>出過 ' +
+      res.candidates[0].count + ' 次</b>，是出過的規格，TIPTOP 裡一定有。' } });
+  } else {
+    var f = res.funnel || [];
+    var steps = [];
+    for (var i = 0; i < f.length; i++) {
+      steps.push(esc_(f[i].value) + ' → ' + f[i].left + ' 種');
+    }
+    widgets.push({ textParagraph: { text:
+      '聽到的條件：<b>' +
+      f.map(function (x) { return esc_(x.value); }).join('</b>｜<b>') + '</b>' } });
+    widgets.push({ textParagraph: { text:
+      '從你們出過的 <b>' + res.total + '</b> 種 ' + esc_(res.model) + ' 篩：' +
+      steps.join('，') } });
+    if (res.confidence === 'low') {
+      widgets.push({ textParagraph: { text:
+        '⚠ <b>這句我讀得不是很準</b>，下面的候選請逐項確認再用。' } });
+    }
+  }
+
+  for (var c = 0; c < res.candidates.length; c++) {
+    var cand = res.candidates[c];
+    var line = '<b>' + esc_(cand.no) + '</b>　出過 ' + cand.count + ' 次';
+    if (cand.diff && cand.diff.length) {
+      var d = [];
+      for (var j = 0; j < cand.diff.length; j++) {
+        d.push(esc_(cand.diff[j].segment) + '改成「' + esc_(cand.diff[j].to) + '」');
+      }
+      line += '<br><font color="#5f6368">跟第一個差在：' + d.join('、') + '</font>';
+    }
+    widgets.push({ textParagraph: { text: line } });
+    widgets.push({ buttonList: { buttons: [{
+      text: '就用這個',
+      onClick: { action: { function: 'pickPartNo', parameters: [
+        { key: 'partNo', value: cand.no },
+        { key: 'model', value: res.model }
+      ] } }
+    }] } });
+  }
+
+  widgets.push({ textParagraph: { text:
+    '<font color="#5f6368">候選都取自實際出過的貨，所以 TIPTOP 裡一定有，不必另外建檔。' +
+    '要改條件的話直接再講一次就好。</font>' } });
+
+  return chatCreateCard_([{
+    cardId: 'partno-' + res.model,
+    card: {
+      header: { title: '候選料號', subtitle: res.model +
+        (res.matched ? '　符合 ' + res.matched + ' 種' : '') },
+      sections: [{ widgets: widgets }]
+    }
+  }]);
+}
+
+/**
+ * 「就用這個」按鈕。
+ *
+ * ⚠ 按鈕的 function 值會被 Chat **直接當函式名呼叫**（見 onCardClick 的註解），
+ *   所以這支一定要是頂層函式。
+ *
+ * 🔑 **刻意不存任何 session 狀態**：要選哪一個完全由按鈕自己帶的 parameters 決定。
+ *   卡片列了哪三個不必記在任何地方，重開、過期、換人按都不會錯。
+ */
+function pickPartNo(event) {
+  var p = eventParams_(event) || {};
+  var no = String(p.partNo || '').trim();
+  if (!no) return chatText_('這顆按鈕沒帶到料號，請重新問一次。');
+  return chatText_('料號：' + no + '\n\n貼到下單頁的「主件料號」欄就可以送出了。');
 }
 
 /**

@@ -30,3 +30,8 @@ LINE DATA/
 
 # Skype 對話紀錄：含真實客戶姓名、電話、地址，勿進版控
 teams對話紀錄/
+
+# 歷史料號 CSV：由 scripts/analyze-shipment-history.py 從 Skype 紀錄重產的**快照**。
+# 不進版控的理由同「下單規格表」——它是衍生產物，進 git 會變成第二份副本、遲早跟來源不一致。
+# 要的人跑一次腳本就有。
+docs/歷史料號_*.csv

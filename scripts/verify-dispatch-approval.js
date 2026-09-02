@@ -4415,5 +4415,387 @@ console.log('\n【38】倉庫核單清單的日期格式');
   ok(only === '2026-08-12', '純日期不補時分，實際：' + only);
 })();
 
+// 【39】白話下單：從歷史料號篩候選
+console.log('\n【39】白話下單：從歷史料號篩候選');
+(function () {
+  const asUser = e => { sandbox.Session.getActiveUser = () => ({ getEmail: () => e }); };
+  const origFetch = sandbox.UrlFetchApp.fetch;
+  const origCall = G.callGeminiJson_;
+
+  // 歷史料號分頁的縮小版。刻意照真實資料的形狀做：
+  // 鎖腹方向的「左內」是**夾在字串中間**（無MCU/方舌連動/左內），不是整格相等——
+  // 用整格比對會全部篩不到，而真實資料就長這樣。
+  const PHEAD = ['料號', '出過次數', '前面板', '鎖腹方向', '總門厚', '電池盒組', '內鎖'];
+  const PROWS = [
+    ['L376-1C11C1-A0311B-A1CA1-2X30A', 85, '消光黑', '無MCU/方舌連動/左內', '總門厚53mm-61mm', '標準版', '無'],
+    ['L376-1C11C1-C0311B-A1CA1-2X31A', 51, '消光黑', '無MCU/方舌不連動/左內', '總門厚53mm-61mm', '標準版', '旋鈕上鎖卡片密碼失效'],
+    ['L376-1C17C1-A0311B-A1CA1-2X30A', 29, '消光黑', '無MCU/方舌連動/左內', '總門厚53mm-61mm', '標準版(RTC on board)', '無'],
+    ['L376-1C11C1-B0311B-A1CA1-2X30A', 10, '消光黑', '無MCU/方舌連動/右內', '總門厚53mm-61mm', '標準版', '無'],
+    ['L376-1C11C1-A0322C-A1CA2-2X31A',  5, '霧銀',   '無MCU/方舌連動/左內', '總門厚62mm~76mm', '標準版', '無'],
+    ['L396-1C11C1-A0311B-A1CA1-2X30A',  3, '消光黑', '無MCU/方舌連動/左內', '總門厚53mm-61mm', '標準版', '無'],
+  ];
+
+  const reset = (rows) => {
+    SHEETS = [makeSheet('歷史料號', PHEAD, rows === undefined ? PROWS : rows, 1)];
+    CACHE = {};
+    props.GEMINI_API_KEY = 'test-key';
+  };
+
+  // 讓 Gemini 回固定的條件。測的是「拿到條件之後程式怎麼做」，
+  // 不是 Gemini 準不準——後者本機測不了，也不該用假資料假裝測過。
+  const geminiReturns = obj => {
+    sandbox.UrlFetchApp.fetch = () => ({
+      getResponseCode: () => 200,
+      getContentText: () => JSON.stringify({
+        candidates: [{ content: { parts: [{ text: JSON.stringify(obj) }] } }]
+      })
+    });
+  };
+
+  reset();
+  asUser('ls@waferlock.com');
+
+  // ══ 讀分頁 ══
+  {
+    const meta = G.loadPartNoMeta_();
+    ok(!!meta, '應讀得到歷史料號分頁');
+    ok((meta.models || []).join(',') === 'L376,L396',
+       '目錄應列出分頁裡有的型號，實際：' + (meta.models || []).join(','));
+    ok(meta.segNames.join(',') === '前面板,鎖腹方向,總門厚,電池盒組,內鎖',
+       '參數段應取自表頭且排除料號/出過次數，實際：' + meta.segNames.join(','));
+
+    const m376 = G.loadPartNoModel_('L376') || { rows: [], values: {} };
+    ok(m376.rows.length === 5, 'L376 應有 5 筆，實際：' + m376.rows.length);
+    ok((G.loadPartNoModel_('L396') || { rows: [] }).rows.length === 1,
+       '同一張分頁要能放多款鎖（L396 應有 1 筆）');
+    ok(G.loadPartNoModel_('L999') === null, '沒有的型號要回 null');
+    // 餵給 AI 的選項只給「歷史真的有的值」——規格表有但沒出過的，選了也篩不到
+    const v = (m376.values['前面板'] || []).slice().sort().join(',');
+    ok(v === '消光黑,霧銀', '每段的可選值應取自歷史實際出現過的，實際：' + v);
+    // 字典編碼解回來要跟原始資料一致
+    ok(m376.rows[0].segs['鎖腹方向'] === '無MCU/方舌連動/左內',
+       '字典編碼解碼後的段值要正確，實際：' + m376.rows[0].segs['鎖腹方向']);
+    ok(m376.rows[0].count === 85, '解碼後的出過次數要正確');
+
+    // 空白格：解碼要還原成空值，但不可出現在給 AI 的選項清單裡
+    {
+      const withBlank = PROWS.map(r => r.slice());
+      withBlank[0] = withBlank[0].slice();
+      withBlank[0][6] = '';                    // 內鎖留空
+      SHEETS = [makeSheet('歷史料號', PHEAD, withBlank, 1)];
+      CACHE = {};
+      const b = G.loadPartNoModel_('L376');
+      ok(b.rows[0].segs['內鎖'] === '', '空白格解碼後應還原成空值');
+      ok((b.values['內鎖'] || []).indexOf('') < 0,
+         '🔴 空字串不可出現在給 AI 的選項清單（AI 選了它會把候選全部篩光）');
+      // reset() 會清掉 CACHE，下面還要檢查快取內容，所以重新載入一次
+      reset();
+      G.loadPartNoModel_('L376');
+    }
+
+    ok(Object.keys(CACHE).some(k => /partno_v2_L376/.test(k)),
+       '🔴 應以「一個型號一個鍵」寫進快取（分開存，日後加型號才不會互相排擠）');
+    ok(!!CACHE['dispatch_partno_meta_v2'], '目錄也要另外快取一份');
+
+    // ⚠ 🔴 **這一段鎖住的是一個真的發生過的 bug**：
+    //   第一版把整包存成 {no,count,segs:{段名:值}}，用真實的 271 列量出來是
+    //   **109,843 bytes**，超過 CACHE_MAX_BYTES(95,000) → 每次都走「太大不快取」，
+    //   結果每則 Chat 訊息都重讀整張表。功能正常、只是慢，**完全看不出來**。
+    //   改成字典編碼（每段相異值存一次、列裡放索引）後降到 22,253 bytes。
+    //   fixture 只有 6 列的話這條測試會無條件通過，所以這裡刻意造真實規模的資料。
+    {
+      const SEGN = 20, ROWN = 271;              // L376 的真實規模
+      const head = ['料號', '出過次數'];
+      for (let i = 0; i < SEGN; i++) head.push('參數段' + i);
+      const big = [];
+      for (let r = 0; r < ROWN; r++) {
+        const line = ['L376-1C11C1-A0311B-A1CA1-' + ('0000' + r).slice(-4), ROWN - r];
+        // 每段 4~11 種相異值，長度接近真實（「無MCU/方舌連動/左內」這種）
+        for (let i = 0; i < SEGN; i++) line.push('參數段' + i + '的值' + (r % (4 + i % 8)) + '－中文說明文字');
+        big.push(line);
+      }
+      SHEETS = [makeSheet('歷史料號', head, big, 1)];
+      CACHE = {};
+      const loaded = G.loadPartNoModel_('L376');
+      ok(loaded && loaded.rows.length === ROWN, '真實規模應載得起來');
+      const size = String(CACHE['dispatch_partno_v2_L376'] || '').length;
+      ok(size > 0,
+         '🔴 真實規模下快取必須真的寫得進去（寫不進去＝每則訊息重讀整張表）');
+      ok(size <= G.CACHE_MAX_BYTES,
+         '🔴 單一型號的快取必須放得進 CACHE_MAX_BYTES，實際：' + size);
+      // 解碼後資料要一致，不能為了縮小而失真
+      ok(loaded.rows[0].no === big[0][0] && loaded.rows[0].count === big[0][1],
+         '字典編碼不可失真（料號與次數）');
+      ok(loaded.rows[270].segs['參數段19'] === big[270][21],
+         '字典編碼不可失真（最後一列的最後一段）');
+    }
+    reset();
+
+    // 分頁是空的（只有表頭）→ 要回 null，不可回空索引
+    reset([]);
+    ok(G.loadPartNoMeta_() === null,
+       '🔴 分頁沒有資料列要回 null（「還沒匯入」與「查無」必須分得出來）');
+
+    // 缺「出過次數」欄 → 排序失去依據，視同尚未匯入而不是全部當 0 次
+    SHEETS = [makeSheet('歷史料號', ['料號', '前面板'],
+      [['L376-1C11C1-A0311B-A1CA1-2X30A', '消光黑']], 1)];
+    CACHE = {};
+    ok(G.loadPartNoMeta_() === null,
+       '🔴 缺出過次數欄要視同未匯入（全部當 0 次會讓排序變隨機，比不給答案更糟）');
+    reset();
+  }
+
+  // ══ 型號辨識 ══
+  {
+    const models = G.loadPartNoMeta_().models;
+    ok(G.detectPartNoModel_('旗山那個案子 L376 要出了', models) === 'L376', '應認出 L376');
+    ok(G.detectPartNoModel_('l376 消光黑', models) === 'L376', '型號比對應不分大小寫');
+    ok(G.detectPartNoModel_('客戶要 L399 那款', models) === '',
+       '🔴 分頁裡沒有的型號不可硬湊成有的');
+    ok(G.detectPartNoModel_('XL3761 是什麼', models) === '',
+       '🔴 型號要用邊界比對，不可被更長的英數字串誤中');
+    ok(G.detectPartNoModel_('L376 這款', ['L376', 'L376N']) === 'L376',
+       '同時匹配時應取最長的一個（這句只有 L376）');
+  }
+
+  // ══ 免 AI 的完整料號路徑：寧可放過也不要誤抓 ══
+  {
+    ok(G.parsePartNoDirect_('用 L376-1C11C1-A0311B-A1CA1-2X30A 這個') ===
+       'L376-1C11C1-A0311B-A1CA1-2X30A', '應抓得出完整料號');
+    ok(G.parsePartNoDirect_('L376 消光黑左內') === '',
+       '🔴 只提到型號不算完整料號（比照 parseChatQuestionFast_ 不可太貪心的教訓）');
+    ok(G.parsePartNoDirect_('L376-1C11C1') === '',
+       '🔴 只有一段的半截料號不算（拆段會錯位）');
+  }
+
+  // ══ 篩選：收斂過程要正確 ══
+  {
+    const m = G.loadPartNoModel_('L376');
+    const rows = m.rows;
+    const r = G.filterPartNos_(rows, [
+      { segment: '前面板', value: '消光黑' },
+      { segment: '鎖腹方向', value: '左內' },
+      { segment: '總門厚', value: '總門厚53mm-61mm' }
+    ]);
+    ok(r.funnel.length === 3, 'funnel 應逐條件各記一筆');
+    ok(r.funnel[0].left === 4, '消光黑應剩 4 種，實際：' + r.funnel[0].left);
+    ok(r.funnel[1].left === 3, '再加左內應剩 3 種，實際：' + r.funnel[1].left);
+    ok(r.funnel[2].left === 3, '再加門厚應剩 3 種，實際：' + r.funnel[2].left);
+    ok(r.rows.length === 3, '最後應剩 3 種');
+    ok(r.killedBy === null, '有結果時 killedBy 應為 null');
+    // 「左內」夾在字串中間也要比對得到，否則真實資料一筆都篩不出來
+    ok(r.rows.every(x => x.segs['鎖腹方向'].indexOf('左內') >= 0),
+       '🔴 值比對要能命中字串中間的關鍵字');
+  }
+
+  // ══ 🔑 篩到 0 時，一定要講出是「哪一個條件」篩光的 ══
+  {
+    const m = G.loadPartNoModel_('L376');
+    const rows = m.rows;
+    const r = G.filterPartNos_(rows, [
+      { segment: '前面板', value: '消光黑' },
+      { segment: '總門厚', value: '總門厚99mm-999mm' }
+    ]);
+    ok(r.rows.length === 0, '這個組合應該一種都沒有');
+    ok(!!r.killedBy, '🔴 篩到 0 一定要有 killedBy（只回「找不到」會讓人以為東西不存在）');
+    // ⚠ 一律用 (x || {}) 取值：killedBy 是 null 時直接取欄位會拋例外，
+    //   例外會中斷整個套件，後面幾百條斷言就都看不到了（同 scriptsParse 的理由）
+    ok((r.killedBy || {}).segment === '總門厚',
+       '🔴 killedBy 要指出正確的那一條，實際：' + (r.killedBy || {}).segment);
+    ok((r.killedBy || {}).before === 4,
+       'killedBy 要帶「加它之前還有幾種」，實際：' + (r.killedBy || {}).before);
+
+    // 第一個條件就篩光的情況
+    const r2 = G.filterPartNos_(rows, [{ segment: '前面板', value: '螢光粉' }]);
+    ok(r2.killedBy && r2.killedBy.before === 5,
+       '第一條就篩光時 before 應是全部筆數，實際：' + (r2.killedBy || {}).before);
+  }
+
+  // ══ 差異描述：只列真正不同的段 ══
+  {
+    const m = G.loadPartNoModel_('L376');
+    const rows = m.rows;
+    const d = G.diffPartNo_(rows[0], rows[2], m.segNames);
+    ok(d.length === 1 && (d[0] || {}).segment === '電池盒組',
+       '只差一段時應只列那一段，實際：' + JSON.stringify(d));
+    ok((d[0] || {}).to === '標準版(RTC on board)', '差異要帶「改成什麼」');
+    const d2 = G.diffPartNo_(rows[0], rows[1], m.segNames);
+    ok(d2.length === 2, '差兩段就要列兩段，實際：' + d2.length);
+    ok(G.diffPartNo_(rows[0], rows[0], m.segNames).length === 0, '跟自己比應該沒有差異');
+  }
+
+  // ══ 整條路徑（含 AI 解析） ══
+  {
+    reset();
+    geminiReturns({ conditions: [
+      { segment: '前面板', value: '消光黑' },
+      { segment: '鎖腹方向', value: '左內' },
+      { segment: '總門厚', value: '總門厚53mm-61mm' }
+    ], confidence: 'high' });
+
+    const res = G.suggestPartNos_('旗山那個案子 L376 要出了，客戶指定消光黑，門是左內開的，門厚量過 60');
+    ok(res.ok === true, '應成功回候選');
+    ok(res.model === 'L376', '型號應為 L376');
+    ok(res.total === 5, 'total 應是該型號的歷史種類數');
+    const cs = res.candidates || [];
+    ok(cs.length === 3, '應回 3 個候選（PARTNO_TOP_N）');
+    ok((cs[0] || {}).no === 'L376-1C11C1-A0311B-A1CA1-2X30A',
+       '候選應依出過次數排序，最常出的排第一');
+    ok((cs[0] || {}).count === 85, '應帶出過次數');
+    ok(((cs[0] || {}).diff || ['x']).length === 0, '第一名不必跟自己比');
+    ok(((cs[2] || {}).diff || []).length === 1, '第三名應帶跟第一名的差異');
+
+    // AI 掰出不存在的段名 → 丟掉，不可拿去篩（否則會篩光並回報錯的原因）
+    geminiReturns({ conditions: [
+      { segment: '前面板', value: '消光黑' },
+      { segment: '顏色深淺', value: '深' }
+    ], confidence: 'high' });
+    const res2 = G.suggestPartNos_('L376 消光黑');
+    ok(res2.ok === true && res2.funnel.length === 1,
+       '🔴 AI 給不存在的段名要丟掉，不可拿去篩，實際 funnel：' + JSON.stringify(res2.funnel));
+
+    // AI 一個條件都解不出來
+    geminiReturns({ conditions: [], confidence: 'low' });
+    const res3 = G.suggestPartNos_('L376');
+    ok(res3.ok === false && res3.reason === 'no_condition',
+       '沒解出條件要回 no_condition，讓使用者知道要多講一點');
+
+    // 直接給完整料號 → 免 AI
+    sandbox.UrlFetchApp.fetch = () => { throw new Error('不該呼叫 Gemini'); };
+    const res4 = G.suggestPartNos_('就用 L376-1C17C1-A0311B-A1CA1-2X30A');
+    ok(res4.ok === true && res4.via === 'direct',
+       '🔴 給了完整料號就不該再打 AI（Gemini 掛掉時這條路要照樣通）');
+    ok(((res4.candidates || [])[0] || {}).count === 29, '直接查也要帶出過次數');
+
+    const res5 = G.suggestPartNos_('用 L376-9Z99Z9-9999Z-9ZZ9-9Z99Z');
+    ok(res5.ok === false && res5.reason === 'unknown_partno',
+       '🔴 沒出過的料號要明講，不可靜默當成查無');
+  }
+
+  // ══ 🔑 parseOrderSpeech_ 一定要帶時間預算 ══
+  {
+    reset();
+    let gotOpts = null;
+    sandbox.callGeminiJson_ = function (parts, schema, tag, opts) {
+      gotOpts = opts;
+      return { ok: true, data: { conditions: [], confidence: 'low' } };
+    };
+    G.parseOrderSpeech_('L376 消光黑', 'L376', { '前面板': ['消光黑', '霧銀'] }, ['前面板']);
+    ok(gotOpts && gotOpts.deadlineMs > 0,
+       '🔴 一定要帶 deadlineMs——Chat 外掛約 38 秒被砍，不設預算會變成零回應');
+    ok((gotOpts || {}).deadlineMs <= 20000, 'deadlineMs 不可大於 20 秒');
+    sandbox.callGeminiJson_ = origCall;
+  }
+
+  // ══ AI 打不通時要講得出原因 ══
+  {
+    reset();
+    sandbox.callGeminiJson_ = () => ({ ok: false, reason: 'timeout' });
+    const r = G.suggestPartNos_('L376 消光黑左內');
+    ok(r.ok === false && r.reason === 'ai_failed' && r.detail === 'timeout',
+       'AI 逾時要回 ai_failed 並帶原因');
+    sandbox.callGeminiJson_ = origCall;
+  }
+
+  // ══ 🔑 空間白名單：白話下單唯一的安全邊界 ══
+  {
+    reset();
+    // 🔑 一定要先讓 Gemini 回得出有效條件。否則閘門被拿掉時解析會失敗，
+    //    料號「剛好」沒外洩，下面那條斷言就變成靠巧合通過的空測試。
+    //    （版本紀錄 2026-08-25 記載同一條反向驗證第一次就是這樣假通過的。）
+    geminiReturns({ conditions: [{ segment: '前面板', value: '消光黑' }], confidence: 'high' });
+    delete props.CHATAPP_ORDER_SPACES;
+    delete props.CHATAPP_ALLOWED_SPACES;
+
+    const ev = { chat: {
+      messagePayload: { message: { argumentText: 'L376 消光黑，左內，門厚 60' },
+                        space: { name: 'spaces/ORDER1' } },
+      user: { name: 'users/111222333444555666', displayName: '小林' } } };
+
+    const r = JSON.stringify(G.onMessage(ev));
+    ok(!/L376-1C11C1/.test(r),
+       '🔴 白名單未設定時一個候選料號都不能吐');
+
+    props.CHATAPP_ORDER_SPACES = 'spaces/OTHER';
+    ok(!/L376-1C11C1/.test(JSON.stringify(G.onMessage(ev))),
+       '🔴 不在白名單的空間不可拿到料號');
+
+    props.CHATAPP_ORDER_SPACES = 'spaces/ORDER1, spaces/OTHER';
+    ok(G.chatOrderAllowed_('spaces/ORDER1') && G.chatOrderAllowed_('spaces/OTHER'),
+       '白名單應支援逗號分隔多個空間');
+    ok(!G.chatOrderAllowed_(''), '空的空間名一律 false');
+    ok(/L376-1C11C1/.test(JSON.stringify(G.onMessage(ev))),
+       '在白名單內應回得出候選料號');
+  }
+
+  // ══ 意圖分流：問句不可被下單搶答 ══
+  {
+    reset();
+    props.CHATAPP_ORDER_SPACES = 'spaces/ORDER1';
+    geminiReturns({ conditions: [{ segment: '前面板', value: '消光黑' }], confidence: 'high' });
+
+    ok(G.looksLikeChatQuestion_('L376 那張單出貨了嗎'), '「…了嗎」應判為問句');
+    ok(G.looksLikeChatQuestion_('幫我查 L376 的單'), '「幫我查」應判為問句');
+    ok(!G.looksLikeChatQuestion_('L376 消光黑，左內開，門厚 60'), '陳述規格不是問句');
+
+    const ask = { chat: {
+      messagePayload: { message: { argumentText: 'L376 那張單出貨了嗎' },
+                        space: { name: 'spaces/ORDER1' } },
+      user: { name: 'users/111222333444555666', displayName: '小林' } } };
+    ok(G.tryPartNoSuggestion_('L376 那張單出貨了嗎') === null,
+       '🔴 問句要回 null 交回問答，不可搶答成料號卡片');
+    ok(G.tryPartNoSuggestion_('今天天氣如何') === null,
+       '沒有型號的閒聊要回 null');
+  }
+
+  // ══ 卡片格式 ══
+  {
+    reset();
+    geminiReturns({ conditions: [
+      { segment: '前面板', value: '消光黑' },
+      { segment: '鎖腹方向', value: '左內' }
+    ], confidence: 'high' });
+    const card = JSON.stringify(G.partNoCard_(G.suggestPartNos_('L376 消光黑左內')));
+
+    ok(/createMessageAction/.test(card), '應用外掛格式的 createMessageAction');
+    ok(/pickPartNo/.test(card), '每個候選都要有可以按的按鈕');
+    ok(/L376-1C11C1-A0311B-A1CA1-2X30A/.test(card), '卡片要列出料號');
+    ok(/出過 85 次/.test(card), '卡片要顯示出過幾次');
+    ok(/從你們出過的/.test(card), '🔴 收斂過程要顯示（這是業務願意相信它的理由）');
+    ok(card.indexOf('**') < 0,
+       '🔴 卡片不可出現 Markdown 的 ** 粗體（卡片用 <b>，純文字訊息用單星號）');
+
+    // 篩到 0 的卡片要指出是哪個條件
+    geminiReturns({ conditions: [{ segment: '總門厚', value: '總門厚99mm-999mm' }],
+                    confidence: 'high' });
+    const bad = JSON.stringify(G.partNoCard_(G.suggestPartNos_('L376 門厚 999')));
+    ok(/總門厚/.test(bad) && /篩光/.test(bad),
+       '🔴 查無的卡片要講出是哪個條件篩光的');
+    ok(bad.indexOf('**') < 0, '查無卡片同樣不可用 Markdown 粗體');
+  }
+
+  // ══ 按鈕：不靠 session 狀態，料號由 parameters 自己帶 ══
+  {
+    const r = JSON.stringify(G.pickPartNo({ commonEventObject: {
+      parameters: { partNo: 'L376-1C11C1-A0311B-A1CA1-2X30A', model: 'L376' } } }));
+    ok(/L376-1C11C1-A0311B-A1CA1-2X30A/.test(r), '按鈕應回出選定的料號');
+    ok(/主件料號/.test(r), '應告訴業務貼到哪裡');
+    const empty = JSON.stringify(G.pickPartNo({ commonEventObject: { parameters: {} } }));
+    ok(!/undefined|null/.test(empty), '沒帶到料號時不可吐出 undefined');
+  }
+
+  // ══ 出貨明細新增料號欄，不可影響既有寫入 ══
+  {
+    ok(G.SHIPMENT_HEADERS.indexOf('料號') >= 0, '出貨明細應有料號欄');
+    ok(G.SHIPMENT_HEADERS.indexOf('出貨品項') >= 0, '料號欄不可取代出貨品項欄');
+    ok(G.SHIPMENT_HEADERS.indexOf('料號') > G.SHIPMENT_HEADERS.indexOf('貨運日期'),
+       '🔴 新欄要加在表尾，不可插在中間（插入會讓既有資料位移）');
+  }
+
+  sandbox.UrlFetchApp.fetch = origFetch;
+  sandbox.callGeminiJson_ = origCall;
+  delete props.CHATAPP_ORDER_SPACES;
+})();
+
 console.log('\n' + (fail ? '❌' : '✅') + ' 通過 ' + pass + '／失敗 ' + fail);
 process.exit(fail ? 1 : 0);

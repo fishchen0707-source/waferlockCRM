@@ -16,7 +16,14 @@
 # 所以這支跑之前要先確認檔案在不在，不在就明講、不要靜默跳過。
 #
 #   python scripts/analyze-shipment-history.py L376
+#
+# ── 除了印出統計，還會產出給小幫手用的 CSV ──────────────
+# docs/歷史料號_<型號>.csv：一列一個歷史料號，每個參數段攤平成一欄。
+# 這份 CSV 貼進試算表的「歷史料號」分頁之後，GAS 端就只要做字串比對，
+# **不必把 835 KB 的料號參數字典搬進 Apps Script**。
+# 重活（拆段、查字典、翻中文）留在這裡做，GAS 只做確定性的篩選。
 import collections
+import csv
 import json
 import os
 import re
@@ -31,6 +38,7 @@ CHAT = os.path.join(ROOT, "teams對話紀錄", "Skype對話紀錄.xlsx")
 DICT = os.path.join(ROOT, "docs", "料號參數字典.json")
 # 出貨相關的分頁。全部訊息那個分頁是彙總，會重複計算，刻意不掃。
 SHEETS = ["台中成品出貨", "出貨-台北出貨8-14新群組", "高雄成品出貨"]
+OUT_DIR = os.path.join(ROOT, "docs")
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -90,6 +98,68 @@ def split(pn, segs):
     return out
 
 
+def write_csv(model, segs, seen):
+    """產出「歷史料號」分頁用的 CSV：一列一個料號，參數段攤平成欄。
+
+    欄值刻意放**中文說明**而不是代碼（放「消光黑」不是放「C」）。三個理由：
+      ① GAS 端篩選就變成純字串比對，不必載入 835 KB 的字典
+      ② AI 的 prompt 直接餵這些中文值當可選項，白話對應關係最短
+      ③ 人打開分頁看得懂，出錯時查得出來
+
+    只輸出 choice 段。fixed 段（鎖=L、產品型號=376）每一列都一樣，是雜訊。
+    """
+    cols = [s for s in segs if s["type"] == "choice"]
+    if not cols:
+        die(f"{model} 沒有任何可選參數段，不產 CSV")
+
+    # 段名是 GAS 端的欄位鍵。重名會讓後面那個安靜蓋掉前面那個——
+    # split() 也是用段名當 key，同樣會中招。寧可停下來也不要產出一份錯的表。
+    names = [s["name"] for s in cols]
+    dup = [n for n in set(names) if names.count(n) > 1]
+    if dup:
+        die(f"{model} 有重名的參數段 {dup}，會讓欄位互相覆蓋。請先修 docs/料號參數字典.json")
+
+    desc = {s["name"]: {o["code"].upper(): o["desc"] for o in s["options"]} for s in cols}
+    miss = collections.Counter()   # (段名, 代碼) → 幾筆查不到說明
+
+    rows = []
+    for pn, cnt in seen.most_common():
+        seg = split(pn, segs)
+        line = [pn, cnt]
+        for s in cols:
+            code = seg[s["name"]]
+            d = desc[s["name"]].get(code)
+            if d is None:
+                # 查不到就寫代碼原值，**不塞空白**——空白會讓人以為這段沒有值，
+                # 而實際上是規格表沒收錄這個代碼（多半是舊料號用了已下架的選項）。
+                miss[(s["name"], code)] += cnt
+                d = code
+            line.append(d)
+        rows.append(line)
+
+    out = os.path.join(OUT_DIR, f"歷史料號_{model}.csv")
+    # utf-8-sig：Excel 直接點開才不會變亂碼（貼進 Google 試算表兩種都行）
+    with open(out, "w", encoding="utf-8-sig", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["料號", "出過次數"] + names)
+        w.writerows(rows)
+
+    print(f"\n✅ 已寫出 {out}")
+    print(f"   {len(rows)} 列 × {len(names) + 2} 欄（料號、出過次數，＋{len(names)} 個參數段）")
+
+    if miss:
+        # 顯性失敗：這些代碼規格表裡查不到，欄位放的是代碼不是中文。
+        # 業務用白話篩的時候篩不到它們——要讓人知道，不能靜默。
+        total_miss = sum(miss.values())
+        print(f"\n⚠ 有 {len(miss)} 種代碼在規格表裡查不到說明"
+              f"（影響 {total_miss} 次出貨，該欄位填的是代碼原值）：")
+        for (name, code), c in miss.most_common(10):
+            print(f"     【{name}】{code}　{c} 次")
+        print("   → 這些值業務用白話篩不到。若常出現，要回頭補 docs/料號參數字典.json")
+    else:
+        print("   每一段的代碼都查得到中文說明，沒有漏的。")
+
+
 def main():
     model = sys.argv[1] if len(sys.argv) > 1 else "L376"
     segs = load_dict(model)
@@ -130,6 +200,10 @@ def main():
                 print(f"     只差【{k}】{a[k]} vs {b[k]}"
                       f"　{desc[k].get(a[k],'?')[:18]} / {desc[k].get(b[k],'?')[:18]}\n")
                 shown += 1
+
+    # 放最後：上面的統計是給人核對用的，就算這裡因為字典有問題而中止，
+    # 人也已經看到掃描結果了。
+    write_csv(model, segs, seen)
 
 
 if __name__ == "__main__":

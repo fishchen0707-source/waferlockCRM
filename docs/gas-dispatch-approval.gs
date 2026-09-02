@@ -215,6 +215,18 @@ var COL_S_RETURN = '退單';
 var COL_S_TRACK_NO = '貨運單號';
 var COL_S_TRACK_AT = '貨運日期';
 
+// 料號（2026-09-02 新增，配合「白話下單」小幫手）。
+//
+// 為什麼要獨立一欄、不繼續塞在「出貨品項」裡：
+//   出貨品項是從 TipTop 整段複製貼上的自由文字，料號混在裡面。
+//   倉庫回報的問題大多就是這一欄（料號不符、沒有料號、數量不對，見下方 :527 註解），
+//   但文字塞在一起就沒辦法比對、統計、防呆。
+//
+// ⚠ **這一欄只會讓料號從今天起開始累積，不會回填歷史。**
+//   小幫手現在的候選來自 scripts/analyze-shipment-history.py 掃 Skype 群組產出的快照；
+//   等這一欄累積夠了，才有機會不再依賴那份 18 MB 的匯出檔。
+var COL_S_PARTNO = '料號';
+
 var SHIPMENT_HEADERS = [
   COL_S_CASE_NO,
   COL_S_AT, COL_S_SHIP_NO, COL_S_ORDER_ID, COL_S_SHIP_DATE, COL_S_DISPATCH,
@@ -226,7 +238,8 @@ var SHIPMENT_HEADERS = [
   COL_S_ORDER_BY, COL_S_BY, COL_S_WH_STATUS, COL_S_WH_BY, COL_S_WH_AT, COL_S_WH_NOTE,
   COL_S_INVOICE_URL, COL_S_INVOICE_NO,
   COL_S_RETURN,
-  COL_S_TRACK_NO, COL_S_TRACK_AT
+  COL_S_TRACK_NO, COL_S_TRACK_AT,
+  COL_S_PARTNO
 ];
 
 // ── 發票電子檔上傳 ──────────────────────────────────────────
@@ -904,6 +917,9 @@ function orderBlock_(email, me, wantQuick) {
 
       '<div class="card">' +
         '<div class="ometa"><b>出貨項目</b><span>助理直接拿去鍵 TipTop，不必重打</span></div>' +
+        // 料號獨立一欄（不只塞在下面的自由文字裡）：倉庫回報的問題大多就是料號，
+        // 分出來才比對得了、統計得了。派工小幫手在 Chat 裡篩出來的料號貼這裡。
+        fld_('partNo', '主件料號', '例：L376-1C11C1-A0311B-A1CA1-2X30A（可在 Chat 問派工小幫手）') +
         '<textarea id="items" rows="4" placeholder="完整料號與數量，一行一項。&#10;' +
           '例：L901GEA10001AA-01 X1&#10;NSM54CMY100032-W x1 - 送感應貼"></textarea>' +
       '</div>' +
@@ -996,7 +1012,8 @@ function orderBlock_(email, me, wantQuick) {
       'var f={kind:KIND,customer:val("customer"),project:val("project"),' +
         'model:val("model"),qty:val("qty"),worker:val("worker"),' +
         'price:val("price"),note:val("note"),' +
-        'items:val("items"),toName:val("toName"),toPhone:val("toPhone"),' +
+        'items:val("items"),partNo:val("partNo"),' +
+        'toName:val("toName"),toPhone:val("toPhone"),' +
         'toAddr:val("toAddr"),invoice:val("invoice"),shipNote:val("shipNote"),' +
         'channelNo:val("channelNo"),custName:val("custName"),' +
         'custPhone:val("custPhone"),custAddr:val("custAddr"),' +
@@ -1020,7 +1037,7 @@ function orderBlock_(email, me, wantQuick) {
           // 出貨資訊寫入失敗時**不清空表單**，否則業務填的一大段東西就沒了
           'if(res.ok){show(res.message,res.shipFailed?"fail":"done");' +
             'if(!res.shipFailed){["customer","project","model","qty","worker","price","note",' +
-              '"items","toName","toPhone","toAddr","shipNote","channelNo",' +
+              '"items","partNo","toName","toPhone","toAddr","shipNote","channelNo",' +
               '"custName","custPhone","custAddr","workItem","workTime",' +
               '"salePrice","costPrice"]' +
               '.forEach(function(k){var e=g(k);if(e)e.value="";' +
@@ -4294,6 +4311,427 @@ var SHIPDOC_PROMPT =
   '3. 「合計：N 筆」「客戶簽收」「印表日期」這些是表格的頁首頁尾，**不是託運紀錄**，不要當成一筆。\n\n' +
   '文件內容如下：\n';
 
+// ── 白話下單：從歷史料號篩候選 ──────────────────────────────
+//
+// 業務講「L376 消光黑、左內、門厚 60」，這裡篩出**真的出過**的料號給她選。
+//
+// 🔑 **為什麼是「篩歷史」而不是「組料號」**：L376 的理論組合有 55 兆種，
+//   但十年來實際只出過 271 種。讓業務逐段選 20 個參數去組一個新料號，
+//   組出來的還可能是 TIPTOP 裡沒有的——那就要等人建檔，是真正的瓶頸。
+//   從歷史篩，候選必定已經出過貨、必定存在於 TIPTOP。
+//
+// 🔑 **為什麼 GAS 端不載入 docs/料號參數字典.json**（835 KB）：
+//   拆段、查代碼、翻中文這些重活都在 scripts/analyze-shipment-history.py 做完了，
+//   「歷史料號」分頁裡存的已經是中文說明（「消光黑」而不是「C」）。
+//   GAS 這邊只做字串比對——確定性的事留給程式，這是這支檔案一貫的分工。
+//
+// ⚠ 分頁怎麼來：跑 `python scripts/analyze-shipment-history.py L376`
+//   產出 docs/歷史料號_L376.csv，貼進試算表的「歷史料號」分頁。
+//   那份 CSV 是**快照**，不會自己更新。
+
+var PARTNO_SHEET = '歷史料號';
+var COL_P_NO = '料號';
+var COL_P_COUNT = '出過次數';
+var PARTNO_TOP_N = 3;        // 卡片上列幾個候選。超過三個業務就不看了
+var PARTNO_MAX_PROMPT_OPTS = 40;  // 單一段餵給 AI 的選項上限，避免 prompt 爆掉
+
+// 快取分成「目錄」與「一個型號一把鑰匙」兩層。
+//
+// 🔑 **為什麼不是整包存一個鍵**（第一版就是，實測發現它從來沒生效過）：
+//   271 列的 L376 存成 {no,count,segs:{段名:值}} 是 **109,843 bytes**，
+//   超過 CACHE_MAX_BYTES(95,000)，所以每次都走「太大不快取」那條路——
+//   結果是每則 Chat 訊息都重讀整張表，而且**完全看不出來**（功能正常，只是慢）。
+//
+// 🔑 **字典編碼**：每段的相異值只存一次，列裡放索引。實測 109,843 → 22,253 bytes（5 倍）。
+//   而且那份相異值清單本來就要算（要餵給 AI 當可選項），等於免費。
+//
+// 🔑 **一個型號一個鍵**：一則訊息只用得到一款鎖。分開存之後，日後匯入第二款
+//   不會排擠掉第一款，也不會因為總量變大而整包放不進去。
+var PARTNO_CACHE_PREFIX = 'dispatch_partno_v2_';   // + 型號
+var PARTNO_META_KEY = 'dispatch_partno_meta_v2';   // 目錄：有哪些型號、有哪些參數段
+
+/**
+ * 讀整張「歷史料號」分頁，建好每個型號的字典編碼並寫進快取。
+ *
+ * **只有快取沒命中時才會走到這裡**，正常情況下一則訊息一次表都不用讀。
+ * 回 { segNames, models:[], packs:{ 型號: {dict, rows} } }；讀不到回 null。
+ *
+ * 型號取自料號的第一段（`L376-1C11C1-…` → `L376`），所以同一張分頁可以放多款鎖。
+ */
+function readPartNoSheet_() {
+  var s;
+  try {
+    s = openAuxSheet_(PARTNO_SHEET, [COL_P_NO, COL_P_COUNT]);
+  } catch (err) {
+    Logger.log('打不開歷史料號分頁：' + err);
+    return null;
+  }
+  var lastRow = s.sheet.getLastRow();
+  var lastCol = s.sheet.getLastColumn();
+  if (lastRow < 2 || lastCol < 3) return null;   // 只有表頭、或連一個參數段都沒有
+
+  var all = s.sheet.getRange(1, 1, lastRow, lastCol).getValues();
+  var head = all[0];
+  var noCol = -1, cntCol = -1, segCols = [], segNames = [];
+  for (var c = 0; c < head.length; c++) {
+    var h = normHeader_(head[c]);
+    if (!h) continue;
+    if (h === normHeader_(COL_P_NO)) { noCol = c; continue; }
+    if (h === normHeader_(COL_P_COUNT)) { cntCol = c; continue; }
+    segCols.push(c);
+    segNames.push(String(head[c]).trim());
+  }
+  if (noCol < 0 || !segCols.length) return null;
+  if (cntCol < 0) {
+    // 出過次數是候選排序的依據，也是業務願意相信這張卡片的理由（「出過 85 次」）。
+    // 缺這一欄的話全部會變成 0 次、排序變成隨機——那比不給答案更糟，所以直接不供應。
+    Logger.log('🔴 「' + PARTNO_SHEET + '」分頁缺「' + COL_P_COUNT + '」欄，無法排序候選，視同尚未匯入。');
+    return null;
+  }
+
+  // 一邊掃一邊做字典編碼：每段的相異值收進 dict，列裡只留索引
+  var packs = {};
+  for (var r = 1; r < all.length; r++) {
+    var no = String(all[r][noCol] || '').trim();
+    if (!no) continue;
+    var model = no.split('-')[0].toUpperCase();
+    if (!model) continue;
+    if (!packs[model]) {
+      packs[model] = { dict: [], _seen: [], rows: [] };
+      for (var d = 0; d < segNames.length; d++) { packs[model].dict.push([]); packs[model]._seen.push({}); }
+    }
+    var p = packs[model];
+    var line = [no, Number(all[r][cntCol]) || 0];
+    for (var i = 0; i < segCols.length; i++) {
+      var v = String(all[r][segCols[i]] || '').trim();
+      if (p._seen[i][v] === undefined) {
+        p._seen[i][v] = p.dict[i].length;
+        p.dict[i].push(v);
+      }
+      line.push(p._seen[i][v]);
+    }
+    p.rows.push(line);
+  }
+
+  var models = [];
+  for (var m in packs) {
+    if (!Object.prototype.hasOwnProperty.call(packs, m)) continue;
+    delete packs[m]._seen;      // 只是建表用的暫存，不進快取
+    models.push(m);
+  }
+  models.sort();
+
+  // 寫快取：目錄一把、每個型號各一把
+  var cache = CacheService.getScriptCache();
+  try {
+    cache.put(PARTNO_META_KEY, JSON.stringify({ segNames: segNames, models: models }), CACHE_TTL);
+    for (var k = 0; k < models.length; k++) {
+      var payload = JSON.stringify(packs[models[k]]);
+      // 還是留著這個判斷：某一款鎖如果出過幾千種料號還是可能爆掉。
+      // 那時它每次重讀表（會變慢但不會壞），而且 log 講得出是哪一款。
+      if (payload.length <= CACHE_MAX_BYTES) {
+        cache.put(PARTNO_CACHE_PREFIX + models[k], payload, CACHE_TTL);
+      } else {
+        Logger.log('⚠ ' + models[k] + ' 的歷史料號 ' + payload.length +
+          ' bytes 超過快取上限，這一款每則訊息都會重讀表');
+      }
+    }
+  } catch (e2) {
+    Logger.log('寫歷史料號快取失敗：' + e2);
+  }
+
+  return { segNames: segNames, models: models, packs: packs };
+}
+
+/** 目錄：有哪些型號、有哪些參數段。給型號辨識用，很小，幾乎都會命中快取。 */
+function loadPartNoMeta_() {
+  try {
+    var hit = CacheService.getScriptCache().get(PARTNO_META_KEY);
+    if (hit) return JSON.parse(hit);
+  } catch (err) {
+    Logger.log('讀歷史料號目錄快取失敗，改為重新讀表：' + err);
+  }
+  var got = readPartNoSheet_();
+  return got ? { segNames: got.segNames, models: got.models } : null;
+}
+
+/**
+ * 單一型號的資料，解回好用的形狀：
+ * { segNames, rows:[{no,count,segs:{段名:值}}], values:{段名:[相異值...]} }
+ *
+ * 解碼 271 列 × 20 段是微秒級的事；真正貴的是讀表，那個已經被快取擋掉了。
+ * 換到的是 filterPartNos_／diffPartNo_ 可以直接寫 row.segs['前面板']，不必到處傳索引表。
+ */
+function loadPartNoModel_(model) {
+  model = String(model || '').toUpperCase();
+  if (!model) return null;
+
+  var meta = loadPartNoMeta_();
+  if (!meta || meta.models.indexOf(model) < 0) return null;
+
+  var pack = null;
+  try {
+    var hit = CacheService.getScriptCache().get(PARTNO_CACHE_PREFIX + model);
+    if (hit) pack = JSON.parse(hit);
+  } catch (err) {
+    Logger.log('讀 ' + model + ' 歷史料號快取失敗，改為重新讀表：' + err);
+  }
+  if (!pack) {
+    var got = readPartNoSheet_();
+    if (!got || !got.packs[model]) return null;
+    pack = got.packs[model];
+  }
+
+  var segNames = meta.segNames;
+  var rows = [];
+  for (var r = 0; r < pack.rows.length; r++) {
+    var line = pack.rows[r];
+    var segs = {};
+    for (var i = 0; i < segNames.length; i++) {
+      segs[segNames[i]] = pack.dict[i][line[i + 2]];
+    }
+    rows.push({ no: line[0], count: line[1], segs: segs });
+  }
+
+  // 每段實際出現過的值＝字典本身。餵給 AI 當可選項用——
+  // 刻意只給「歷史真的有的值」而不是規格表的全部選項：
+  // 規格表有的但沒出過的值，選了也一定篩不到東西。
+  //
+  // ⚠ **空字串要濾掉**：分頁上的空白格會被收進字典（解碼時還原成空值是對的），
+  //   但它不能出現在給 AI 的選項清單裡——那會變成一個空選項（`A｜｜B`），
+  //   而 AI 一旦選了它，partNoValueHit_ 對空字串一律回 false，結果是全部篩光。
+  var values = {};
+  for (var v = 0; v < segNames.length; v++) {
+    var keep = [];
+    for (var w = 0; w < pack.dict[v].length; w++) {
+      if (pack.dict[v][w]) keep.push(pack.dict[v][w]);
+    }
+    values[segNames[v]] = keep;
+  }
+
+  return { segNames: segNames, rows: rows, values: values };
+}
+
+/** 句子裡提到哪一款鎖？只認「歷史料號分頁真的有」的型號。 */
+function detectPartNoModel_(text, models) {
+  var t = String(text || '').toUpperCase();
+  if (!t || !models || !models.length) return '';
+  var best = '';
+  for (var i = 0; i < models.length; i++) {
+    var m = models[i];
+    if (m.length <= best.length) continue;    // 已經有更長的命中就不必再試
+    // 用邊界比對，避免 L37 誤中 L376；同時取最長的一個（L376N 優先於 L376）
+    var re = new RegExp('(^|[^A-Z0-9])' + m + '([^A-Z0-9]|$)');
+    if (re.test(t)) best = m;
+  }
+  return best;
+}
+
+/**
+ * 免 AI 的快速路徑：業務直接把完整料號貼上來。
+ *
+ * ⚠ 比照 parseChatQuestionFast_ 的教訓，**寧可放過也不要誤抓**。
+ *   這裡要求料號至少有兩段（`L376-XXXX-XXXX`），只提到型號的閒聊不算。
+ */
+function parsePartNoDirect_(text) {
+  var m = String(text || '').match(/\b[A-Za-z]\d{3}[A-Za-z]?(?:-[A-Za-z0-9]{2,10}){2,}\b/);
+  return m ? m[0].toUpperCase() : '';
+}
+
+/**
+ * 用 AI 把白話轉成「段名 + 值」的條件。
+ *
+ * 🔑 AI 在這裡只做一件事：**把業務的白話對應到我給它的選項清單**。
+ *   值一律要從清單裡原文照抄，不可自由發揮——因為下游是字串比對，
+ *   它自己編一個「黑色」而清單裡寫「消光黑」，結果就是篩不到而且看不出原因。
+ *
+ * ⚠ 門厚是唯一需要它動腦的地方：業務說「門厚量過 60」，清單裡是
+ *   「總門厚53mm-61mm」這種區間，要它自己判斷 60 落在哪一段。
+ */
+function parseOrderSpeech_(text, model, values, segNames) {
+  var lines = [];
+  for (var i = 0; i < segNames.length; i++) {
+    var name = segNames[i];
+    var vs = values[name] || [];
+    if (vs.length < 2) continue;         // 只有一種值的段，篩了也不會收斂
+    var shown = vs.slice(0, PARTNO_MAX_PROMPT_OPTS);
+    lines.push('- ' + name + '：' + shown.join('｜') +
+      (vs.length > shown.length ? '｜…' : ''));
+  }
+
+  var schema = {
+    type: 'OBJECT',
+    properties: {
+      conditions: {
+        type: 'ARRAY',
+        items: {
+          type: 'OBJECT',
+          properties: { segment: { type: 'STRING' }, value: { type: 'STRING' } },
+          required: ['segment', 'value']
+        }
+      },
+      confidence: { type: 'STRING' }
+    },
+    required: ['conditions', 'confidence']
+  };
+
+  var prompt =
+    '你是門鎖下單的條件解析器。業務在講一款 ' + model + ' 的規格，' +
+    '請把她講的話對應到下面的參數段與選項。\n\n' +
+    '可用的參數段與選項（值一律**原文照抄**，不要改寫、不要自己造詞）：\n' +
+    lines.join('\n') + '\n\n' +
+    '輸出 JSON：\n' +
+    '- conditions：陣列，每個元素 { segment: 段名, value: 選項值 }。' +
+    '段名與值都必須是上面清單裡出現過的字串。\n' +
+    '- confidence："high" 或 "low"\n\n' +
+    '規則：\n' +
+    '1. **只輸出你有把握的條件**。業務沒提到的段就不要放進來——' +
+    '少一個條件只是候選多幾個（她自己看得出來），多一個猜的條件會把對的料號篩掉。\n' +
+    '2. 值一定要從清單裡挑，**不可以自己寫**。例如她說「黑色」而清單裡是「消光黑」，' +
+    '就填「消光黑」；清單裡找不到對應的就整條不要放。\n' +
+    '3. 門厚講的是數字（例如「門厚量過 60」「60mm」），清單裡是區間' +
+    '（例如「總門厚53mm-61mm」）→ 判斷那個數字落在哪個區間，填**區間的原文**，不要填數字。\n' +
+    '4. 一句話裡同一段只給一個條件。\n' +
+    '5. 完全聽不出任何條件 → conditions 給空陣列、confidence 給 "low"。\n\n' +
+    '業務說的是：\n' + text;
+
+  // 20 秒預算：Chat 外掛約 38 秒被砍，扣掉讀表與組卡片的時間就剩這些。
+  // 理由同 parseChatQuestion_（版本紀錄 2026-08-25 那次逾時事故）。
+  var got = callGeminiJson_([{ text: prompt }], schema, '白話下單解析｜' + model,
+    { deadlineMs: 20000 });
+  if (!got.ok) return { failed: got.reason };
+
+  var p = got.data || {};
+  var raw = (p.conditions && p.conditions.length) ? p.conditions : [];
+  var conds = [];
+  for (var k = 0; k < raw.length; k++) {
+    var seg = String(raw[k].segment || '').trim();
+    var val = String(raw[k].value || '').trim();
+    if (!seg || !val) continue;
+    // 防禦性檢查：AI 掰了一個不存在的段名就丟掉。
+    // 留著只會讓它篩掉全部然後回報「這個條件把它篩光了」，指向錯的原因。
+    if (!values[seg]) { Logger.log('AI 給了不存在的段名，已忽略：' + seg); continue; }
+    conds.push({ segment: seg, value: val });
+  }
+  return { conditions: conds, confidence: (p.confidence === 'low') ? 'low' : 'high' };
+}
+
+/** 值比對：正規化後做子字串比對。 */
+function partNoValueHit_(cellValue, want) {
+  var a = String(cellValue || '').replace(/\s+/g, '').toUpperCase();
+  var b = String(want || '').replace(/\s+/g, '').toUpperCase();
+  if (!b) return false;
+  return a.indexOf(b) >= 0;
+}
+
+/**
+ * 逐條件篩選。回 { rows, funnel, killedBy }。
+ *
+ * 🔑 **funnel（每一步剩幾種）是這張卡片最有說服力的部分**，不能省：
+ *   「從 271 種篩到 14 種」讓業務知道這不是 AI 生出來的，是真的查過歷史。
+ *
+ * 🔑 **killedBy：篩到 0 的時候一定要講出是哪個條件篩光的。**
+ *   版本紀錄 2026-08-25 已經踩過同一類坑：查無時回「我找不到」技術上正確，
+ *   但會讓人以為東西不存在（當時連我自己都被誤導去查是不是程式有 bug）。
+ */
+function filterPartNos_(rows, conds) {
+  var cur = rows.slice();
+  var funnel = [];
+  var killedBy = null;
+  for (var i = 0; i < conds.length; i++) {
+    var c = conds[i];
+    var before = cur.length;
+    var next = [];
+    for (var r = 0; r < cur.length; r++) {
+      if (partNoValueHit_(cur[r].segs[c.segment], c.value)) next.push(cur[r]);
+    }
+    funnel.push({ segment: c.segment, value: c.value, left: next.length });
+    if (!next.length && !killedBy) {
+      killedBy = { segment: c.segment, value: c.value, before: before };
+    }
+    cur = next;
+    if (!cur.length) break;
+  }
+  return { rows: cur, funnel: funnel, killedBy: killedBy };
+}
+
+/** 兩個料號差在哪幾段。回 [{segment, from, to}]，給「改成…」那行用。 */
+function diffPartNo_(base, other, segNames) {
+  var out = [];
+  if (!base || !other) return out;
+  for (var i = 0; i < segNames.length; i++) {
+    var n = segNames[i];
+    var a = String(base.segs[n] || '').trim();
+    var b = String(other.segs[n] || '').trim();
+    if (a !== b) out.push({ segment: n, from: a, to: b });
+  }
+  return out;
+}
+
+/**
+ * 白話下單的總入口：一句話 → 候選料號。**只查、不寫任何資料。**
+ *
+ * 回傳一律是純資料物件，卡片長什麼樣由 gas-dispatch-chatapp.gs 決定——
+ * 這裡不組 Chat 的 JSON，理由同 answerChatQuestion_ 與 chatText_ 的分工。
+ *
+ * ok:false 的每一種 reason 都要能讓使用者知道「下一步該做什麼」，
+ * 不可以全部退化成一句「找不到」。
+ */
+function suggestPartNos_(text) {
+  // 先只讀目錄（很小、幾乎都命中快取）。認不出型號的話連該款的資料都不必載入——
+  // 而「認不出型號」是最常見的情況：這個空間裡大部分訊息根本不是在下單。
+  var meta = loadPartNoMeta_();
+  if (!meta) return { ok: false, reason: 'no_sheet' };
+
+  var model = detectPartNoModel_(text, meta.models);
+  if (!model) return { ok: false, reason: 'no_model', known: meta.models };
+
+  var bucket = loadPartNoModel_(model);
+  if (!bucket) return { ok: false, reason: 'no_sheet' };
+  var total = bucket.rows.length;
+
+  // 業務直接貼完整料號 → 免 AI，直接確認它出過沒有
+  var direct = parsePartNoDirect_(text);
+  if (direct) {
+    for (var i = 0; i < bucket.rows.length; i++) {
+      if (bucket.rows[i].no.toUpperCase() === direct) {
+        return { ok: true, model: model, total: total, via: 'direct',
+                 funnel: [], confidence: 'high',
+                 candidates: [{ no: bucket.rows[i].no, count: bucket.rows[i].count, diff: [] }] };
+      }
+    }
+    // 沒出過不代表錯，可能是新規格——但一定要講清楚，不能默默當成查無
+    return { ok: false, reason: 'unknown_partno', model: model, total: total, partNo: direct };
+  }
+
+  var parsed = parseOrderSpeech_(text, model, bucket.values, bucket.segNames);
+  if (parsed.failed) return { ok: false, reason: 'ai_failed', model: model, detail: parsed.failed };
+  if (!parsed.conditions.length) {
+    return { ok: false, reason: 'no_condition', model: model, total: total,
+             segNames: bucket.segNames };
+  }
+
+  var res = filterPartNos_(bucket.rows, parsed.conditions);
+  if (!res.rows.length) {
+    return { ok: false, reason: 'no_match', model: model, total: total,
+             funnel: res.funnel, killedBy: res.killedBy };
+  }
+
+  var sorted = res.rows.slice().sort(function (a, b) { return b.count - a.count; });
+  var top = sorted.slice(0, PARTNO_TOP_N);
+  var cands = [];
+  for (var k = 0; k < top.length; k++) {
+    cands.push({
+      no: top[k].no,
+      count: top[k].count,
+      diff: k === 0 ? [] : diffPartNo_(top[0], top[k], bucket.segNames)
+    });
+  }
+  return { ok: true, model: model, total: total, via: 'ai',
+           funnel: res.funnel, matched: res.rows.length,
+           confidence: parsed.confidence, candidates: cands };
+}
+
 // ── 貨運單佇列與配對 ────────────────────────────────────────
 
 var SHIPDOC_FOLDER_PROP = 'DISPATCH_SHIPDOC_FOLDER_ID';
@@ -5846,6 +6284,7 @@ function writeOrderShipment_(orderNo, kind, form, email, me, stamp) {
   rec[COL_S_CUSTOMER] = String(form.customer || '').trim();
   rec[COL_S_PROJECT] = String(form.project || '').trim();
   rec[COL_S_ITEMS] = String(form.items || '').trim();
+  rec[COL_S_PARTNO] = String(form.partNo || '').trim();
   rec[COL_S_TO_NAME] = String(form.toName || '').trim();
   rec[COL_S_TO_PHONE] = String(form.toPhone || '').trim();
   rec[COL_S_TO_ADDR] = String(form.toAddr || '').trim();
