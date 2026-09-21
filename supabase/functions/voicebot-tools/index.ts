@@ -151,6 +151,8 @@ async function createRepair(args: { name?: string; phone?: string; address?: str
     id: caseNo, wf_id: wfId, name, phone, building: address, date: today, type: product,
     issue, status: "pending", urgency: "normal", contact_name: name, contact_phone: phone,
     created_by: "AI語音客服", created_at: createdAt, sla_level: "normal", warranty_in: false,
+    // 維修單一律歸客服課（與 CRM 端 CASE_TYPE_DEPARTMENT.repair 同一條規則）
+    department: "客服課",
   });
   if (!ir.ok) return { ok: false, message: "建立工單失敗，建議改由專員處理" };
   return { ok: true, case_no: caseNo, is_new_customer: isNew };
