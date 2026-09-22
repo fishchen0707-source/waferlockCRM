@@ -534,6 +534,16 @@ const COMPLAINT_CAT = {
     '進階設定': ['防盜模式','自動上鎖時間','音量調整','語言設定','其他'],
     '說明書': ['找不到說明書','說明書內容疑問','影片教學','其他'],
   },
+  '安裝需求': {
+    '新裝機': ['新成屋','中古屋翻修','租屋','其他'],
+    '加裝 / 換機': ['加裝第二道門','舊鎖汰換','換型號','其他'],
+    '建案配置': ['建商採購','社區大樓','其他'],
+  },
+  '商機': {
+    '報價詢問': ['單戶報價','多戶 / 建案報價','經銷合作','其他'],
+    '產品比較': ['型號差異','功能詢問','價格比較','其他'],
+    '購買通路': ['門市據點','電商平台','其他'],
+  },
   '其他': {
     '投訴': ['服務品質','師傅服務','產品品質','安裝品質','其他'],
     '建議': ['產品改善建議','服務改善建議','其他'],
@@ -555,6 +565,11 @@ const CASE_TYPE_DEPARTMENT = {complaint:'客服課', repair:'客服課', install
 const caseDept = c => c?.department || DEFAULT_DEPARTMENT;
 // admin 的 role 是 'admin' 不是部門，原樣寫入會變成任何部門都看不到的孤兒案。
 const userDept = u => (!u?.role || u.role === 'admin') ? DEFAULT_DEPARTMENT : u.role;
+// 立案選了主分類後自動帶出的預設值（兩者都仍可手動改）。
+// 後續派工：選到這些主分類時，建立立案單後自動接著開派工單。
+const CAT_DISPATCH = {'安裝需求':'install', '維修申請':'repair'};
+// 權責單位：沒列到的主分類不改動（維持登入者部門）。
+const CAT_DEPARTMENT = {'商機':'內銷課'};
 
 // ── 統一工單（安裝 + 維修）共用選項 ──
 const TENANT_TYPES = [['owner','屋主'],['family','家人'],['tenant','租客']];
@@ -1696,13 +1711,15 @@ function CRMPage(){
   const createComplaint=async()=>{
     const c=customers.find(x=>x.wfId===sel?.wfId);
     if(!c){ toast('請先選擇客戶','','warn'); return; }
+    // 類別必須在建單當下決定——它同時決定權責單位與是否接派工
+    if(!ctForm.cat1){ toast('請選擇案件類別','主分類決定權責單位與是否需要派工','warn'); return; }
     const cid=(await sb.rpc('next_case_no',{p_prefix:'C'})).data || ('CT-'+Date.now());
     const ts=today()+' '+now();
     const newCt={
       id:cid, wfId:c.wfId, name:c.name, phone:c.phone,
       date:today(), createdAt:ts, createdBy:currentUser?.name||'CRM 客服',
       callChannel:ctForm.callChannel, department:ctForm.department,
-      cat1:'', cat2:'', cat3:'',
+      cat1:ctForm.cat1||'', cat2:ctForm.cat2||'', cat3:ctForm.cat3||'',
       process:ctForm.process,
       status:'pending',
       closedDate:null,
@@ -1715,7 +1732,16 @@ function CRMPage(){
     });
     toast('📞 客訴建立',`${c.name} 客訴單 ${cid} 已建立`,'ok');
     setCtModal(false);
-    setTimeout(()=>openCaseTab(c.wfId,cid),500);
+    // 若選了「安裝需求」或「維修申請」，自動接著開派工表單
+    if(CAT_DISPATCH[ctForm.cat1]){
+      setTimeout(()=>{
+        setSourceComplaintId(cid);
+        setSourceComplaintType(CAT_DISPATCH[ctForm.cat1]);
+        setCaseModal(true);
+      },300);
+    } else {
+      setTimeout(()=>openCaseTab(c.wfId,cid),500);
+    }
   };
 
   const addFollowup=(ctId,note)=>{
@@ -2197,7 +2223,7 @@ function CRMPage(){
                     <button style={{padding:'5px 11px',background:'#EFF6FF',color:'var(--accent)',border:'none',borderRadius:5,fontSize:11,fontWeight:700,cursor:'pointer'}} onClick={()=>openEdit(cur)}>編輯資料</button>
                     <button style={{padding:'5px 11px',background:'#EDE9FE',color:'#5B21B6',border:'none',borderRadius:5,fontSize:11,fontWeight:700,cursor:'pointer'}} onClick={()=>openProj(cur)}>🏢 歸屬建案</button>
                     <button style={{padding:'5px 11px',background:'#FEF3C7',color:'#92400E',border:'none',borderRadius:5,fontSize:11,fontWeight:700,cursor:'pointer'}} onClick={()=>openComplaint(cur)}>📞 新增立案</button>
-                    <button style={{padding:'5px 11px',background:'#D1FAE5',color:'#065F46',border:'none',borderRadius:5,fontSize:11,fontWeight:700,cursor:'pointer'}} onClick={()=>openCase(cur)}>🔧 新增派工</button>
+
                   </div>
                 </div>
                 <div className="igrid">
@@ -2468,7 +2494,7 @@ function CRMPage(){
       {ctModal&&sel&&(
         <div className="mo" onClick={e=>e.target===e.currentTarget&&setCtModal(false)}>
           <div className="mob" style={{maxWidth:500}}>
-            <h3>📞 新增客訴立案</h3>
+            <h3>📞 新增立案</h3>
             <div style={{background:'var(--g50)',borderRadius:8,padding:'10px 12px',marginBottom:12,fontSize:12}}>
               <div style={{fontWeight:700,fontSize:13}}>{sel.name}</div>
               <div style={{color:'var(--g500)',marginTop:1}}>{sel.phone}　<span style={{fontFamily:'JetBrains Mono',fontSize:10}}>{sel.wfId}</span></div>
@@ -2480,11 +2506,36 @@ function CRMPage(){
                   {CALL_CHANNELS.map(v=><option key={v}>{v}</option>)}
                 </select>
               </div>
-              <div className="mf"><label>指派單位</label>
-                <select value={ctForm.department} onChange={e=>setCtForm(p=>({...p,department:e.target.value}))}>
-                  {COMPLAINT_DEPARTMENTS.map(v=><option key={v} value={v}>🏢 {v}</option>)}
+            </div>
+
+            {/* 三層分類 */}
+            <div className="mf"><label>案件類別（主分類） <span style={{color:'var(--err)'}}>*</span></label>
+              <select value={ctForm.cat1} onChange={e=>{const c1=e.target.value; const newDept=CAT_DEPARTMENT[c1]||ctForm.department; setCtForm(p=>({...p,cat1:c1,cat2:'',cat3:'',department:newDept}));}}>
+                <option value="">— 請選擇 —</option>
+                {Object.keys(COMPLAINT_CAT).map(v=><option key={v} value={v}>{v}</option>)}
+              </select>
+            </div>
+            {ctForm.cat1&&(
+              <div className="mf"><label>案件類別（次分類）</label>
+                <select value={ctForm.cat2} onChange={e=>setCtForm(p=>({...p,cat2:e.target.value,cat3:''}))}>
+                  <option value="">— 請選擇 —</option>
+                  {Object.keys(COMPLAINT_CAT[ctForm.cat1]||{}).map(v=><option key={v} value={v}>{v}</option>)}
                 </select>
               </div>
+            )}
+            {ctForm.cat2&&(
+              <div className="mf"><label>案件類別（細項）</label>
+                <select value={ctForm.cat3} onChange={e=>setCtForm(p=>({...p,cat3:e.target.value}))}>
+                  <option value="">— 請選擇 —</option>
+                  {(COMPLAINT_CAT[ctForm.cat1]?.[ctForm.cat2]||[]).map(v=><option key={v} value={v}>{v}</option>)}
+                </select>
+              </div>
+            )}
+
+            <div className="mf"><label>指派單位</label>
+              <select value={ctForm.department} onChange={e=>setCtForm(p=>({...p,department:e.target.value}))}>
+                {COMPLAINT_DEPARTMENTS.map(v=><option key={v} value={v}>🏢 {v}</option>)}
+              </select>
             </div>
 
             <div className="mf"><label>處理過程 / 來電摘要</label>
@@ -2495,7 +2546,7 @@ function CRMPage(){
 
             <div className="mact">
               <button className="cancel" onClick={()=>setCtModal(false)}>取消</button>
-              <button className="confirm" onClick={createComplaint}>建立客訴單</button>
+              <button className="confirm" onClick={createComplaint}>{CAT_DISPATCH[ctForm.cat1]?'建立並開派工單':'建立立案單'}</button>
             </div>
           </div>
         </div>
