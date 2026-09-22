@@ -538,6 +538,7 @@ const COMPLAINT_CAT = {
     '新裝機': ['新成屋','中古屋翻修','租屋','其他'],
     '加裝 / 換機': ['加裝第二道門','舊鎖汰換','換型號','其他'],
     '建案配置': ['建商採購','社區大樓','其他'],
+    '單購配件': ['電池','感應卡 / 遙控器','把手 / 面板零件','其他'],
   },
   '商機': {
     '報價詢問': ['單戶報價','多戶 / 建案報價','經銷合作','其他'],
@@ -577,9 +578,12 @@ const SOURCE_CHANNELS = ['線下門市','官方網站','LINE@','區域業務','�
 const TIME_RANGES = [['','不指定'],['morning','早'],['noon','午'],['night','晚']];
 // 工單類別：第一層=安裝/維修，第二層=細類
 const WORK_CATEGORIES = {
-  install:['新案裝機','加裝','換型號','建案配置'],
+  install:['新案裝機','加裝','換型號','建案配置','單購配件'],
   repair:['到府維修','外送維修','到府檢測','保固換機'],
 };
+// 單購配件：走安裝單（要出貨、要請款），但不派師傅。出貨後由客服直接「交付結案」，不啟動門鎖保固。
+const ACCESSORY_ONLY = '單購配件';
+const isAccessoryOnly = o => o?.category2 === ACCESSORY_ONLY;
 // 收費品項預設下拉（仍可手打覆寫）
 const CHARGE_PRESETS = ['更換鋰電池','更換面板','更換把手','更換主板','到府檢測費','拆裝工資','遠途交通費','其他'];
 const INSTALL_MODELS = {
@@ -1003,15 +1007,15 @@ function AddressPicker({initial, onConfirm, onClose}){
 }
 
 // ─── 統一工單建立表單（安裝 + 維修 一個版本）───
-function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}){
+function WorkOrderForm({initialCategory='install', initialCategory2='', lockedCustomer=null, onClose}){
   const {db,updateDB,toast,currentUser}=useContext(Ctx);
   const lc=lockedCustomer;
   const isInWar=(c)=> !!(c && c.productId && c.installDate && pctW(c.installDate, c.warrantyMonths||36)>0);
   const [f,setF]=useState(()=>({
-    category:initialCategory, category2:'',
+    category:initialCategory, category2:initialCategory2,
     name:lc?.name||'', phone:lc?.phone||'', address:lc?.address||'', zip:'',
     tenantType:'owner', landlordConfirmed:false, sourceChannel:'', communityNote:'',
-    site:lc?.site||'', unit:lc?.unit||'', qty:1, workHours:initialCategory==='install'?2:1,
+    site:lc?.site||'', unit:lc?.unit||'', qty:1, workHours:initialCategory2===ACCESSORY_ONLY?0:initialCategory==='install'?2:1,
     timeRange:'', scheduledDate:'', hiRisk:false, hardJob:false, bomber:false, note:'',
     channel:lc?.channel||'lock_shop', productId:lc?.productId||'L376', serialNo:'', locksmithId:'S1',
     groupId:lc?.groupId||'', projectId:lc?.projectId||'',
@@ -1150,7 +1154,10 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
           </div>
         </div>
         <div className="mf"><label>類別細項</label>
-          <select value={f.category2} onChange={e=>set('category2',e.target.value)}>
+          <select value={f.category2} onChange={e=>{const v=e.target.value;
+            // 單購配件不排師傅：收起排程、工時歸零，避免誤佔時段
+            if(v===ACCESSORY_ONLY){ setSchedOpen(false); setF(p=>({...p,category2:v,workHours:0})); }
+            else setF(p=>({...p,category2:v,workHours:p.workHours||(cat==='install'?2:1)}));}}>
             <option value="">— 請選擇 —</option>
             {subcats.map(s=><option key={s}>{s}</option>)}
           </select>
@@ -1249,9 +1256,12 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
         {/* 台數 / 工時 */}
         <div className="mf2">
           <div className="mf"><label>台數</label><input type="number" min="1" value={f.qty} onChange={e=>set('qty',e.target.value)}/></div>
-          <div className="mf"><label>預估工時（小時）</label><input type="number" step="0.5" min="0.5" value={f.workHours} onChange={e=>set('workHours',e.target.value)}/></div>
+          {!(cat==='install'&&f.category2===ACCESSORY_ONLY)&&<div className="mf"><label>預估工時（小時）</label><input type="number" step="0.5" min="0.5" value={f.workHours} onChange={e=>set('workHours',e.target.value)}/></div>}
         </div>
 
+        {cat==='install'&&f.category2===ACCESSORY_ONLY
+          ? <div style={{margin:'2px 0 10px',padding:'7px 11px',background:'#ECFDF5',border:'1px solid #A7F3D0',borderRadius:6,fontSize:11.5,color:'#065F46',fontWeight:600}}>📦 單購配件不派師傅：完成 ERP 出貨後，在案件卡按「配件已交付，結案」即可。</div>
+          : <>
         <button type="button" onClick={()=>setSchedOpen(o=>!o)}
           style={{margin:'2px 0 8px',padding:'6px 12px',background:schedOpen?'var(--brand)':'#EDE9FE',color:schedOpen?'#fff':'#5B21B6',border:'none',borderRadius:6,fontSize:12,fontWeight:700,cursor:'pointer'}}>
           📅 {schedOpen?'收合排程畫面':'開啟排程畫面（直接派師傅/時段）'}
@@ -1265,6 +1275,7 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
             </div>
           </div>
         )}
+          </>}
 
         {/* 風險旗標（維修情境的內部標記，新裝訂單不露出） */}
         {cat==='repair'&&<div className="mf"><label>風險旗標</label>
@@ -1702,6 +1713,20 @@ function CRMPage(){
     setTimeout(()=>toast('🎉 客編保固已更新',`${o.name} 保固至 ${warrantyEnd}`,'ok'),1400);
     setVerifyInstall(null);
   };
+  // 單購配件：出貨後由客服直接交付結案。刻意不寫客戶 installDate／保固——沒有裝門鎖，不能啟動門鎖保固。
+  const deliverAccessory=o=>{
+    if(!o.shipmentNo){ toast('尚未出貨','請先完成 ERP 出貨（標記出貨）再交付結案','warn'); return; }
+    updateDB(prev=>{
+      // 「待安裝」標籤只在這位客戶沒有其他進行中的安裝單時才拿掉
+      const otherOpen=Object.values(prev.installs||{}).some(x=>x.wfId===o.wfId&&x.id!==o.id
+        &&!isAccessoryOnly(x)&&!['done','failed','voided'].includes(x.status));
+      const customers=otherOpen?(prev.customers||[]):(prev.customers||[]).map(c=>c.wfId!==o.wfId?c:
+        {...c,tags:(c.tags||[]).filter(t=>t!=='待安裝')});
+      return {...prev,customers,installs:{...prev.installs,[o.id]:pushHist({...prev.installs[o.id],
+        status:'done',completedDate:today()},currentUser?.name,'📦 配件已交付，結案')}};
+    });
+    toast('📦 配件已交付','案件已結案（不啟動門鎖保固）','ok');
+  };
 
   const openComplaint=(c)=>{
     setCtForm({callChannel:CALL_CHANNELS[0],department:userDept(currentUser),cat1:'',cat2:'',cat3:'',process:'',status:'pending'});
@@ -2079,7 +2104,7 @@ function CRMPage(){
           <div className="rid">{o.id}</div>
           {renderDeptRow(o,'install')}
         </div>
-        <span className={`sb ${o.status==='done'?'done':(o.status==='failed'||o.status==='voided')?'urgent':o.status==='pending'?'pending':'dispatched'}`}>{STEPLABEL[o.status]}</span>
+        <span className={`sb ${o.status==='done'?'done':(o.status==='failed'||o.status==='voided')?'urgent':o.status==='pending'?'pending':'dispatched'}`}>{isAccessoryOnly(o)&&o.status==='pending'?'📦 待交付':STEPLABEL[o.status]}</span>
       </div>
       <div className="rb">
         <div><span>👷 派工師傅</span><br/><strong>{(db.workers||[]).find(w=>w.id===o.workerId)?.name||WORKERS.find(w=>w.id===o.workerId)?.name||'未排程'}</strong></div>
@@ -2095,7 +2120,7 @@ function CRMPage(){
       )}
       {o.paymentMethod&&<div style={{marginTop:6,fontSize:10.5,padding:'5px 9px',background:'#F0FDF4',borderRadius:5,color:'#065F46',fontWeight:700}}>💳 {PAY_LABEL[o.paymentMethod]||o.paymentMethod}{o.chargeTotal>0?` $${o.chargeTotal}`:''}{o.paymentMethod!=='free'?`　${o.paid?'✅ 已收款':'未收款'}`:''}{o.txnId?` · ${o.txnId}`:''}</div>}
       {renderChargesDetail(o.charges)}
-      {o.status==='done'&&<div style={{fontSize:11,color:'var(--ok)',fontWeight:700,marginTop:4}}>✅ 完工 {o.completedDate}　·　保固至 {o.warrantyEnd}</div>}
+      {o.status==='done'&&<div style={{fontSize:11,color:'var(--ok)',fontWeight:700,marginTop:4}}>{isAccessoryOnly(o)?`📦 已交付 ${o.completedDate||''}`:`✅ 完工 ${o.completedDate||""}　·　保固至 ${o.warrantyEnd||"—"}`}</div>}
       {/* 請款進度（完工後）：待請款→已請款→已開票，單向推進，每步寫異動紀錄 */}
       {o.status==='done'&&(()=>{
         const bs=o.billingStatus||'unbilled';
@@ -2135,7 +2160,7 @@ function CRMPage(){
       {/* ERP 出貨資訊／閘門：已出貨顯示單號；未出貨且未排程的新單，排程被鎖住直到標記出貨 */}
       {o.shipmentNo
         ? <div style={{marginTop:6,fontSize:10.5,padding:'5px 9px',background:'#ECFDF5',borderRadius:5,color:'#065F46',fontWeight:700}}>🚚 已出貨　單號 {o.shipmentNo}{o.shippedDate?`　·　${o.shippedDate}`:''}</div>
-        : (o.status==='pending'&&!o.workerId&&<div style={{marginTop:6,fontSize:10.5,padding:'5px 9px',background:'#FEF3C7',borderRadius:5,color:'#92400E',fontWeight:700}}>🚚 待出貨 — 完成 ERP 出貨後才能排安裝</div>)}
+        : (o.status==='pending'&&!o.workerId&&<div style={{marginTop:6,fontSize:10.5,padding:'5px 9px',background:'#FEF3C7',borderRadius:5,color:'#92400E',fontWeight:700}}>{isAccessoryOnly(o)?'🚚 待出貨 — 出貨後即可交付結案（不派師傅）':'🚚 待出貨 — 完成 ERP 出貨後才能排安裝'}</div>)}
       {/* 貨運託運單號（由 shipment-worker 解析貨運單 PDF 後自動掛上）*/}
       {(()=>{
         const sp=(db.shipments||[]).find(s=>s.installId===o.id);
@@ -2154,13 +2179,15 @@ function CRMPage(){
       {o.status!=='done'&&o.status!=='failed'&&o.status!=='voided'&&(
         <div style={{marginTop:8,display:'flex',gap:6,flexWrap:'wrap'}}>
           {(o.status==='pending'||o.status==='arrived')&&!o.shipmentNo&&<button onClick={()=>openShipModal(o)} style={{padding:'5px 12px',background:'#D1FAE5',color:'#065F46',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>🚚 標記出貨</button>}
-          {(o.status==='pending'||o.status==='arrived')&&(()=>{
+          {isAccessoryOnly(o)&&o.status==='pending'&&<button onClick={()=>deliverAccessory(o)} title={o.shipmentNo?'':'先完成 ERP 出貨'}
+            style={{padding:'5px 12px',background:'var(--ok)',color:'#fff',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:o.shipmentNo?'pointer':'not-allowed',opacity:o.shipmentNo?1:.45}}>📦 配件已交付，結案</button>}
+          {!isAccessoryOnly(o)&&(o.status==='pending'||o.status==='arrived')&&(()=>{
             const shipLocked=!o.shipmentNo&&!o.workerId; // 已排程舊單不回溯鎖
             return <button onClick={()=>{if(shipLocked){toast('尚未出貨','請先完成 ERP 出貨（標記出貨）再排安裝','warn');return;}openInstallSchedule(o);}}
               title={shipLocked?'先完成 ERP 出貨':''}
               style={{padding:'5px 12px',background:o.workerId?'#FEF3C7':'#EDE9FE',color:o.workerId?'#92400E':'#5B21B6',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:shipLocked?'not-allowed':'pointer',opacity:shipLocked?.45:1}}>{o.workerId?'🔁 轉單／改排程':'📅 排程派工'}</button>;
           })()}
-          {o.status==='pending'&&<button onClick={()=>arriveInstall(o)} style={{padding:'5px 12px',background:'var(--accent)',color:'var(--brand)',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>📍 標記到場</button>}
+          {!isAccessoryOnly(o)&&o.status==='pending'&&<button onClick={()=>arriveInstall(o)} style={{padding:'5px 12px',background:'var(--accent)',color:'var(--brand)',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>📍 標記到場</button>}
           {o.status==='arrived'&&<button onClick={()=>installedDone(o)} style={{padding:'5px 12px',background:'var(--ok)',color:'#fff',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>🔧 施工完成</button>}
           {o.status==='installed'&&<button onClick={()=>setVerifyInstall(o)} style={{padding:'5px 12px',background:'var(--ok)',color:'#fff',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>🔬 完工驗收 + 保固登錄</button>}
           {(o.status==='pending'||o.status==='arrived')&&<button onClick={()=>{setVoidModal(o);setVoidReason('');}} style={{padding:'5px 12px',background:'#7F1D1D',color:'#fff',border:'none',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer'}}>🚫 當單／改約</button>}
@@ -2347,6 +2374,7 @@ function CRMPage(){
         <WorkOrderForm
           lockedCustomer={customers.find(c=>c.wfId===sel.wfId)||sel}
           initialCategory={sourceComplaintId?sourceComplaintType:undefined}
+          initialCategory2={sourceComplaintId&&db.complaints?.[sourceComplaintId]?.cat2===ACCESSORY_ONLY?ACCESSORY_ONLY:''}
           onClose={(newId)=>{
             setCaseModal(false);
             if(sourceComplaintId&&newId){
@@ -2546,7 +2574,7 @@ function CRMPage(){
 
             <div className="mact">
               <button className="cancel" onClick={()=>setCtModal(false)}>取消</button>
-              <button className="confirm" onClick={createComplaint}>{CAT_DISPATCH[ctForm.cat1]?'建立並開派工單':'建立立案單'}</button>
+              <button className="confirm" onClick={createComplaint}>{ctForm.cat2===ACCESSORY_ONLY?'建立並開配件單':CAT_DISPATCH[ctForm.cat1]?'建立並開派工單':'建立立案單'}</button>
             </div>
           </div>
         </div>
