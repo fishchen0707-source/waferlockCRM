@@ -270,12 +270,12 @@ const appendConvMsg = async (convId, text, {unreadDelta=0}={}) => {
 // ── DB 欄位轉換（camelCase <-> snake_case） ──
 const custToDb = c => ({wf_id:c.wfId,cust_key:custKey(c.name,c.address),name:c.name,phone:c.phone,email:c.email,address:c.address,district:c.district,area:c.area,channel:c.channel,product_id:c.productId,serial_no:c.serialNo,install_date:c.installDate,warranty_months:c.warrantyMonths,warranty_end:c.warrantyEnd,tags:c.tags||[],reg_type:c.regType,reg_date:c.regDate,line_uid:c.lineUid,fb_id:c.fbId,ig_id:c.igId,repair_ids:c.repairIds||[],complaint_ids:c.complaintIds||[],site:c.site,unit:c.unit,order_no:c.orderNo,group_id:c.groupId,project_id:c.projectId,zip:c.zip,customer_type:c.customerType||'consumer',dealer_code:c.dealerCode,disabled:!!c.disabled,disabled_reason:c.disabledReason,disabled_at:c.disabledAt});
 const dbToCust = r => ({wfId:r.wf_id,name:r.name,phone:r.phone,email:r.email,address:r.address,district:r.district,area:r.area,channel:r.channel,productId:r.product_id,serialNo:r.serial_no,installDate:r.install_date,warrantyMonths:r.warranty_months,warrantyEnd:r.warranty_end,tags:r.tags||[],regType:r.reg_type,regDate:r.reg_date,lineUid:r.line_uid,fbId:r.fb_id,igId:r.ig_id,repairIds:r.repair_ids||[],complaintIds:r.complaint_ids||[],site:r.site,unit:r.unit,orderNo:r.order_no,groupId:r.group_id,projectId:r.project_id,zip:r.zip,customerType:r.customer_type||'consumer',dealerCode:r.dealer_code,disabled:!!r.disabled,disabledReason:r.disabled_reason,disabledAt:r.disabled_at});
-const repairToDb = r => ({id:r.id,wf_id:r.wfId,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,worker_id:r.workerId,scheduled_date:r.scheduledDate,desc:r.desc,contact_name:r.contactName,contact_phone:r.contactPhone,site:r.site,unit:r.unit,handling_unit:r.handlingUnit,note:r.note,warranty_in:r.warrantyIn,created_by:r.createdBy,created_at:r.createdAt,unread:r.unread,arrival_pushed:r.arrivalPushed,rating:r.rating,receipt_no:r.receiptNo,audit_note:r.auditNote,completed_date:r.completedDate,sched_date:r.schedDate,sched_start:r.schedStart,sched_span:r.schedSpan,charges:r.charges||[],charge_total:r.chargeTotal,payment_method:r.paymentMethod,paid:r.paid,txn_id:r.txnId,paid_at:r.paidAt,work_note:r.workNote,warranty_judgment:r.warrantyJudgment,exclude_reason:r.excludeReason,photos:r.photos||[],signature:r.signature,sla_level:r.slaLevel,tenant_type:r.tenantType,landlord_confirmed:r.landlordConfirmed,source_channel:r.sourceChannel,community_note:r.communityNote,zip:r.zip,category2:r.category2,time_range:r.timeRange,qty:r.qty,work_hours:r.workHours,flag_bomber:r.flagBomber,eta_at:r.etaAt,eta_text:r.etaText,accepted_at:r.acceptedAt,arrived_at:r.arrivedAt,est_distance_km:r.estDistanceKm,eta_source:r.etaSource,history:r.history||[],fault_model:r.faultModel,fault_reason_major:r.faultReasonMajor,fault_reason_detail:r.faultReasonDetail,handling_result:r.handlingResult,invoice_type:r.invoiceType,tax_id:r.taxId,invoice_title:r.invoiceTitle});
-const dbToRepair = r => ({id:r.id,wfId:r.wf_id,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,workerId:r.worker_id,scheduledDate:r.scheduled_date,desc:r.desc,contactName:r.contact_name,contactPhone:r.contact_phone,site:r.site,unit:r.unit,handlingUnit:r.handling_unit,note:r.note,warrantyIn:r.warranty_in,createdBy:r.created_by,createdAt:r.created_at,unread:r.unread,arrivalPushed:r.arrival_pushed,rating:r.rating,receiptNo:r.receipt_no,auditNote:r.audit_note,completedDate:r.completed_date,schedDate:r.sched_date,schedStart:r.sched_start,schedSpan:r.sched_span,charges:r.charges||[],chargeTotal:r.charge_total,paymentMethod:r.payment_method,paid:r.paid,txnId:r.txn_id,paidAt:r.paid_at,workNote:r.work_note,warrantyJudgment:r.warranty_judgment,excludeReason:r.exclude_reason,photos:r.photos||[],signature:r.signature,slaLevel:r.sla_level,tenantType:r.tenant_type,landlordConfirmed:r.landlord_confirmed,sourceChannel:r.source_channel,communityNote:r.community_note,zip:r.zip,category2:r.category2,timeRange:r.time_range,qty:r.qty,workHours:r.work_hours,flagBomber:r.flag_bomber,etaAt:r.eta_at,etaText:r.eta_text,acceptedAt:r.accepted_at,arrivedAt:r.arrived_at,estDistanceKm:r.est_distance_km,etaSource:r.eta_source,history:r.history||[],faultModel:r.fault_model,faultReasonMajor:r.fault_reason_major,faultReasonDetail:r.fault_reason_detail,handlingResult:r.handling_result,invoiceType:r.invoice_type,taxId:r.tax_id,invoiceTitle:r.invoice_title});
+const repairToDb = r => ({id:r.id,wf_id:r.wfId,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,worker_id:r.workerId,scheduled_date:r.scheduledDate,desc:r.desc,contact_name:r.contactName,contact_phone:r.contactPhone,site:r.site,unit:r.unit,handling_unit:r.handlingUnit,department:r.department,note:r.note,warranty_in:r.warrantyIn,created_by:r.createdBy,created_at:r.createdAt,unread:r.unread,arrival_pushed:r.arrivalPushed,rating:r.rating,receipt_no:r.receiptNo,audit_note:r.auditNote,completed_date:r.completedDate,sched_date:r.schedDate,sched_start:r.schedStart,sched_span:r.schedSpan,charges:r.charges||[],charge_total:r.chargeTotal,payment_method:r.paymentMethod,paid:r.paid,txn_id:r.txnId,paid_at:r.paidAt,work_note:r.workNote,warranty_judgment:r.warrantyJudgment,exclude_reason:r.excludeReason,photos:r.photos||[],signature:r.signature,sla_level:r.slaLevel,tenant_type:r.tenantType,landlord_confirmed:r.landlordConfirmed,source_channel:r.sourceChannel,community_note:r.communityNote,zip:r.zip,category2:r.category2,time_range:r.timeRange,qty:r.qty,work_hours:r.workHours,flag_bomber:r.flagBomber,eta_at:r.etaAt,eta_text:r.etaText,accepted_at:r.acceptedAt,arrived_at:r.arrivedAt,est_distance_km:r.estDistanceKm,eta_source:r.etaSource,history:r.history||[],fault_model:r.faultModel,fault_reason_major:r.faultReasonMajor,fault_reason_detail:r.faultReasonDetail,handling_result:r.handlingResult,invoice_type:r.invoiceType,tax_id:r.taxId,invoice_title:r.invoiceTitle});
+const dbToRepair = r => ({id:r.id,wfId:r.wf_id,name:r.name,phone:r.phone,district:r.district,area:r.area,building:r.building,date:r.date,type:r.type,issue:r.issue,space:r.space,status:r.status,urgency:r.urgency,workerId:r.worker_id,scheduledDate:r.scheduled_date,desc:r.desc,contactName:r.contact_name,contactPhone:r.contact_phone,site:r.site,unit:r.unit,handlingUnit:r.handling_unit,department:r.department,note:r.note,warrantyIn:r.warranty_in,createdBy:r.created_by,createdAt:r.created_at,unread:r.unread,arrivalPushed:r.arrival_pushed,rating:r.rating,receiptNo:r.receipt_no,auditNote:r.audit_note,completedDate:r.completed_date,schedDate:r.sched_date,schedStart:r.sched_start,schedSpan:r.sched_span,charges:r.charges||[],chargeTotal:r.charge_total,paymentMethod:r.payment_method,paid:r.paid,txnId:r.txn_id,paidAt:r.paid_at,workNote:r.work_note,warrantyJudgment:r.warranty_judgment,excludeReason:r.exclude_reason,photos:r.photos||[],signature:r.signature,slaLevel:r.sla_level,tenantType:r.tenant_type,landlordConfirmed:r.landlord_confirmed,sourceChannel:r.source_channel,communityNote:r.community_note,zip:r.zip,category2:r.category2,timeRange:r.time_range,qty:r.qty,workHours:r.work_hours,flagBomber:r.flag_bomber,etaAt:r.eta_at,etaText:r.eta_text,acceptedAt:r.accepted_at,arrivedAt:r.arrived_at,estDistanceKm:r.est_distance_km,etaSource:r.eta_source,history:r.history||[],faultModel:r.fault_model,faultReasonMajor:r.fault_reason_major,faultReasonDetail:r.fault_reason_detail,handlingResult:r.handling_result,invoiceType:r.invoice_type,taxId:r.tax_id,invoiceTitle:r.invoice_title});
 const ctToDb = c => ({id:c.id,wf_id:c.wfId,name:c.name,phone:c.phone,date:c.date,created_at:c.createdAt,created_by:c.createdBy,call_channel:c.callChannel,department:c.department,cat1:c.cat1,cat2:c.cat2,cat3:c.cat3,process:c.process,status:c.status,closed_date:c.closedDate,timeline:c.timeline||[]});
 const dbToCt = r => ({id:r.id,wfId:r.wf_id,name:r.name,phone:r.phone,date:r.date,createdAt:r.created_at,createdBy:r.created_by,callChannel:r.call_channel,department:r.department,cat1:r.cat1,cat2:r.cat2,cat3:r.cat3,process:r.process,status:r.status,closedDate:r.closed_date,timeline:r.timeline||[]});
-const installToDb = o => ({id:o.id,name:o.name,phone:o.phone,address:o.address,channel:o.channel,note:o.note,product_id:o.productId,serial_no:o.serialNo,locksmith_id:o.locksmithId,status:o.status,created_date:o.createdDate,created_ts:o.createdTs,arrival_pushed:o.arrivalPushed,photos:o.photos||[],signature:o.signature,verify:o.verify||{},taught:o.taught||{},work_note:o.workNote,completed_date:o.completedDate,wf_id:o.wfId,warranty_end:o.warrantyEnd,worker_id:o.workerId,sched_date:o.schedDate,sched_start:o.schedStart,sched_span:o.schedSpan,charges:o.charges||[],charge_total:o.chargeTotal,payment_method:o.paymentMethod,paid:o.paid,txn_id:o.txnId,paid_at:o.paidAt,tenant_type:o.tenantType,landlord_confirmed:o.landlordConfirmed,source_channel:o.sourceChannel,community_note:o.communityNote,zip:o.zip,category2:o.category2,time_range:o.timeRange,qty:o.qty,work_hours:o.workHours,flag_bomber:o.flagBomber,shipment_no:o.shipmentNo,shipped_date:o.shippedDate,accepted_at:o.acceptedAt,billing_status:o.billingStatus,invoice_type:o.invoiceType,tax_id:o.taxId,invoice_title:o.invoiceTitle,void_type:o.voidType,void_reason:o.voidReason,voided_at:o.voidedAt,voided_by:o.voidedBy,history:o.history||[]});
-const dbToInstall = r => ({id:r.id,name:r.name,phone:r.phone,address:r.address,channel:r.channel,note:r.note,productId:r.product_id,serialNo:r.serial_no,locksmithId:r.locksmith_id,status:r.status,createdDate:r.created_date,createdTs:r.created_ts?parseInt(r.created_ts):null,arrivalPushed:r.arrival_pushed,photos:r.photos||[],signature:r.signature,verify:r.verify||{},taught:r.taught||{},workNote:r.work_note,completedDate:r.completed_date,wfId:r.wf_id,warrantyEnd:r.warranty_end,workerId:r.worker_id,schedDate:r.sched_date,schedStart:r.sched_start,schedSpan:r.sched_span,charges:r.charges||[],chargeTotal:r.charge_total,paymentMethod:r.payment_method,paid:r.paid,txnId:r.txn_id,paidAt:r.paid_at,tenantType:r.tenant_type,landlordConfirmed:r.landlord_confirmed,sourceChannel:r.source_channel,communityNote:r.community_note,zip:r.zip,category2:r.category2,timeRange:r.time_range,qty:r.qty,workHours:r.work_hours,flagBomber:r.flag_bomber,shipmentNo:r.shipment_no,shippedDate:r.shipped_date,acceptedAt:r.accepted_at,billingStatus:r.billing_status,invoiceType:r.invoice_type,taxId:r.tax_id,invoiceTitle:r.invoice_title,voidType:r.void_type,voidReason:r.void_reason,voidedAt:r.voided_at,voidedBy:r.voided_by,history:r.history||[]});
+const installToDb = o => ({id:o.id,name:o.name,phone:o.phone,address:o.address,channel:o.channel,note:o.note,department:o.department,product_id:o.productId,serial_no:o.serialNo,locksmith_id:o.locksmithId,status:o.status,created_date:o.createdDate,created_ts:o.createdTs,arrival_pushed:o.arrivalPushed,photos:o.photos||[],signature:o.signature,verify:o.verify||{},taught:o.taught||{},work_note:o.workNote,completed_date:o.completedDate,wf_id:o.wfId,warranty_end:o.warrantyEnd,worker_id:o.workerId,sched_date:o.schedDate,sched_start:o.schedStart,sched_span:o.schedSpan,charges:o.charges||[],charge_total:o.chargeTotal,payment_method:o.paymentMethod,paid:o.paid,txn_id:o.txnId,paid_at:o.paidAt,tenant_type:o.tenantType,landlord_confirmed:o.landlordConfirmed,source_channel:o.sourceChannel,community_note:o.communityNote,zip:o.zip,category2:o.category2,time_range:o.timeRange,qty:o.qty,work_hours:o.workHours,flag_bomber:o.flagBomber,shipment_no:o.shipmentNo,shipped_date:o.shippedDate,accepted_at:o.acceptedAt,billing_status:o.billingStatus,invoice_type:o.invoiceType,tax_id:o.taxId,invoice_title:o.invoiceTitle,void_type:o.voidType,void_reason:o.voidReason,voided_at:o.voidedAt,voided_by:o.voidedBy,history:o.history||[]});
+const dbToInstall = r => ({id:r.id,name:r.name,phone:r.phone,address:r.address,channel:r.channel,note:r.note,department:r.department,productId:r.product_id,serialNo:r.serial_no,locksmithId:r.locksmith_id,status:r.status,createdDate:r.created_date,createdTs:r.created_ts?parseInt(r.created_ts):null,arrivalPushed:r.arrival_pushed,photos:r.photos||[],signature:r.signature,verify:r.verify||{},taught:r.taught||{},workNote:r.work_note,completedDate:r.completed_date,wfId:r.wf_id,warrantyEnd:r.warranty_end,workerId:r.worker_id,schedDate:r.sched_date,schedStart:r.sched_start,schedSpan:r.sched_span,charges:r.charges||[],chargeTotal:r.charge_total,paymentMethod:r.payment_method,paid:r.paid,txnId:r.txn_id,paidAt:r.paid_at,tenantType:r.tenant_type,landlordConfirmed:r.landlord_confirmed,sourceChannel:r.source_channel,communityNote:r.community_note,zip:r.zip,category2:r.category2,timeRange:r.time_range,qty:r.qty,workHours:r.work_hours,flagBomber:r.flag_bomber,shipmentNo:r.shipment_no,shippedDate:r.shipped_date,acceptedAt:r.accepted_at,billingStatus:r.billing_status,invoiceType:r.invoice_type,taxId:r.tax_id,invoiceTitle:r.invoice_title,voidType:r.void_type,voidReason:r.void_reason,voidedAt:r.voided_at,voidedBy:r.voided_by,history:r.history||[]});
 const convToDb = c => ({id:c.id,wf_id:c.wfId,name:c.name,platform:c.platform,av:c.av,unread:c.unread||0,last_msg:c.lastMsg,last_time:c.lastTime,msgs:c.msgs||[],agent_takeover:c.agentTakeover||false,need_case:c.needCase||false,biz_inquiry:c.bizInquiry||false,handle_status:c.handleStatus||'pending'});
 const dbToConv = r => ({id:r.id,wfId:r.wf_id,name:r.name,platform:r.platform,av:r.av,unread:r.unread||0,lastMsg:r.last_msg,lastTime:r.last_time,msgs:r.msgs||[],agentTakeover:r.agent_takeover||false,needCase:r.need_case||false,bizInquiry:r.biz_inquiry||false,handleStatus:r.handle_status||'pending'});
 
@@ -543,6 +543,18 @@ const COMPLAINT_CAT = {
 const COMPLAINT_STATUS_LABEL = {pending:'📋 待處理',following:'🔍 追蹤中',dispatched:'🔧 已派工',closed:'✅ 結案'};
 const CALL_CHANNELS = ['📞 電話來電','💬 LINE 訊息','📧 電子郵件','🏪 門市到訪','🌐 官網表單'];
 const COMPLAINT_DEPARTMENTS = ['客服課', '內銷課', '外銷課', '電商課', '行銷企劃'];
+
+// ── 案件權責單位（部門隔離）──
+// 案件池只顯示自己單位的案子（管理員除外）；客戶 360 主檔不過濾，一律看得到全部。
+// ⚠️ 與 repairs.handlingUnit（原廠工務／配合鎖店＝施工單位）語義不同，不可混用。
+const DEFAULT_DEPARTMENT = COMPLAINT_DEPARTMENTS[0];   // '客服課'——第一線接件單位
+// 沒有真人建單者時（外部進件、自動立案、admin 建單）依單別決定歸屬。
+// 目前三種單別的外部進件第一線都是客服，所以值都一樣；保留 map 是為了日後要分流時只改這裡。
+const CASE_TYPE_DEPARTMENT = {complaint:'客服課', repair:'客服課', install:'客服課'};
+// 舊資料 department 為 null 時視為預設單位，避免無主案件在每個部門視角都消失。
+const caseDept = c => c?.department || DEFAULT_DEPARTMENT;
+// admin 的 role 是 'admin' 不是部門，原樣寫入會變成任何部門都看不到的孤兒案。
+const userDept = u => (!u?.role || u.role === 'admin') ? DEFAULT_DEPARTMENT : u.role;
 
 // ── 統一工單（安裝 + 維修）共用選項 ──
 const TENANT_TYPES = [['owner','屋主'],['family','家人'],['tenant','租客']];
@@ -1060,7 +1072,7 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
           ...(c.disabled?{disabled:false,tags:(c.tags||[]).filter(t=>t!=='已作廢')}:{})});
       }
       const order=pushHist({id,name:f.name.trim(),phone:f.phone.trim(),address:f.address,channel:f.channel,
-        productId:f.productId,serialNo:f.serialNo,locksmithId:null,wfId,scheduledDate:f.scheduledDate,
+        productId:f.productId,serialNo:f.serialNo,locksmithId:null,wfId,scheduledDate:f.scheduledDate,department:userDept(currentUser),
         status:'pending',createdDate:today(),createdTs:Date.now(),arrivalPushed:false,...common,...bk.fields},
         currentUser?.name,'建立安裝工單'+(bk.fields.workerId?'＋排程':'')
           +(reactivated?`｜🔄 客編重新啟用（原作廢於 ${exist.disabledAt||'—'}）`:''));
@@ -1084,7 +1096,7 @@ function WorkOrderForm({initialCategory='install', lockedCustomer=null, onClose}
       district:exist?.district||'',area:exist?.area||'',building:f.address,date:today(),
       type:f.type,issue:f.issue.trim(),space:f.space,status:bk.fields.workerId?'dispatched':'pending',urgency:f.urgency,workerId:null,
       scheduledDate:f.scheduledDate,desc:f.desc,contactName:f.name,contactPhone:f.phone,
-      handlingUnit:f.handlingUnit,warrantyIn:wIn2,createdBy:currentUser?.name||'CRM 客服',
+      handlingUnit:f.handlingUnit,department:CASE_TYPE_DEPARTMENT.repair,warrantyIn:wIn2,createdBy:currentUser?.name||'CRM 客服',
       createdAt:today()+' '+now(),unread:false,arrivalPushed:false,rating:null,receiptNo:null,
       auditNote:'',slaLevel:f.hiRisk?'high':'normal',...common,...bk.fields},currentUser?.name,'建立報修工單'+(bk.fields.workerId?'＋排程':''));
     const uid=exist?.lineUid;
@@ -1282,7 +1294,7 @@ function CRMPage(){
   const [editModal,setEditModal] = useState(false);
   const [editForm,setEditForm] = useState(null);
   const [ctModal,setCtModal] = useState(false);
-  const [ctForm,setCtForm] = useState({callChannel:CALL_CHANNELS[0],department:COMPLAINT_DEPARTMENTS[0],cat1:'',cat2:'',cat3:'',process:'',status:'pending'});
+  const [ctForm,setCtForm] = useState({callChannel:CALL_CHANNELS[0],department:userDept(currentUser),cat1:'',cat2:'',cat3:'',process:'',status:'pending'});
   const [expandedCt,setExpandedCt] = useState(null); // 客訴展開
   const [showHist,setShowHist] = useState(null); // 展開中的異動紀錄案件 id（隱藏按鈕觸發）
   const [viewingMedia,setViewingMedia] = useState(null); // 正在查看的照片/簽名 {photos,signature,caseId}（僅 admin 可開）
@@ -1297,6 +1309,9 @@ function CRMPage(){
   const [sourceComplaintId,setSourceComplaintId] = useState(null); // for dispatch→complaint link
   const [sourceComplaintType,setSourceComplaintType] = useState('repair'); // 'repair' | 'install'
   const [historyModal,setHistoryModal] = useState(false); // 客戶主檔「歷史紀錄」彈窗
+  const [transferModal,setTransferModal] = useState(null); // 移轉權責單位：{id,type,from}
+  const [transferDept,setTransferDept]   = useState(DEFAULT_DEPARTMENT);
+  const [transferReason,setTransferReason] = useState('');
   const [projModal,setProjModal] = useState(false);
   const [projForm,setProjForm] = useState({groupId:'',projectId:''}); // 歸屬建案
   const [editAddrPicker,setEditAddrPicker] = useState(false);
@@ -1674,7 +1689,7 @@ function CRMPage(){
   };
 
   const openComplaint=(c)=>{
-    setCtForm({callChannel:CALL_CHANNELS[0],department:COMPLAINT_DEPARTMENTS[0],cat1:'',cat2:'',cat3:'',process:'',status:'pending'});
+    setCtForm({callChannel:CALL_CHANNELS[0],department:userDept(currentUser),cat1:'',cat2:'',cat3:'',process:'',status:'pending'});
     setCtModal(true);
   };
 
@@ -1751,6 +1766,39 @@ function CRMPage(){
     setFollowModal(null); setFollowModalNote(''); setFollowModalDate('');
     if(highlightedOrderId===ctId) setTimeout(()=>window.close(),700);
   };
+
+  // ── 移轉權責單位（轉單）──
+  // 入口刻意放在客戶 360 而不是案件池：案件轉出後原部門在案件池就看不到了，
+  // 但客戶主檔對所有人都不過濾，轉錯了還能從這裡轉回來。
+  const doTransfer=()=>{
+    if(!transferModal) return;
+    const {id,type,from}=transferModal;
+    if(transferDept===from){ toast('單位沒有變更','請選擇不同的權責單位','warn'); return; }
+    if(!transferReason.trim()){ toast('請填寫移轉原因','移轉紀錄要留得住，原因不可空白','warn'); return; }
+    const ts=today()+' '+now();
+    const note=`🔄 移轉權責單位：${from} → ${transferDept}｜原因：${transferReason.trim()}`;
+    updateDB(prev=>{
+      if(type==='complaint'){
+        const ct=prev.complaints?.[id]; if(!ct) return prev;
+        return {...prev,complaints:{...(prev.complaints||{}),[id]:{...ct,department:transferDept,
+          timeline:[...(ct.timeline||[]),{ts,by:currentUser?.name,note,type:'transfer'}]}}};
+      }
+      const key=type==='repair'?'repairs':'installs';
+      const o=prev[key]?.[id]; if(!o) return prev;
+      return {...prev,[key]:{...(prev[key]||{}),[id]:pushHist({...o,department:transferDept},currentUser?.name,note)}};
+    });
+    toast('🔄 已移轉單位',`${from} → ${transferDept}`,'ok');
+    setTransferModal(null); setTransferReason('');
+  };
+  // 三張案件卡共用的「權責單位 ＋ 轉單」列
+  const renderDeptRow=(c,type)=>(
+    <div style={{marginTop:3,display:'flex',alignItems:'center',gap:5}}>
+      <DeptBadge dept={c.department}/>
+      <button onClick={()=>{const from=caseDept(c);setTransferModal({id:c.id,type,from});setTransferDept(from);setTransferReason('');}}
+        title="移轉權責單位"
+        style={{fontSize:9.5,padding:'1px 6px',borderRadius:8,fontWeight:700,background:'#F1F5F9',color:'#475569',border:'1px solid var(--g200)',cursor:'pointer'}}>🔄 轉單</button>
+    </div>
+  );
 
   const linkComplaintToRepair=(ctId,repairId)=>{
     const ts=today()+' '+now();
@@ -1851,6 +1899,7 @@ function CRMPage(){
         <div style={{flex:1}}>
           <div style={{fontWeight:700,fontSize:12}}>{ct.cat1}{ct.cat2?` › ${ct.cat2}`:''}{ct.cat3?` › ${ct.cat3}`:''}</div>
           <div style={{fontSize:10,color:'var(--g400)',marginTop:1}}>{ct.id} · {ct.callChannel} · {ct.date}</div>
+          {renderDeptRow(ct,'complaint')}
           {ct.process&&<div style={{marginTop:5,fontSize:11.5,color:'var(--g700)',lineHeight:1.5,background:'var(--g50)',borderRadius:4,padding:'4px 7px'}}>{ct.process}</div>}
         </div>
         <span className={`ct-sb ${ct.status}`}>{COMPLAINT_STATUS_LABEL[ct.status]}</span>
@@ -1924,10 +1973,11 @@ function CRMPage(){
           <div style={{fontSize:12,fontWeight:700}}>{r.type} — {r.issue}</div>
           <div className="rid">{r.id}</div>
           <div style={{display:'flex',gap:4,marginTop:4,flexWrap:'wrap'}}>
+            {renderDeptRow(r,'repair')}
             {r.warrantyIn!=null&&<span style={{fontSize:9.5,padding:'1px 6px',borderRadius:8,fontWeight:700,
               background:r.warrantyIn?'#D1FAE5':'#FEE2E2',color:r.warrantyIn?'#065F46':'#991B1B'}}>
               {r.warrantyIn?'✅ 保固內':'⚠️ 保固外'}</span>}
-            {r.handlingUnit&&<span style={{fontSize:9.5,padding:'1px 6px',borderRadius:8,fontWeight:600,background:'#EDE9FE',color:'#5B21B6'}}>{r.handlingUnit}</span>}
+            {r.handlingUnit&&<span title="施工單位" style={{fontSize:9.5,padding:'1px 6px',borderRadius:8,fontWeight:600,background:'#EDE9FE',color:'#5B21B6'}}>{r.handlingUnit}</span>}
             {(r.site||r.unit)&&<span style={{fontSize:9.5,padding:'1px 6px',borderRadius:8,fontWeight:600,background:'#FEF3C7',color:'#92400E'}}>🏗️ {[r.site,r.unit].filter(Boolean).join(' ')}</span>}
           </div>
         </div>
@@ -2001,6 +2051,7 @@ function CRMPage(){
         <div>
           <div style={{fontSize:12,fontWeight:700}}>安裝 — {PRODUCTS[o.productId]?.name||o.productId||'—'}</div>
           <div className="rid">{o.id}</div>
+          {renderDeptRow(o,'install')}
         </div>
         <span className={`sb ${o.status==='done'?'done':(o.status==='failed'||o.status==='voided')?'urgent':o.status==='pending'?'pending':'dispatched'}`}>{STEPLABEL[o.status]}</span>
       </div>
@@ -2205,9 +2256,9 @@ function CRMPage(){
             <div style={{fontSize:11.5,color:'var(--g400)',marginBottom:10}}>{cur.wfId}　共 {historyCount} 筆（聯繫 / 維修 / 派工）</div>
             <div style={{flex:1,overflowY:'auto',display:'flex',flexDirection:'column',gap:7,paddingRight:2}}>
               {[
-                ...curComplaints.map(ct=>({_type:'complaint',id:ct.id,date:ct.date,title:`${ct.cat1||'客訴'}${ct.cat2?' › '+ct.cat2:''}`,_ts:new Date(ct.date||0).getTime()||0})),
-                ...repairs.map(r=>({_type:'repair',id:r.id,date:r.date,title:`${r.type||'維修'} — ${r.issue||''}`,_ts:new Date(r.date||0).getTime()||0})),
-                ...curInstalls.map(o=>({_type:'install',id:o.id,date:o.createdDate,title:`安裝 ${PRODUCTS[o.productId]?.name||o.productId||''}`,_ts:o.createdTs||0})),
+                ...curComplaints.map(ct=>({_type:'complaint',id:ct.id,date:ct.date,title:`${ct.cat1||'客訴'}${ct.cat2?' › '+ct.cat2:''}`,dept:ct.department,status:ct.status,_ts:new Date(ct.date||0).getTime()||0})),
+                ...repairs.map(r=>({_type:'repair',id:r.id,date:r.date,title:`${r.type||'維修'} — ${r.issue||''}`,dept:r.department,status:r.status,_ts:new Date(r.date||0).getTime()||0})),
+                ...curInstalls.map(o=>({_type:'install',id:o.id,date:o.createdDate,title:`安裝 ${PRODUCTS[o.productId]?.name||o.productId||''}`,dept:o.department,status:o.status,_ts:o.createdTs||0})),
                 ...curCalls,
               ].sort((a,b)=>b._ts-a._ts).map(item=>{
                 const lab={complaint:['客訴','#FEF3C7','#B45309'],repair:['維修','#E0F2FE','#0369A1'],install:['安裝','#EDE9FE','#5B21B6'],call:['通話','#DCFCE7','#15803D']}[item._type];
@@ -2218,6 +2269,14 @@ function CRMPage(){
                       <div style={{fontSize:12,fontWeight:600,color:'#1E293B',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.title}</div>
                       <div style={{fontSize:10.5,color:'var(--g400)',fontFamily:'monospace'}}>{item.id} · {item.date||'—'}</div>
                     </div>
+                    {/* 通話紀錄沒有 dept／status 欄位，必須守門，否則 CASE_STATUS[undefined] 會炸 */}
+                    {item._type!=='call'&&(()=>{
+                      const st=CASE_STATUS[item.status]||{label:item.status||'—',bg:'#F1F5F9',fg:'#64748B'};
+                      return(<>
+                        <DeptBadge dept={item.dept}/>
+                        <span style={{background:st.bg,color:st.fg,fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:9,flexShrink:0,whiteSpace:'nowrap'}}>{st.label}</span>
+                      </>);
+                    })()}
                     {item._type==='call'
                       ? <span style={{fontSize:10.5,color:'var(--g400)',flexShrink:0,whiteSpace:'nowrap'}}>👤 {item.agent}</span>
                       : <button onClick={()=>openCaseTab(cur.wfId,item.id)} style={{padding:'5px 11px',background:'var(--brand)',color:'#fff',border:'none',borderRadius:5,fontSize:11,fontWeight:700,cursor:'pointer',flexShrink:0,whiteSpace:'nowrap'}}>🔗 開啟此案</button>}
@@ -2227,6 +2286,33 @@ function CRMPage(){
               {historyCount===0&&<div style={{textAlign:'center',color:'var(--g400)',padding:'30px 0'}}>尚無任何紀錄</div>}
             </div>
             <div className="mact"><button className="cancel" onClick={()=>setHistoryModal(false)}>關閉</button></div>
+          </div>
+        </div>
+      )}
+
+      {transferModal&&(
+        <div className="mo" onClick={e=>{if(e.target===e.currentTarget)setTransferModal(null);}}>
+          <div className="mob" style={{maxWidth:420}}>
+            <h3>🔄 移轉權責單位</h3>
+            <div style={{background:'var(--g50)',borderRadius:6,padding:'7px 10px',marginBottom:12,fontSize:12,color:'var(--g600)'}}>
+              {transferModal.id}・目前單位：<b>{transferModal.from}</b>
+            </div>
+            <div className="mf"><label>移轉至 <span style={{color:'var(--err)'}}>*</span></label>
+              <select value={transferDept} onChange={e=>setTransferDept(e.target.value)}>
+                {COMPLAINT_DEPARTMENTS.map(d=><option key={d} value={d}>🏢 {d}</option>)}
+              </select>
+            </div>
+            <div className="mf"><label>移轉原因 <span style={{color:'var(--err)'}}>*</span></label>
+              <textarea value={transferReason} onChange={e=>setTransferReason(e.target.value)} rows={3}
+                placeholder="例：客戶詢問報價，屬商機案件，轉由業務單位承接"/>
+            </div>
+            <div style={{fontSize:11,color:'var(--g500)',background:'#FFFBEB',border:'1px solid #FDE68A',borderRadius:6,padding:'7px 10px',lineHeight:1.6}}>
+              ⚠️ 移轉後，原單位在「案件池」就看不到這張單了（客戶主檔仍看得到全部，可從這裡轉回）。
+            </div>
+            <div className="mact">
+              <button className="cancel" onClick={()=>setTransferModal(null)}>取消</button>
+              <button className="ok" onClick={doTransfer}>確認移轉</button>
+            </div>
           </div>
         </div>
       )}
@@ -2396,7 +2482,7 @@ function CRMPage(){
               </div>
               <div className="mf"><label>指派單位</label>
                 <select value={ctForm.department} onChange={e=>setCtForm(p=>({...p,department:e.target.value}))}>
-                  {COMPLAINT_DEPARTMENTS.map(v=><option key={v}>🏢 {v}</option>)}
+                  {COMPLAINT_DEPARTMENTS.map(v=><option key={v} value={v}>🏢 {v}</option>)}
                 </select>
               </div>
             </div>
@@ -2724,6 +2810,10 @@ const CASE_STATUS={
   following:{label:'追蹤中',bg:'#DBEAFE',fg:'#1D4ED8'},
   closed:   {label:'已結案',bg:'#D1FAE5',fg:'#065F46'},
 };
+// 權責單位徽章。用 function 宣告取得 hoisting——CRMPage 的案件卡在本行之前就會用到。
+function DeptBadge({dept}){
+  return <span title="權責單位" style={{fontSize:9.5,padding:'1px 6px',borderRadius:8,fontWeight:700,background:'#E0E7FF',color:'#3730A3',whiteSpace:'nowrap'}}>🏢 {dept||DEFAULT_DEPARTMENT}</span>;
+}
 const maskName=name=>{
   if(!name)return'—';
   if(name.length<=2)return name[0]+'*';
@@ -2992,6 +3082,12 @@ function HomePage(){
   const complaints=Object.values(db.complaints||{});
   const DONE_STATUS=['done','closed','failed','voided'];
   const isOpen=c=>!DONE_STATUS.includes(c.status);
+  // ── 權責單位隔離 ──
+  // currentRole 對非 admin 就是他的部門（登入時取 crm_users.role），此時側邊欄鎖死；
+  // admin 選「管理員(全知)」不在部門清單內 → 回到側邊欄自由篩選，切某部門時等同該部門視角。
+  const viewDept   = COMPLAINT_DEPARTMENTS.includes(currentRole) ? currentRole : dept;
+  const deptLocked = COMPLAINT_DEPARTMENTS.includes(currentRole);
+  const inDept     = c => viewDept==='all' || caseDept(c)===viewDept;
   const allCases=[
     ...installs.filter(isOpen).map(o=>({...o,_type:'install',_date:o.createdTs||0})),
     ...repairs.filter(isOpen).map(r=>({...r,_type:'repair',_date:new Date(r.date||0).getTime()||0})),
@@ -3007,11 +3103,10 @@ function HomePage(){
     return true;
   };
   const filteredBase=(typeFilter==='following_complaint'
-    ? followingComplaints.filter(c=>dept==='all'||c.department===dept)
+    ? followingComplaints.filter(inDept)
     : allCases.filter(c=>{
         if(typeFilter!=='all'&&c._type!==typeFilter)return false;
-        if(dept!=='all'&&c._type==='complaint'&&c.department!==dept)return false;
-        return true;
+        return inDept(c);   // 安裝／維修／客訴三類一律過濾（過去只有客訴被過濾）
       })
   ).filter(inDateRange);
   const filtered=[...filteredBase].sort((a,b)=>sortDir==='asc'?(a._date-b._date):(b._date-a._date));
@@ -3023,7 +3118,7 @@ function HomePage(){
   const pageSize=30;
   const totalPages=Math.max(1,Math.ceil(activePool.length/pageSize));
   const pageCases=activePool.slice((Math.min(pageNo,totalPages)-1)*pageSize,Math.min(pageNo,totalPages)*pageSize);
-  useEffect(()=>{ setPageNo(1); },[typeFilter,dept,dateFrom,dateTo,sortDir,results]);
+  useEffect(()=>{ setPageNo(1); },[typeFilter,dept,viewDept,dateFrom,dateTo,sortDir,results]);
   const openCustomer=wfId=>{ setCrmTarget(wfId); setPage('crm'); };
   const caseUrl=(wfId,caseId)=>location.origin+location.pathname+'#crm/'+wfId+'/'+caseId;
   const openCaseTab=(wfId,caseId)=>{ if(!wfId){ toast('此案件尚未歸戶','請先整理客編再開啟','warn'); return; } window.open(caseUrl(wfId,caseId),'_blank'); };
@@ -3084,8 +3179,14 @@ function HomePage(){
   const typeFg={install:'#5B21B6',repair:'#0369A1',complaint:'#B45309'};
   const typeBar={install:'#7C3AED',repair:'#0EA5E9',complaint:'#F59E0B'};
   const ST=CASE_STATUS;
-  const pend=allCases.filter(c=>c.status==='pending').length;
-  const urg=repairs.filter(r=>r.urgency==='urgent'&&r.status!=='done').length;
+  // 側邊欄計數與底部統計都要跟著部門縮水，否則會出現「清單看不到、數字卻算得到」的矛盾。
+  const deptCases      = allCases.filter(inDept);
+  const deptInstalls   = installs.filter(o=>isOpen(o)&&inDept(o));
+  const deptRepairs    = repairs.filter(r=>isOpen(r)&&inDept(r));
+  const deptComplaints = complaints.filter(ct=>(ct.status==='pending'||ct.status==='following')&&inDept(ct));
+  const deptFollowing  = followingComplaints.filter(inDept);
+  const pend=deptCases.filter(c=>c.status==='pending').length;
+  const urg=repairs.filter(r=>r.urgency==='urgent'&&r.status!=='done'&&inDept(r)).length;
   // 需整理案件：無客編、客編不存在、或「案件地址+姓名」與其所綁客編對不上（含先前用電話誤併）
   const custList=db.customers||[];
   const isTempCust=c=>(c.tags||[]).includes('待整理');
@@ -3147,7 +3248,7 @@ function HomePage(){
         </div>
         <div style={{padding:'8px 0',borderBottom:'1px solid #334155'}}>
           <div style={{padding:'4px 12px',fontSize:9.5,color:'#475569',fontWeight:700,letterSpacing:1,marginBottom:2}}>案件類型</div>
-          {[['all','🗂️ 全部案件',allCases.length],['install','🛠️ 安裝件',installs.filter(isOpen).length],['repair','🔧 維修件',repairs.filter(isOpen).length],['complaint','📞 客訴件',complaints.filter(ct=>ct.status==='pending'||ct.status==='following').length]].map(([v,l,cnt])=>(
+          {[['all','🗂️ 全部案件',deptCases.length],['install','🛠️ 安裝件',deptInstalls.length],['repair','🔧 維修件',deptRepairs.length],['complaint','📞 客訴件',deptComplaints.length]].map(([v,l,cnt])=>(
             <div key={v} onClick={()=>setTypeFilter(v)}
               style={{padding:'9px 12px',cursor:'pointer',fontSize:12.5,display:'flex',alignItems:'center',justifyContent:'space-between',
                 fontWeight:typeFilter===v?700:400,background:typeFilter===v?'#334155':'transparent',
@@ -3159,7 +3260,15 @@ function HomePage(){
         </div>
         <div style={{padding:'8px 0',flex:1,overflowY:'auto'}}>
           <div style={{padding:'4px 12px',fontSize:9.5,color:'#475569',fontWeight:700,letterSpacing:1,marginBottom:2}}>處理部門</div>
-          {['all',...COMPLAINT_DEPARTMENTS].map(d=>(
+          {/* 非管理員（或管理員切到某部門視角）只看得到自己的單位，清單變唯讀單列。
+              條件用 deptLocked 而非 isAdmin，避免出現「能點但點了沒反應」。 */}
+          {deptLocked ? (
+            <div title="僅能檢視所屬單位的案件"
+              style={{padding:'9px 12px',fontSize:12.5,color:'#38BDF8',background:'#334155',
+                borderLeft:'3px solid #38BDF8',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+              <span>{viewDept}</span><span style={{fontSize:10,color:'#64748B'}}>🔒</span>
+            </div>
+          ) : ['all',...COMPLAINT_DEPARTMENTS].map(d=>(
             <div key={d} onClick={()=>setDept(d)}
               style={{padding:'9px 12px',cursor:'pointer',fontSize:12.5,
                 background:dept===d?'#334155':'transparent',color:dept===d?'#38BDF8':'#94A3B8',
@@ -3180,7 +3289,7 @@ function HomePage(){
         <div style={{padding:'12px',borderTop:'1px solid #334155',fontSize:11,color:'#64748B',lineHeight:1.8}}>
           {urg>0&&<div style={{color:'#EF4444',fontWeight:700,marginBottom:2}}>🚨 緊急 {urg} 件</div>}
           <div>待處理 <b style={{color:'#F59E0B'}}>{pend}</b> 件</div>
-          {followingComplaints.length>0&&<div style={{color:'#A78BFA'}}>🔍 追蹤中客訴 <b>{followingComplaints.length}</b> 件</div>}
+          {deptFollowing.length>0&&<div style={{color:'#A78BFA'}}>🔍 追蹤中客訴 <b>{deptFollowing.length}</b> 件</div>}
           <div>篩選結果 <b style={{color:'#38BDF8'}}>{filtered.length}</b> 件</div>
         </div>
       </div>
@@ -3266,9 +3375,9 @@ function HomePage(){
             </div>
           )}
           {typeFilter==='complaint'&&(()=>{
-            const pc=complaints.filter(ct=>ct.status==='pending'&&(dept==='all'||ct.department===dept))
+            const pc=complaints.filter(ct=>ct.status==='pending'&&inDept(ct))
               .map(ct=>({...ct,_type:'complaint'})).sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
-            const fc=followingComplaints.filter(c=>dept==='all'||c.department===dept).filter(inDateRange);
+            const fc=followingComplaints.filter(inDept).filter(inDateRange);
             const renderCard=c=>{
               const addr=c.address||c.building||c.district||'—';
               const s=ST[c.status]||{label:c.status||'—',bg:'#F1F5F9',fg:'#64748B'};
@@ -3394,7 +3503,9 @@ function LoginScreen({onLogin}){
     const {data}=await sb.from('crm_users').select('*').eq('account',acc.trim()).eq('pin',pin.trim()).eq('active',true).maybeSingle();
     setBusy(false);
     if(!data){setErr('帳號或密碼錯誤');return;}
-    onLogin({id:data.id,name:data.name,role:data.role});
+    // role 必須 trim：整套部門隔離靠 COMPLAINT_DEPARTMENTS.includes(role) 等值比對，
+    // DB 裡一個尾空白就會讓那個人變成「全知」。
+    onLogin({id:data.id,name:data.name,role:(data.role||'').trim()});
   };
   return(
     <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'#0F2744'}}>
@@ -4158,7 +4269,8 @@ function App(){
   const [currentUser,setCurrentUser] = useState(()=>{try{return JSON.parse(localStorage.getItem('wl_crm_user'))||null;}catch(e){return null;}});
   const [adminView,setAdminView] = useState('管理員(全知)'); // admin 切換視角
   const isAdmin = currentUser?.role==='admin';
-  const currentRole = isAdmin ? adminView : (currentUser?.role||'管理員(全知)');
+  // role 為空時落到預設部門而非全知——寧可看不到，不要誤放權限。
+  const currentRole = isAdmin ? adminView : (currentUser?.role||DEFAULT_DEPARTMENT);
   const doLogin=(u)=>{ setCurrentUser(u); localStorage.setItem('wl_crm_user',JSON.stringify(u)); };
   const doLogout=()=>{ localStorage.removeItem('wl_crm_user'); setCurrentUser(null); };
   const [db,setDB] = useState(EMPTY_DB);

@@ -200,6 +200,8 @@ Deno.serve(async (req) => {
       if (!cust.wfId) return json({ ok: false, error: "發客編失敗" }, 502);
       const ir = await dbPost("installs", {
         id, wf_id: cust.wfId, name, phone, address, channel: "web",
+        // 外部進件沒有建單人，依單別歸第一線接件單位；客服看過再轉單分流。
+        department: "客服課",
         product_id: b.product_id || null, serial_no: null,
         status: "pending", created_date: today, created_ts: Date.now(),
         note: (subject ? subject + "\n" : "") + content,
